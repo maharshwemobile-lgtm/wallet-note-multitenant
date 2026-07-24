@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
 import { DEFAULT_ROLES } from "@/lib/permissions";
 import type { AuthUser } from "@/lib/auth";
+import { moduleSetting, type ModuleMode } from "@/lib/modules";
 
 export interface TenantRegistration {
   businessName: string;
@@ -14,7 +15,7 @@ export interface TenantRegistration {
   password: string;
   currency: "MMK" | "THB";
   timezone: string;
-  miniMartEnabled: boolean;
+  moduleMode: ModuleMode;
 }
 
 export async function assertBranchAccess(user: AuthUser, branchId: string) {
@@ -140,7 +141,7 @@ export async function registerTenant(input: TenantRegistration) {
         data: {
           businessId: business.id,
           key: "modules",
-          value: JSON.stringify({ miniMartEnabled: input.miniMartEnabled }),
+          value: JSON.stringify(moduleSetting(input.moduleMode)),
         },
       });
       await tx.auditLog.create({

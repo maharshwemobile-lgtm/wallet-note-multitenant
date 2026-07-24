@@ -13,7 +13,7 @@ const schema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters").max(72),
   currency: z.enum(["MMK", "THB"]).default("MMK"),
   timezone: z.string().trim().min(1).max(80).default("Asia/Yangon"),
-  miniMartEnabled: z.boolean().default(false),
+  moduleMode: z.enum(["WALLET_ONLY", "MINI_MART_ONLY", "BOTH"]).default("WALLET_ONLY"),
 });
 
 const attempts = new Map<string, { count: number; resetAt: number }>();

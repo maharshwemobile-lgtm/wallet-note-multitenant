@@ -1,5 +1,6 @@
 import { withAuth, json } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { parseModuleAccess } from "@/lib/modules";
 
 export const GET = withAuth(null, async ({ user }) => {
   const [branches, moduleSetting] = await Promise.all([
@@ -17,14 +18,14 @@ export const GET = withAuth(null, async ({ user }) => {
     }),
   ]);
 
-  let miniMartEnabled = true;
+  let modules = parseModuleAccess({ miniMartEnabled: true });
   if (moduleSetting) {
     try {
-      miniMartEnabled = JSON.parse(moduleSetting.value).miniMartEnabled === true;
+      modules = parseModuleAccess(JSON.parse(moduleSetting.value));
     } catch {
-      miniMartEnabled = true;
+      modules = parseModuleAccess({ miniMartEnabled: true });
     }
   }
 
-  return json({ user, branches, modules: { miniMartEnabled } });
+  return json({ user, branches, modules });
 });

@@ -12,6 +12,7 @@ import { api } from "@/lib/client";
 import { ToastProvider, cn } from "./ui";
 import { PwaInstall } from "./PwaInstall";
 import { LanguageSwitch } from "./LanguageProvider";
+import type { ModuleMode } from "@/lib/modules";
 
 interface Me {
   user: {
@@ -19,7 +20,7 @@ interface Me {
     permissions: string[]; allBranches: boolean; branchIds: string[];
   };
   branches: { id: string; name: string; code: string }[];
-  modules: { miniMartEnabled: boolean };
+  modules: { mode: ModuleMode; miniMartEnabled: boolean; walletNoteEnabled: boolean };
 }
 
 const AuthCtx = createContext<{
@@ -28,6 +29,8 @@ const AuthCtx = createContext<{
   branches: Me["branches"];
   defaultBranchId: string;
   miniMartEnabled: boolean;
+  walletNoteEnabled: boolean;
+  moduleMode: ModuleMode;
   refreshAuth: () => Promise<void>;
 }>({
   me: null,
@@ -35,6 +38,8 @@ const AuthCtx = createContext<{
   branches: [],
   defaultBranchId: "",
   miniMartEnabled: false,
+  walletNoteEnabled: true,
+  moduleMode: "WALLET_ONLY",
   refreshAuth: async () => {},
 });
 
@@ -48,11 +53,11 @@ const NAV = [
   { href: "/purchases", label: "Purchases", icon: Truck, perm: "purchase.view", miniMart: true },
   { href: "/items", label: "Items", icon: Package, perm: "item.view", miniMart: true },
   { href: "/stock", label: "Stock", icon: Boxes, perm: "stock.view", miniMart: true },
-  { href: "/three-d", label: "3D Records", icon: Hash, perm: "three_d.view" },
-  { href: "/exchange", label: "Exchange", icon: ArrowLeftRight, perm: "exchange.view" },
-  { href: "/wallets", label: "Wallets", icon: Wallet, perm: "wallet.view" },
-  { href: "/credit", label: "Credit & Payable", icon: HandCoins, perm: "credit.view" },
-  { href: "/income-expense", label: "Income & Expense", icon: Receipt, perm: "income_expense.view" },
+  { href: "/three-d", label: "3D Records", icon: Hash, perm: "three_d.view", walletNote: true },
+  { href: "/exchange", label: "Exchange", icon: ArrowLeftRight, perm: "exchange.view", walletNote: true },
+  { href: "/wallets", label: "Wallets", icon: Wallet, perm: "wallet.view", walletNote: true },
+  { href: "/credit", label: "Credit & Payable", icon: HandCoins, perm: "credit.view", walletNote: true },
+  { href: "/income-expense", label: "Income & Expense", icon: Receipt, perm: "income_expense.view", walletNote: true },
   { href: "/reports", label: "Reports", icon: FileBarChart, perm: "report.view" },
   { href: "/customers", label: "Customers", icon: Users, perm: "customer.view" },
   { href: "/suppliers", label: "Suppliers", icon: Building2, perm: "customer.view", miniMart: true },
@@ -63,6 +68,7 @@ const NAV = [
 ];
 
 const MINI_MART_PATHS = ["/pos", "/sales", "/purchases", "/items", "/stock", "/suppliers"];
+const WALLET_NOTE_PATHS = ["/three-d", "/exchange", "/wallets", "/credit", "/income-expense"];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
@@ -104,11 +110,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const miniMartEnabled = me?.modules.miniMartEnabled ?? false;
+  const walletNoteEnabled = me?.modules.walletNoteEnabled ?? true;
   const blockedMiniMartPath = !miniMartEnabled && MINI_MART_PATHS.some((path) => pathname.startsWith(path));
+  const blockedWalletNotePath = !walletNoteEnabled && WALLET_NOTE_PATHS.some((path) => pathname.startsWith(path));
+  const blockedModulePath = blockedMiniMartPath || blockedWalletNotePath;
 
   useEffect(() => {
-    if (me && blockedMiniMartPath) router.replace("/");
-  }, [blockedMiniMartPath, me, router]);
+    if (me && blockedModulePath) router.replace("/");
+  }, [blockedModulePath, me, router]);
 
   if (loading || !me) {
     return (
@@ -119,7 +128,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const hasPerm = (p: string) => me.user.permissions.includes(p);
-  const visibleNav = NAV.filter((n) => (!n.perm || hasPerm(n.perm)) && (!n.miniMart || miniMartEnabled));
+  const visibleNav = NAV.filter((n) =>
+    (!n.perm || hasPerm(n.perm)) &&
+    (!n.miniMart || miniMartEnabled) &&
+    (!n.walletNote || walletNoteEnabled)
+  );
   const mobileNav = visibleNav.slice(0, 4);
 
   const sidebar = (
@@ -154,6 +167,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         branches: me.branches,
         defaultBranchId: me.branches[0]?.id ?? "",
         miniMartEnabled,
+        walletNoteEnabled,
+        moduleMode: me.modules.mode,
         refreshAuth,
       }}
     >
@@ -205,7 +220,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </header>
 
             <main className="min-w-0 flex-1 p-3 pb-24 sm:p-4 lg:pb-6">
-              {blockedMiniMartPath ? (
+              {blockedModulePath ? (
                 <div className="flex min-h-40 items-center justify-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
                 </div>
@@ -233,7 +248,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </nav>
 
             {/* Floating new-transaction button (mobile) */}
-            {hasPerm("three_d.create") && (
+            {walletNoteEnabled && hasPerm("three_d.create") && (
               <Link
                 href="/three-d?new=1"
                 className="no-print fixed bottom-16 right-4 z-30 rounded-full bg-blue-600 p-3.5 text-white shadow-lg lg:hidden"

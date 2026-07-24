@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ShoppingCart, Wallet } from "lucide-react";
+import { Layers3, ShoppingCart, Wallet } from "lucide-react";
 import { Button, Card, Input, Modal, Select } from "@/components/ui";
 import { PwaInstall } from "@/components/PwaInstall";
 import { LanguageSwitch } from "@/components/LanguageProvider";
@@ -39,7 +39,7 @@ export default function RegisterPage() {
     setShowModuleChoice(true);
   }
 
-  async function register(miniMartEnabled: boolean) {
+  async function register(moduleMode: "WALLET_ONLY" | "MINI_MART_ONLY" | "BOTH") {
     setShowModuleChoice(false);
     setLoading(true);
     try {
@@ -54,7 +54,7 @@ export default function RegisterPage() {
           currency: form.currency,
           timezone: "Asia/Yangon",
           password: form.password,
-          miniMartEnabled,
+          moduleMode,
         },
       });
       router.push("/");
@@ -160,22 +160,28 @@ export default function RegisterPage() {
           </Button>
         </form>
 
-        <Modal open={showModuleChoice} onClose={() => setShowModuleChoice(false)} title="Enable Mini Mart functions?">
+        <Modal open={showModuleChoice} onClose={() => setShowModuleChoice(false)} title="Choose functions">
           <div className="space-y-4">
             <div className="flex items-start gap-3">
               <div className="rounded-lg bg-blue-100 p-2 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
                 <ShoppingCart size={20} />
               </div>
               <p className="text-sm text-gray-600 dark:text-gray-300">
-                Turn this on for items, stock, purchases, suppliers, and Sales &amp; POS.
+                Choose the functions this workspace needs. You can change this later in Settings.
               </p>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2">
-              <Button variant="secondary" disabled={loading} onClick={() => register(false)}>
+            <div className="grid gap-2">
+              <Button variant="secondary" disabled={loading} onClick={() => register("WALLET_ONLY")}>
+                <Wallet size={17} />
                 Wallet Note only
               </Button>
-              <Button disabled={loading} onClick={() => register(true)}>
-                Enable Mini Mart
+              <Button variant="secondary" disabled={loading} onClick={() => register("MINI_MART_ONLY")}>
+                <ShoppingCart size={17} />
+                Mini Mart only
+              </Button>
+              <Button disabled={loading} onClick={() => register("BOTH")}>
+                <Layers3 size={17} />
+                Wallet Note + Mini Mart
               </Button>
             </div>
           </div>

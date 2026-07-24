@@ -35,7 +35,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashData | null>(null);
   const [date, setDate] = useState("");
   const [branchId, setBranchId] = useState("");
-  const { branches, miniMartEnabled } = useAuth();
+  const { branches, miniMartEnabled, walletNoteEnabled } = useAuth();
   const { push } = useToast();
   const router = useRouter();
 
@@ -69,7 +69,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {data.rates.length > 0 && (
+      {walletNoteEnabled && data.rates.length > 0 && (
         <Card className="flex flex-wrap items-center gap-6 py-3">
           {data.rates.map((r) => (
             <div key={r.pair} className="text-sm">
@@ -88,6 +88,7 @@ export default function DashboardPage() {
             <StatCard label="Sales Profit" value={fmtMoney(data.pos.salesProfit, "MMK")} tone={BigInt(data.pos.salesProfit) >= 0n ? "green" : "red"} onClick={() => router.push("/sales")} />
           </>
         )}
+        {walletNoteEnabled && <>
         <StatCard label="Total MMK Balance" value={fmtMoney(s.wallets.totalMmk, "MMK")} onClick={() => router.push("/wallets")} />
         <StatCard label="Total THB Balance" value={fmtMoney(s.wallets.totalThb, "THB")} onClick={() => router.push("/wallets")} />
         <StatCard label="3D Total Today" value={fmtMoney(s.threeD.totalBet, "MMK")} sub={`${s.threeD.totalRecords} records`} onClick={() => router.push("/three-d")} />
@@ -104,6 +105,7 @@ export default function DashboardPage() {
         <StatCard label="Unsettled 3D" value={fmtMoney(s.threeD.unsettledAmount, "MMK")} tone="amber" onClick={() => router.push("/three-d")} />
         <StatCard label="Credit Collected Today" value={fmtMoney(s.credit.collected, "MMK")} tone="green" onClick={() => router.push("/credit")} />
         <StatCard label="Payable Paid Today" value={fmtMoney(s.payable.paid, "MMK")} onClick={() => router.push("/credit?tab=payable")} />
+        </>}
       </div>
 
       {miniMartEnabled && data.pos && data.pos.lowStock.length > 0 && (
@@ -119,7 +121,7 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {s.wallets.lowBalance.length > 0 && (
+      {walletNoteEnabled && s.wallets.lowBalance.length > 0 && (
         <Card className="border-amber-300 dark:border-amber-700">
           <h3 className="mb-2 text-sm font-semibold text-amber-700 dark:text-amber-400">Low wallet balance alerts</h3>
           <ul className="space-y-1 text-sm">
@@ -132,7 +134,7 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-3">
+      {walletNoteEnabled && <div className="grid gap-4 lg:grid-cols-3">
         <Card>
           <h3 className="mb-3 text-sm font-semibold">Pending 3D sessions</h3>
           {data.pendingSessions.length === 0 && <p className="text-sm text-gray-500">No pending sessions</p>}
@@ -171,7 +173,7 @@ export default function DashboardPage() {
             ))}
           </ul>
         </Card>
-      </div>
+      </div>}
     </div>
   );
 }

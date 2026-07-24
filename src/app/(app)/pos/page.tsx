@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Trash2, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CheckCircle2, Minus, Plus, Search, Trash2 } from "lucide-react";
 import { api } from "@/lib/client";
 import { fmtMoney } from "@/lib/format";
-import { Button, Card, Input, Select, Spinner, cn, useToast } from "@/components/ui";
+import { Button, Card, Input, Modal, Select, Spinner, cn, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
 
 interface Item {
@@ -15,86 +15,238 @@ interface Item {
 interface Wallet { id: string; name: string; currency: string; currentBalance: string }
 interface Contact { id: string; name: string; type: string }
 interface CartLine { item: Item; quantity: number; unitPrice: number }
+interface SaleResult { txnNo: string; total: string; profit: string }
+interface Draft {
+  savedAt: number;
+  lines: { itemId: string; quantity: number; unitPrice: number }[];
+  discount: string;
+  walletId: string;
+  customerId: string;
+  payMode: "full" | "credit" | "partial";
+  partialAmount: string;
+  cashReceived: string;
+}
+
+const DRAFT_LIFETIME = 12 * 60 * 60 * 1000;
+
+function readAmount(value: string) {
+  return parseFloat(value.replace(/,/g, "")) || 0;
+}
+
+function cashSuggestions(total: number) {
+  if (total <= 0) return [];
+  const steps = [1000, 5000, 10000, 50000, 100000];
+  return [...new Set([total, ...steps.map((step) => Math.ceil(total / step) * step)])]
+    .filter((amount) => amount >= total)
+    .sort((a, b) => a - b)
+    .slice(0, 4);
+}
 
 export default function PosPage() {
   const [items, setItems] = useState<Item[] | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [customers, setCustomers] = useState<Contact[]>([]);
   const [q, setQ] = useState("");
+  const [category, setCategory] = useState("ALL");
   const [cart, setCart] = useState<CartLine[]>([]);
   const [discount, setDiscount] = useState("0");
   const [walletId, setWalletId] = useState("");
   const [customerId, setCustomerId] = useState("");
   const [payMode, setPayMode] = useState<"full" | "credit" | "partial">("full");
   const [partialAmount, setPartialAmount] = useState("");
+  const [cashReceived, setCashReceived] = useState("");
+  const [reviewOpen, setReviewOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [lastSale, setLastSale] = useState<{ txnNo: string; total: string; profit: string } | null>(null);
+  const [lastSale, setLastSale] = useState<SaleResult | null>(null);
+  const [draftReady, setDraftReady] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   const { push } = useToast();
-  const { defaultBranchId } = useAuth();
+  const { defaultBranchId, me } = useAuth();
+  const draftKey = `wallet-note:pos-draft:${me?.user.id ?? "anonymous"}`;
 
   const load = useCallback(() => {
     api<{ items: Item[] }>("/api/v1/items?pageSize=200&active=1")
-      .then((d) => setItems(d.items))
-      .catch((e) => push(e.message, "error"));
-    api<Wallet[]>("/api/v1/wallets").then((w) => {
-      setWallets(w);
-      const cash = w.find((x) => x.currency === "MMK");
-      if (cash) setWalletId((prev) => prev || cash.id);
+      .then((data) => setItems(data.items))
+      .catch((error) => push(error.message, "error"));
+    api<Wallet[]>("/api/v1/wallets").then((data) => {
+      setWallets(data);
+      const cash = data.find((wallet) => wallet.currency === "MMK");
+      if (cash) setWalletId((current) => current || cash.id);
     }).catch(() => {});
     api<{ contacts: Contact[] }>("/api/v1/customers?type=CUSTOMER&pageSize=200")
-      .then((d) => setCustomers(d.contacts)).catch(() => {});
+      .then((data) => setCustomers(data.contacts)).catch(() => {});
   }, [push]);
+
   useEffect(load, [load]);
+
+  useEffect(() => {
+    if (!items || draftReady) return;
+    const timer = window.setTimeout(() => {
+      try {
+        const raw = localStorage.getItem(draftKey);
+        const draft = raw ? JSON.parse(raw) as Draft : null;
+        if (draft && Date.now() - draft.savedAt < DRAFT_LIFETIME) {
+          const byId = new Map(items.map((item) => [item.id, item]));
+          setCart(draft.lines.flatMap((line) => {
+            const item = byId.get(line.itemId);
+            if (!item) return [];
+            const stock = item.stockLevels
+              .filter((level) => !defaultBranchId || level.branchId === defaultBranchId)
+              .reduce((total, level) => total + level.quantity, 0);
+            return [{ item, quantity: Math.min(line.quantity, stock), unitPrice: line.unitPrice }];
+          }).filter((line) => line.quantity > 0));
+          setDiscount(draft.discount);
+          setWalletId(draft.walletId);
+          setCustomerId(draft.customerId);
+          setPayMode(draft.payMode);
+          setPartialAmount(draft.partialAmount);
+          setCashReceived(draft.cashReceived);
+        } else if (raw) {
+          localStorage.removeItem(draftKey);
+        }
+      } catch {
+        localStorage.removeItem(draftKey);
+      }
+      setDraftReady(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, [defaultBranchId, draftKey, draftReady, items]);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    const draft: Draft = {
+      savedAt: Date.now(),
+      lines: cart.map((line) => ({ itemId: line.item.id, quantity: line.quantity, unitPrice: line.unitPrice })),
+      discount, walletId, customerId, payMode, partialAmount, cashReceived,
+    };
+    localStorage.setItem(draftKey, JSON.stringify(draft));
+  }, [cart, cashReceived, customerId, discount, draftKey, draftReady, partialAmount, payMode, walletId]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "F2") {
+        event.preventDefault();
+        searchRef.current?.focus();
+      }
+      if ((event.ctrlKey || event.metaKey) && event.key === "Enter" && cart.length > 0) {
+        event.preventDefault();
+        setReviewOpen(true);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [cart.length]);
+
+  const categories = useMemo(() => {
+    if (!items) return [];
+    return [...new Set(items.map((item) => item.category?.name).filter(Boolean) as string[])].sort();
+  }, [items]);
 
   const filtered = useMemo(() => {
     if (!items) return [];
-    const needle = q.toLowerCase();
-    return items.filter(
-      (it) => !needle || it.name.toLowerCase().includes(needle) || it.sku.toLowerCase().includes(needle) || it.barcode?.includes(needle)
+    const needle = q.trim().toLowerCase();
+    return items.filter((item) =>
+      (category === "ALL" || item.category?.name === category) &&
+      (!needle || item.name.toLowerCase().includes(needle) || item.sku.toLowerCase().includes(needle) || item.barcode?.toLowerCase().includes(needle))
     );
-  }, [items, q]);
+  }, [category, items, q]);
 
-  const stockOf = (it: Item) => it.stockLevels.reduce((a, l) => a + l.quantity, 0);
-  const inCart = (id: string) => cart.reduce((a, l) => (l.item.id === id ? a + l.quantity : a), 0);
+  function stockOf(item: Item) {
+    return item.stockLevels
+      .filter((level) => !defaultBranchId || level.branchId === defaultBranchId)
+      .reduce((total, level) => total + level.quantity, 0);
+  }
 
-  function addToCart(it: Item) {
-    if (inCart(it.id) >= stockOf(it)) {
-      push(`No more stock for ${it.name}`, "error");
+  function inCart(id: string) {
+    return cart.reduce((total, line) => line.item.id === id ? total + line.quantity : total, 0);
+  }
+
+  function addToCart(item: Item) {
+    if (inCart(item.id) >= stockOf(item)) {
+      push(`No more stock for ${item.name}`, "error");
       return;
     }
-    setCart((c) => {
-      const existing = c.find((l) => l.item.id === it.id);
-      if (existing) return c.map((l) => (l.item.id === it.id ? { ...l, quantity: l.quantity + 1 } : l));
-      return [...c, { item: it, quantity: 1, unitPrice: Number(BigInt(it.sellingPrice)) / 100 }];
+    setCart((current) => {
+      const existing = current.find((line) => line.item.id === item.id);
+      if (existing) {
+        return current.map((line) => line.item.id === item.id ? { ...line, quantity: line.quantity + 1 } : line);
+      }
+      return [...current, { item, quantity: 1, unitPrice: Number(BigInt(item.sellingPrice)) / 100 }];
     });
   }
 
-  const subtotal = cart.reduce((a, l) => a + l.quantity * l.unitPrice, 0);
-  const disc = parseFloat(discount.replace(/,/g, "")) || 0;
+  function changeQuantity(itemId: string, quantity: number) {
+    const line = cart.find((entry) => entry.item.id === itemId);
+    if (!line) return;
+    if (quantity <= 0) {
+      setCart((current) => current.filter((entry) => entry.item.id !== itemId));
+      return;
+    }
+    setCart((current) => current.map((entry) =>
+      entry.item.id === itemId ? { ...entry, quantity: Math.min(quantity, stockOf(entry.item)) } : entry
+    ));
+  }
+
+  function scan(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter" || !items) return;
+    const needle = q.trim().toLowerCase();
+    const exact = items.find((item) =>
+      item.sku.toLowerCase() === needle || item.barcode?.toLowerCase() === needle
+    );
+    if (exact) {
+      event.preventDefault();
+      addToCart(exact);
+      setQ("");
+    }
+  }
+
+  const subtotal = cart.reduce((total, line) => total + line.quantity * line.unitPrice, 0);
+  const disc = readAmount(discount);
   const total = Math.max(0, subtotal - disc);
-  const paidAmount = payMode === "full" ? total : payMode === "credit" ? 0 : Math.min(total, parseFloat(partialAmount.replace(/,/g, "")) || 0);
+  const paidAmount = payMode === "full" ? total : payMode === "credit" ? 0 : Math.min(total, readAmount(partialAmount));
   const creditAmount = total - paidAmount;
+  const received = readAmount(cashReceived);
+  const change = payMode === "full" ? Math.max(0, received - total) : 0;
+  const canCheckout = cart.length > 0 && disc >= 0 && disc <= subtotal &&
+    (paidAmount === 0 || Boolean(walletId)) &&
+    (creditAmount === 0 || Boolean(customerId)) &&
+    (payMode !== "full" || !cashReceived || received >= total);
+
+  function clearSale() {
+    setCart([]);
+    setDiscount("0");
+    setPartialAmount("");
+    setCashReceived("");
+    setPayMode("full");
+    setCustomerId("");
+    localStorage.removeItem(draftKey);
+  }
 
   async function checkout() {
+    if (!canCheckout) return;
     setBusy(true);
     try {
-      const sale = await api<{ txnNo: string; total: string; profit: string }>("/api/v1/sales", {
+      const sale = await api<SaleResult>("/api/v1/sales", {
         method: "POST",
         body: {
           branchId: defaultBranchId,
           customerId: customerId || undefined,
-          lines: cart.map((l) => ({ itemId: l.item.id, quantity: l.quantity, unitPrice: l.unitPrice.toString() })),
+          lines: cart.map((line) => ({
+            itemId: line.item.id,
+            quantity: line.quantity,
+            unitPrice: line.unitPrice.toString(),
+          })),
           discount: disc.toString(),
           paidAmount: paidAmount.toString(),
           walletId: paidAmount > 0 ? walletId : undefined,
         },
       });
+      setReviewOpen(false);
       setLastSale(sale);
-      push(`Sale ${sale.txnNo} completed`);
-      setCart([]); setDiscount("0"); setPartialAmount(""); setPayMode("full"); setCustomerId("");
+      clearSale();
       load();
-    } catch (e) {
-      push(e instanceof Error ? e.message : "Failed", "error");
+    } catch (error) {
+      push(error instanceof Error ? error.message : "Sale failed", "error");
     } finally {
       setBusy(false);
     }
@@ -106,79 +258,88 @@ export default function PosPage() {
     <div className="mx-auto max-w-7xl">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Sales &amp; POS</h1>
-        {lastSale && (
-          <span className="max-w-full truncate text-xs text-green-600 sm:text-sm">
-            Last: {lastSale.txnNo} · {fmtMoney(lastSale.total)} MMK
-          </span>
-        )}
+        <span className="text-xs text-gray-500">{cart.reduce((sum, line) => sum + line.quantity, 0)} item(s)</span>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-5">
-        {/* Item grid */}
         <div className="space-y-3 lg:col-span-3">
-          <div className="relative">
-            <Search size={16} className="absolute left-3 top-2.5 text-gray-400" />
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search or scan barcode…"
-              className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm dark:border-gray-700 dark:bg-gray-800"
-              autoFocus
-            />
+          <div className="grid gap-2 sm:grid-cols-[1fr_12rem]">
+            <div className="relative">
+              <Search size={16} className="absolute left-3 top-3 text-gray-400" />
+              <input
+                ref={searchRef}
+                value={q}
+                onChange={(event) => setQ(event.target.value)}
+                onKeyDown={scan}
+                placeholder="Search or scan barcode..."
+                className="min-h-10 w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm dark:border-gray-700 dark:bg-gray-800"
+                autoFocus
+              />
+            </div>
+            <Select value={category} onChange={(event) => setCategory(event.target.value)}>
+              <option value="ALL">All categories</option>
+              {categories.map((name) => <option key={name} value={name}>{name}</option>)}
+            </Select>
           </div>
           <div className="grid max-h-[42dvh] grid-cols-2 gap-2 overflow-y-auto sm:max-h-[55dvh] sm:grid-cols-3 lg:max-h-[70vh] xl:grid-cols-4">
-            {filtered.map((it) => {
-              const qty = stockOf(it);
-              const available = qty - inCart(it.id);
-              const out = available <= 0;
+            {filtered.map((item) => {
+              const available = stockOf(item) - inCart(item.id);
               return (
                 <button
-                  key={it.id}
-                  onClick={() => addToCart(it)}
-                  disabled={out}
+                  key={item.id}
+                  onClick={() => addToCart(item)}
+                  disabled={available <= 0}
                   className={cn(
                     "min-h-24 rounded-lg border border-gray-200 bg-white p-2.5 text-left shadow-sm transition hover:border-blue-400 dark:border-gray-800 dark:bg-gray-900 sm:p-3",
-                    out && "opacity-40"
+                    available <= 0 && "opacity-40"
                   )}
                 >
-                  <div className="text-sm font-semibold leading-tight">{it.name}</div>
-                  <div className="mt-0.5 text-[11px] text-gray-500">{it.sku} · stock {available}</div>
-                  <div className="mt-1 text-sm font-bold tabular-nums text-blue-600">{fmtMoney(it.sellingPrice)} MMK</div>
+                  <div className="text-sm font-semibold leading-tight">{item.name}</div>
+                  <div className="mt-0.5 text-[11px] text-gray-500">{item.sku} · stock {available}</div>
+                  <div className="mt-1 text-sm font-bold tabular-nums text-blue-600">{fmtMoney(item.sellingPrice)} MMK</div>
                 </button>
               );
             })}
           </div>
         </div>
 
-        {/* Cart */}
         <Card className="h-fit space-y-3 lg:col-span-2">
-          <h3 className="text-sm font-semibold">Cart ({cart.length})</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Cart ({cart.length})</h3>
+            {cart.length > 0 && (
+              <button type="button" onClick={clearSale} className="text-xs font-medium text-red-600">Clear</button>
+            )}
+          </div>
           {cart.length === 0 ? (
             <p className="py-6 text-center text-sm text-gray-400">Tap items to add them</p>
           ) : (
-            <div className="max-h-64 space-y-2 overflow-y-auto">
-              {cart.map((l) => (
-                <div key={l.item.id} className="flex items-center gap-2 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate font-medium">{l.item.name}</div>
-                    <div className="text-xs text-gray-500 tabular-nums">
-                      {l.unitPrice.toLocaleString()} × {l.quantity} = {(l.unitPrice * l.quantity).toLocaleString()}
+            <div className="max-h-72 space-y-3 overflow-y-auto">
+              {cart.map((line) => (
+                <div key={line.item.id} className="space-y-2 border-b border-gray-100 pb-2 text-sm last:border-0 dark:border-gray-800">
+                  <div className="flex items-center gap-2">
+                    <div className="min-w-0 flex-1 truncate font-medium">{line.item.name}</div>
+                    <b className="tabular-nums">{(line.unitPrice * line.quantity).toLocaleString()} MMK</b>
+                    <button onClick={() => changeQuantity(line.item.id, 0)} className="min-h-9 min-w-9 rounded-lg p-2 text-gray-400 hover:text-red-500" aria-label={`Remove ${line.item.name}`}>
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                  <div className="flex items-end justify-between gap-2">
+                    <Input
+                      label="Selling price"
+                      value={line.unitPrice.toString()}
+                      onChange={(event) => {
+                        const value = Math.max(0, readAmount(event.target.value));
+                        setCart((current) => current.map((entry) => entry.item.id === line.item.id ? { ...entry, unitPrice: value } : entry));
+                      }}
+                      inputMode="decimal"
+                      className="max-w-32"
+                    />
+                    <div className="flex h-10 shrink-0 items-center overflow-hidden rounded-lg border border-gray-300 dark:border-gray-700">
+                      <button type="button" onClick={() => changeQuantity(line.item.id, line.quantity - 1)} className="h-full w-10 p-2" aria-label="Decrease quantity"><Minus size={15} /></button>
+                      <span className="w-10 text-center font-semibold tabular-nums">{line.quantity}</span>
+                      <button type="button" onClick={() => changeQuantity(line.item.id, line.quantity + 1)} disabled={line.quantity >= stockOf(line.item)} className="h-full w-10 p-2 disabled:opacity-30" aria-label="Increase quantity"><Plus size={15} /></button>
                     </div>
                   </div>
-                  <input
-                    type="number"
-                    min={1}
-                    max={stockOf(l.item)}
-                    value={l.quantity}
-                    onChange={(e) => {
-                      const v = Math.max(1, Math.min(stockOf(l.item), parseInt(e.target.value) || 1));
-                      setCart((c) => c.map((x) => (x.item.id === l.item.id ? { ...x, quantity: v } : x)));
-                    }}
-                    className="w-16 rounded border border-gray-300 px-2 py-1 text-right text-sm dark:border-gray-700 dark:bg-gray-800"
-                  />
-                  <button onClick={() => setCart((c) => c.filter((x) => x.item.id !== l.item.id))} className="text-gray-400 hover:text-red-500">
-                    <Trash2 size={15} />
-                  </button>
                 </div>
               ))}
             </div>
@@ -188,58 +349,94 @@ export default function PosPage() {
             <div className="flex justify-between"><span>Subtotal</span><b className="tabular-nums">{subtotal.toLocaleString()} MMK</b></div>
             <div className="flex items-center justify-between gap-2">
               <span>Discount</span>
-              <input
-                value={discount}
-                onChange={(e) => setDiscount(e.target.value)}
-                className="w-28 rounded border border-gray-300 px-2 py-1 text-right text-sm dark:border-gray-700 dark:bg-gray-800"
-                inputMode="decimal"
-              />
+              <input value={discount} onChange={(event) => setDiscount(event.target.value)} className="w-28 rounded border border-gray-300 px-2 py-1 text-right text-sm dark:border-gray-700 dark:bg-gray-800" inputMode="decimal" />
             </div>
+            {disc > subtotal && <p className="text-xs text-red-600">Discount cannot exceed subtotal.</p>}
             <div className="flex justify-between text-base"><span className="font-semibold">Total</span><b className="tabular-nums text-blue-600">{total.toLocaleString()} MMK</b></div>
           </div>
 
           <div className="space-y-2">
             <div className="flex gap-1 rounded-lg bg-gray-100 p-1 text-[11px] dark:bg-gray-800 sm:text-xs">
-              {(["full", "partial", "credit"] as const).map((m) => (
-                <button
-                  key={m}
-                  onClick={() => setPayMode(m)}
-                  className={cn("min-h-9 min-w-0 flex-1 rounded-md px-1 py-1.5 font-medium capitalize sm:px-2", payMode === m ? "bg-white shadow dark:bg-gray-700" : "text-gray-500")}
-                >
-                  {m === "full" ? "Full" : m === "partial" ? "Partial" : "Credit"}
+              {(["full", "partial", "credit"] as const).map((mode) => (
+                <button key={mode} onClick={() => setPayMode(mode)} className={cn("min-h-9 min-w-0 flex-1 rounded-md px-1 py-1.5 font-medium capitalize sm:px-2", payMode === mode ? "bg-white shadow dark:bg-gray-700" : "text-gray-500")}>
+                  {mode === "full" ? "Full" : mode === "partial" ? "Partial" : "Credit"}
                 </button>
               ))}
             </div>
-            {payMode === "partial" && (
-              <Input label="Amount received now" value={partialAmount} onChange={(e) => setPartialAmount(e.target.value)} inputMode="decimal" />
+            {payMode === "partial" && <Input label="Amount received now" value={partialAmount} onChange={(event) => setPartialAmount(event.target.value)} inputMode="decimal" />}
+            {payMode === "full" && (
+              <>
+                <Input label="Cash received (optional)" value={cashReceived} onChange={(event) => setCashReceived(event.target.value)} inputMode="decimal" />
+                <div className="flex flex-wrap gap-1.5">
+                  {cashSuggestions(total).map((amount) => (
+                    <button key={amount} type="button" onClick={() => setCashReceived(amount.toString())} className="rounded-lg border border-gray-300 px-2 py-1 text-xs tabular-nums dark:border-gray-700">
+                      {amount.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+                {cashReceived && received < total && <p className="text-xs text-red-600">Cash received is less than the total.</p>}
+                {cashReceived && received >= total && <p className="text-sm font-semibold text-green-600">Change: {change.toLocaleString()} MMK</p>}
+              </>
             )}
             {paidAmount > 0 && (
-              <Select label="Receive into wallet" value={walletId} onChange={(e) => setWalletId(e.target.value)}>
-                {wallets.filter((w) => w.currency === "MMK").map((w) => (
-                  <option key={w.id} value={w.id}>{w.name} ({fmtMoney(w.currentBalance)})</option>
+              <Select label="Receive into wallet" value={walletId} onChange={(event) => setWalletId(event.target.value)}>
+                {wallets.filter((wallet) => wallet.currency === "MMK").map((wallet) => (
+                  <option key={wallet.id} value={wallet.id}>{wallet.name} ({fmtMoney(wallet.currentBalance)})</option>
                 ))}
               </Select>
             )}
             {creditAmount > 0 && (
               <>
-                <Select label={`Customer (owes ${creditAmount.toLocaleString()} MMK)`} value={customerId} onChange={(e) => setCustomerId(e.target.value)}>
-                  <option value="">Select customer…</option>
-                  {customers.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                <Select label={`Customer owes ${creditAmount.toLocaleString()} MMK`} value={customerId} onChange={(event) => setCustomerId(event.target.value)}>
+                  <option value="">Select customer...</option>
+                  {customers.map((customer) => <option key={customer.id} value={customer.id}>{customer.name}</option>)}
                 </Select>
-                <p className="text-xs text-amber-600">The unpaid amount becomes a customer credit record.</p>
+                <p className="text-xs text-amber-600">The unpaid amount is money the customer owes your business.</p>
               </>
             )}
           </div>
 
-          <Button
-            className="w-full"
-            disabled={busy || cart.length === 0 || (paidAmount > 0 && !walletId) || (creditAmount > 0 && !customerId)}
-            onClick={checkout}
-          >
-            {busy ? "Processing…" : `Complete sale — ${total.toLocaleString()} MMK`}
+          <Button className="w-full" disabled={busy || !canCheckout} onClick={() => setReviewOpen(true)}>
+            Review sale · {total.toLocaleString()} MMK
           </Button>
         </Card>
       </div>
+
+      <Modal open={reviewOpen} onClose={() => setReviewOpen(false)} title="Review sale">
+        <div className="space-y-4">
+          <div className="max-h-52 space-y-2 overflow-y-auto text-sm">
+            {cart.map((line) => (
+              <div key={line.item.id} className="flex justify-between gap-3">
+                <span className="min-w-0 truncate">{line.item.name} × {line.quantity}</span>
+                <b className="shrink-0 tabular-nums">{(line.unitPrice * line.quantity).toLocaleString()} MMK</b>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-1 border-t border-gray-200 pt-3 text-sm dark:border-gray-700">
+            <div className="flex justify-between"><span>Total</span><b>{total.toLocaleString()} MMK</b></div>
+            <div className="flex justify-between"><span>Received</span><b>{paidAmount.toLocaleString()} MMK</b></div>
+            {creditAmount > 0 && <div className="flex justify-between text-amber-600"><span>Customer owes</span><b>{creditAmount.toLocaleString()} MMK</b></div>}
+            {change > 0 && <div className="flex justify-between text-green-600"><span>Change</span><b>{change.toLocaleString()} MMK</b></div>}
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            <Button variant="secondary" disabled={busy} onClick={() => setReviewOpen(false)}>Back</Button>
+            <Button disabled={busy} onClick={checkout}>{busy ? "Processing..." : "Complete sale"}</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={Boolean(lastSale)} onClose={() => setLastSale(null)} title="Sale complete">
+        {lastSale && (
+          <div className="space-y-4 text-center">
+            <CheckCircle2 className="mx-auto text-green-600" size={48} />
+            <div>
+              <p className="font-mono text-lg font-bold">{lastSale.txnNo}</p>
+              <p className="mt-1 text-2xl font-bold text-blue-600">{fmtMoney(lastSale.total)} MMK</p>
+            </div>
+            <Button className="w-full" onClick={() => { setLastSale(null); searchRef.current?.focus(); }}>New sale</Button>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
