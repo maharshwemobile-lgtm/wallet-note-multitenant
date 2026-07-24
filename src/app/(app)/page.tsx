@@ -22,7 +22,6 @@ interface DashData {
   recentThreeD: { id: string; txnNo: string; number: string; betAmount: string; createdAt: string; session: { name: string } }[];
   recentExchanges: { id: string; txnNo: string; type: string; fromAmount: string; fromCurrency: string; toAmount: string; toCurrency: string; createdAt: string; status: string }[];
   pendingSessions: { id: string; name: string; drawDate: string; status: string }[];
-  dailyCloseStatus: string;
   rates: { pair: string; buyRate: string; sellRate: string }[];
   pos?: {
     salesCount: number;
@@ -36,7 +35,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashData | null>(null);
   const [date, setDate] = useState("");
   const [branchId, setBranchId] = useState("");
-  const { branches } = useAuth();
+  const { branches, miniMartEnabled } = useAuth();
   const { push } = useToast();
   const router = useRouter();
 
@@ -59,9 +58,7 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold">Dashboard</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
-            {data.date} · Daily close: <Badge status={data.dailyCloseStatus} />
-          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400">{data.date}</p>
         </div>
         <div className="flex gap-2">
           <Input type="date" value={date || data.date} onChange={(e) => setDate(e.target.value)} />
@@ -85,7 +82,7 @@ export default function DashboardPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {data.pos && (
+        {miniMartEnabled && data.pos && (
           <>
             <StatCard label="Today's Sales" value={fmtMoney(data.pos.salesTotal, "MMK")} sub={`${data.pos.salesCount} sale(s)`} onClick={() => router.push("/sales")} />
             <StatCard label="Sales Profit" value={fmtMoney(data.pos.salesProfit, "MMK")} tone={BigInt(data.pos.salesProfit) >= 0n ? "green" : "red"} onClick={() => router.push("/sales")} />
@@ -109,7 +106,7 @@ export default function DashboardPage() {
         <StatCard label="Payable Paid Today" value={fmtMoney(s.payable.paid, "MMK")} onClick={() => router.push("/credit?tab=payable")} />
       </div>
 
-      {data.pos && data.pos.lowStock.length > 0 && (
+      {miniMartEnabled && data.pos && data.pos.lowStock.length > 0 && (
         <Card className="border-red-300 dark:border-red-800">
           <h3 className="mb-2 text-sm font-semibold text-red-700 dark:text-red-400">Low stock alerts</h3>
           <ul className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
