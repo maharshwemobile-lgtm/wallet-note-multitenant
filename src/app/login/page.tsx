@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Wallet } from "lucide-react";
 import { Button, Input, Card } from "@/components/ui";
 import { PwaInstall } from "@/components/PwaInstall";
+import { LanguageSwitch } from "@/components/LanguageProvider";
 import { api } from "@/lib/client";
 
 export default function LoginPage() {
@@ -31,7 +32,8 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex flex-1 items-center justify-center p-4">
+    <main className="relative flex min-w-0 w-full flex-1 items-center justify-center overflow-x-hidden p-4 pt-16">
+      <LanguageSwitch className="absolute right-4 top-4" />
       <Card className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-2 pt-2">
           <div className="rounded-2xl bg-blue-600 p-3 text-white">

@@ -11,6 +11,7 @@ import {
 import { api } from "@/lib/client";
 import { ToastProvider, cn } from "./ui";
 import { PwaInstall } from "./PwaInstall";
+import { LanguageSwitch } from "./LanguageProvider";
 
 interface Me {
   user: {
@@ -192,6 +193,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 </span>
               </div>
               <div className="flex items-center gap-1">
+                <LanguageSwitch className="mr-1" />
                 <PwaInstall compact />
                 <button onClick={toggleTheme} className="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800" title="Toggle theme">
                   {dark ? <Sun size={18} /> : <Moon size={18} />}

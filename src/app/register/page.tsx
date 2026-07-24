@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { ShoppingCart, Wallet } from "lucide-react";
 import { Button, Card, Input, Modal, Select } from "@/components/ui";
 import { PwaInstall } from "@/components/PwaInstall";
+import { LanguageSwitch } from "@/components/LanguageProvider";
 import { api } from "@/lib/client";
 
 export default function RegisterPage() {
@@ -66,7 +67,8 @@ export default function RegisterPage() {
   }
 
   return (
-    <main className="flex flex-1 items-center justify-center p-4 py-8">
+    <main className="relative flex min-w-0 w-full flex-1 items-center justify-center overflow-x-hidden p-4 pb-8 pt-20">
+      <LanguageSwitch className="absolute right-4 top-4" />
       <Card className="w-full max-w-xl">
         <div className="mb-6 flex flex-col items-center gap-2 pt-2">
           <div className="rounded-xl bg-blue-600 p-3 text-white">
