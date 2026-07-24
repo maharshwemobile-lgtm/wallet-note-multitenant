@@ -80,6 +80,7 @@ export default function AboutPage() {
   if (!about) return <Spinner />;
 
   const links = [
+    { label: "Facebook", value: "My Choice My Life", href: externalUrl(about.facebook) },
     { label: "TikTok", value: about.tiktok, href: tiktokUrl(about.tiktok) },
     { label: "Telegram", value: about.telegram, href: telegramUrl(about.telegram) },
     { label: "Website", value: about.website, href: externalUrl(about.website) },

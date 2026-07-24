@@ -9,6 +9,7 @@ export interface AboutContent {
   phone: string;
   telegram: string;
   tiktok: string;
+  facebook: string;
   website: string;
   customerLiveUrl: string;
   copyright: string;
@@ -26,11 +27,12 @@ export const DEFAULT_ABOUT: AboutContent = {
   description: "Developed by Mahar Shwe Mobile for simple, private business records and Mini Mart operations.",
   developer: "Khun Myint Aung",
   developerPhoto: "/khun-myint-aung.jpg",
-  developerPhotoSource: "https://scontent.xx.fbcdn.net/v/t39.30808-6/486366953_2022676798240298_8059676134482978012_n.jpg",
+  developerPhotoSource: "https://www.facebook.com/Mychoicemylife2018",
   location: "Hsisheng Township, Shan State, Taunggyi",
   phone: "",
   telegram: "@Mylifemychoice68",
   tiktok: "@maharshwemobile",
+  facebook: "https://www.facebook.com/Mychoicemylife2018",
   website: "https://maharshwe.online/",
   customerLiveUrl: "https://maharshwe.online/",
   copyright: "",

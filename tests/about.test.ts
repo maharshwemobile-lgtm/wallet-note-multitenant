@@ -18,5 +18,6 @@ describe("about content", () => {
   it("preserves configured URLs", () => {
     expect(externalUrl("https://example.com/path")).toBe("https://example.com/path");
     expect(telegramUrl("https://t.me/example")).toBe("https://t.me/example");
+    expect(DEFAULT_ABOUT.facebook).toBe("https://www.facebook.com/Mychoicemylife2018");
   });
 });

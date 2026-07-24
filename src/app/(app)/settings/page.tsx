@@ -152,6 +152,7 @@ export default function SettingsPage() {
             <Input label="Telegram" value={about.telegram} onChange={(e) => setAbout({ ...about, telegram: e.target.value })} />
             <Input label="TikTok" value={about.tiktok} onChange={(e) => setAbout({ ...about, tiktok: e.target.value })} />
           </div>
+          <Input label="Facebook page" value={about.facebook} onChange={(e) => setAbout({ ...about, facebook: e.target.value })} />
           <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Website" value={about.website} onChange={(e) => setAbout({ ...about, website: e.target.value })} />
             <Input label="Customer live URL" value={about.customerLiveUrl} onChange={(e) => setAbout({ ...about, customerLiveUrl: e.target.value })} />
