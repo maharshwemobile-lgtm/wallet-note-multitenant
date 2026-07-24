@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Wallet } from "lucide-react";
 import { Button, Input, Card } from "@/components/ui";
+import { PwaInstall } from "@/components/PwaInstall";
 import { api } from "@/lib/client";
 
 export default function LoginPage() {
@@ -53,6 +54,9 @@ export default function LoginPage() {
             Create a free account
           </Link>
         </p>
+        <div className="mt-3 flex justify-center">
+          <PwaInstall />
+        </div>
       </Card>
     </main>
   );

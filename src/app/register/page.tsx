@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ShoppingCart, Wallet } from "lucide-react";
 import { Button, Card, Input, Modal, Select } from "@/components/ui";
+import { PwaInstall } from "@/components/PwaInstall";
 import { api } from "@/lib/client";
 
 export default function RegisterPage() {
@@ -184,6 +185,9 @@ export default function RegisterPage() {
             Sign in
           </Link>
         </p>
+        <div className="mt-3 flex justify-center">
+          <PwaInstall />
+        </div>
       </Card>
     </main>
   );

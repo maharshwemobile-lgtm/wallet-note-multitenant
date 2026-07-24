@@ -1,43 +1,59 @@
-// Wallet Note service worker.
-// Static assets are cached; API requests always go to the network — financial
-// writes must never silently complete offline. Navigation falls back to
-// /offline.html when the network is unavailable.
+const CACHE = "wallet-note-v2";
+const STATIC = [
+  "/offline.html",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/icon-maskable-512.png",
+  "/manifest.webmanifest",
+];
 
-const CACHE = "wallet-note-v1";
-const STATIC = ["/offline.html", "/icon.svg", "/manifest.webmanifest"];
-
-self.addEventListener("install", (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(STATIC)));
+self.addEventListener("install", (event) => {
+  event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(STATIC)));
   self.skipWaiting();
 });
 
-self.addEventListener("activate", (e) => {
-  e.waitUntil(
+self.addEventListener("activate", (event) => {
+  event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((key) => key !== CACHE).map((key) => caches.delete(key)))
     )
   );
   self.clients.claim();
 });
 
-self.addEventListener("fetch", (e) => {
-  const url = new URL(e.request.url);
-  if (e.request.method !== "GET" || url.pathname.startsWith("/api/")) return;
-
-  if (e.request.mode === "navigate") {
-    e.respondWith(fetch(e.request).catch(() => caches.match("/offline.html")));
+self.addEventListener("fetch", (event) => {
+  const url = new URL(event.request.url);
+  if (
+    event.request.method !== "GET" ||
+    url.origin !== self.location.origin ||
+    url.pathname.startsWith("/api/")
+  ) {
     return;
   }
-  e.respondWith(
-    caches.match(e.request).then(
+
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      fetch(event.request).catch(async () => {
+        const offline = await caches.match("/offline.html");
+        return offline || Response.error();
+      })
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(event.request).then(
       (cached) =>
         cached ||
-        fetch(e.request).then((res) => {
-          if (res.ok && (url.pathname.startsWith("/_next/static/") || STATIC.includes(url.pathname))) {
-            const clone = res.clone();
-            caches.open(CACHE).then((c) => c.put(e.request, clone));
+        fetch(event.request).then((response) => {
+          if (
+            response.ok &&
+            (url.pathname.startsWith("/_next/static/") || STATIC.includes(url.pathname))
+          ) {
+            const clone = response.clone();
+            caches.open(CACHE).then((cache) => cache.put(event.request, clone));
           }
-          return res;
+          return response;
         })
     )
   );
