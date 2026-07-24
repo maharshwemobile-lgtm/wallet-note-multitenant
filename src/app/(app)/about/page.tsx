@@ -83,6 +83,7 @@ export default function AboutPage() {
     { label: "Facebook", value: "My Choice My Life", href: externalUrl(about.facebook) },
     { label: "TikTok", value: about.tiktok, href: tiktokUrl(about.tiktok) },
     { label: "Telegram", value: about.telegram, href: telegramUrl(about.telegram) },
+    { label: "Community", value: "Join Telegram Community", href: externalUrl(about.community) },
     { label: "Website", value: about.website, href: externalUrl(about.website) },
   ].filter((link) => link.value && link.href);
 

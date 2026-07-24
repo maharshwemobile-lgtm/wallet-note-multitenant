@@ -8,6 +8,7 @@ export interface AboutContent {
   location: string;
   phone: string;
   telegram: string;
+  community: string;
   tiktok: string;
   facebook: string;
   website: string;
@@ -31,6 +32,7 @@ export const DEFAULT_ABOUT: AboutContent = {
   location: "Hsisheng Township, Shan State, Taunggyi",
   phone: "",
   telegram: "@Mylifemychoice68",
+  community: "https://t.me/+2gc9ml7iMgk1ZThl",
   tiktok: "@maharshwemobile",
   facebook: "https://www.facebook.com/Mychoicemylife2018",
   website: "https://maharshwe.online/",
