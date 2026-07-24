@@ -10,7 +10,7 @@ export function cn(...parts: (string | false | null | undefined)[]) {
 
 export function Card({ children, className }: { children: ReactNode; className?: string }) {
   return (
-    <div className={cn("rounded-xl border border-gray-200 bg-white p-4 shadow-sm dark:border-gray-800 dark:bg-gray-900", className)}>
+    <div className={cn("rounded-lg border border-gray-200 bg-white p-3 shadow-sm dark:border-gray-800 dark:bg-gray-900 sm:p-4", className)}>
       {children}
     </div>
   );
@@ -30,10 +30,10 @@ export function StatCard({ label, value, sub, onClick, tone }: {
   return (
     <button
       onClick={onClick}
-      className="rounded-xl border border-gray-200 bg-white p-4 text-left shadow-sm transition hover:shadow-md dark:border-gray-800 dark:bg-gray-900 w-full"
+      className="w-full rounded-lg border border-gray-200 bg-white p-3 text-left shadow-sm transition hover:shadow-md dark:border-gray-800 dark:bg-gray-900 sm:p-4"
     >
       <div className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">{label}</div>
-      <div className={cn("mt-1 text-xl font-bold tabular-nums", tones[tone ?? "default"])}>{value}</div>
+      <div className={cn("mt-1 text-lg font-bold tabular-nums sm:text-xl", tones[tone ?? "default"])}>{value}</div>
       {sub && <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{sub}</div>}
     </button>
   );
@@ -57,7 +57,7 @@ export function Button({ children, onClick, type = "button", variant = "primary"
       disabled={disabled}
       className={cn(
         "rounded-lg font-medium transition disabled:cursor-not-allowed disabled:opacity-60",
-        size === "sm" ? "px-2.5 py-1.5 text-xs" : "px-4 py-2 text-sm",
+        size === "sm" ? "min-h-9 px-2.5 py-1.5 text-xs" : "min-h-10 px-4 py-2 text-sm",
         variants[variant],
         className
       )}
@@ -76,7 +76,7 @@ export function Input({ label, error, ...props }: {
       <input
         {...props}
         className={cn(
-          "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100",
+          "min-h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 sm:min-h-10 sm:text-sm",
           props.className
         )}
       />
@@ -94,7 +94,7 @@ export function Select({ label, children, ...props }: {
       <select
         {...props}
         className={cn(
-          "w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 outline-none focus:border-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100",
+          "min-h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-base text-gray-900 outline-none focus:border-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 sm:min-h-10 sm:text-sm",
           props.className
         )}
       >
@@ -122,17 +122,17 @@ export function Modal({ open, onClose, title, children, wide }: {
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center sm:p-4">
       <div
         className={cn(
-          "max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white p-5 shadow-xl dark:bg-gray-900 sm:rounded-2xl",
+          "max-h-[calc(100dvh-1rem)] w-full overflow-y-auto rounded-t-2xl bg-white p-4 pb-[max(1rem,env(safe-area-inset-bottom))] shadow-xl dark:bg-gray-900 sm:max-h-[92vh] sm:rounded-xl sm:p-5",
           wide ? "sm:max-w-3xl" : "sm:max-w-lg"
         )}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">{title}</h2>
-          <button onClick={onClose} className="rounded-lg p-1 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
+          <h2 className="min-w-0 pr-2 text-base font-semibold text-gray-900 dark:text-gray-100 sm:text-lg">{title}</h2>
+          <button onClick={onClose} className="min-h-10 min-w-10 rounded-lg p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800">
             <X size={20} />
           </button>
         </div>
@@ -146,7 +146,7 @@ export function Table({ headers, children, rightAlign }: {
   headers: string[]; children: ReactNode; rightAlign?: number[];
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800">
+    <div className="max-w-full overscroll-x-contain overflow-x-auto rounded-lg border border-gray-200 dark:border-gray-800">
       <table className="w-full min-w-max text-sm">
         <thead>
           <tr className="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:border-gray-800 dark:bg-gray-900/60 dark:text-gray-400">

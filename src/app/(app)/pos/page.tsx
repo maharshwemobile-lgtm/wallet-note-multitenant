@@ -104,10 +104,10 @@ export default function PosPage() {
 
   return (
     <div className="mx-auto max-w-7xl">
-      <div className="mb-3 flex items-center justify-between">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Sales &amp; POS</h1>
         {lastSale && (
-          <span className="text-sm text-green-600">
+          <span className="max-w-full truncate text-xs text-green-600 sm:text-sm">
             Last: {lastSale.txnNo} · {fmtMoney(lastSale.total)} MMK
           </span>
         )}
@@ -126,7 +126,7 @@ export default function PosPage() {
               autoFocus
             />
           </div>
-          <div className="grid max-h-[70vh] grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3 xl:grid-cols-4">
+          <div className="grid max-h-[42dvh] grid-cols-2 gap-2 overflow-y-auto sm:max-h-[55dvh] sm:grid-cols-3 lg:max-h-[70vh] xl:grid-cols-4">
             {filtered.map((it) => {
               const qty = stockOf(it);
               const available = qty - inCart(it.id);
@@ -137,7 +137,7 @@ export default function PosPage() {
                   onClick={() => addToCart(it)}
                   disabled={out}
                   className={cn(
-                    "rounded-xl border border-gray-200 bg-white p-3 text-left shadow-sm transition hover:border-blue-400 dark:border-gray-800 dark:bg-gray-900",
+                    "min-h-24 rounded-lg border border-gray-200 bg-white p-2.5 text-left shadow-sm transition hover:border-blue-400 dark:border-gray-800 dark:bg-gray-900 sm:p-3",
                     out && "opacity-40"
                   )}
                 >
@@ -199,14 +199,14 @@ export default function PosPage() {
           </div>
 
           <div className="space-y-2">
-            <div className="flex gap-1 rounded-lg bg-gray-100 p-1 text-xs dark:bg-gray-800">
+            <div className="flex gap-1 rounded-lg bg-gray-100 p-1 text-[11px] dark:bg-gray-800 sm:text-xs">
               {(["full", "partial", "credit"] as const).map((m) => (
                 <button
                   key={m}
                   onClick={() => setPayMode(m)}
-                  className={cn("flex-1 rounded-md px-2 py-1.5 font-medium capitalize", payMode === m ? "bg-white shadow dark:bg-gray-700" : "text-gray-500")}
+                  className={cn("min-h-9 min-w-0 flex-1 rounded-md px-1 py-1.5 font-medium capitalize sm:px-2", payMode === m ? "bg-white shadow dark:bg-gray-700" : "text-gray-500")}
                 >
-                  {m === "full" ? "Paid in full" : m === "partial" ? "Partial" : "On credit"}
+                  {m === "full" ? "Full" : m === "partial" ? "Partial" : "Credit"}
                 </button>
               ))}
             </div>

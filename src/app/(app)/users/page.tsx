@@ -110,7 +110,7 @@ export default function UsersPage() {
       <Input label="Full name" value={uform.name} onChange={(e) => setUform({ ...uform, name: e.target.value })} />
       {!isEdit && <Input label="Username" value={uform.username} onChange={(e) => setUform({ ...uform, username: e.target.value })} />}
       <Input label={isEdit ? "New password (leave blank to keep)" : "Password (min 8 chars)"} type="password" value={uform.password} onChange={(e) => setUform({ ...uform, password: e.target.value })} />
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <Select label="Role" value={uform.roleId} onChange={(e) => setUform({ ...uform, roleId: e.target.value })}>
           <option value="">Select…</option>
           {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -233,7 +233,7 @@ export default function UsersPage() {
 
       <Modal open={showNewRole} onClose={() => setShowNewRole(false)} title="New custom role" wide>
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Role name" value={rform.name} onChange={(e) => setRform({ ...rform, name: e.target.value })} />
             <Input label="Description" value={rform.description} onChange={(e) => setRform({ ...rform, description: e.target.value })} />
           </div>

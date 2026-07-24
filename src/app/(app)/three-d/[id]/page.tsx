@@ -225,11 +225,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
               {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </Select>
           )}
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Customer name (optional)" value={entry.customerName} onChange={(e) => setEntry({ ...entry, customerName: e.target.value })} />
             <Input label="Phone (optional)" value={entry.customerPhone} onChange={(e) => setEntry({ ...entry, customerPhone: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label={`Odds (default ${s.defaultOdds})`} value={entry.odds} onChange={(e) => setEntry({ ...entry, odds: e.target.value })} placeholder={s.defaultOdds} />
             <Input label="Commission % (optional)" value={entry.commissionRate} onChange={(e) => setEntry({ ...entry, commissionRate: e.target.value })} placeholder="10" />
           </div>

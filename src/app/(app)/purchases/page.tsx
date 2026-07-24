@@ -94,7 +94,7 @@ export default function PurchasesPage() {
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">Purchases</h1>
         {hasPerm("purchase.create") && (
           <Button onClick={() => setShowNew(true)}><Plus size={16} className="mr-1 inline" />New purchase</Button>
@@ -173,7 +173,7 @@ export default function PurchasesPage() {
             </div>
           </div>
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid gap-3 sm:grid-cols-3">
             <Input label="Discount" value={form.discount} onChange={(e) => setForm({ ...form, discount: e.target.value })} inputMode="decimal" />
             <Input label="Paid now" value={form.paidAmount} onChange={(e) => setForm({ ...form, paidAmount: e.target.value })} inputMode="decimal" />
             <Input label="Due date (unpaid part)" type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />

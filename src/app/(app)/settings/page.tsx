@@ -76,7 +76,7 @@ export default function SettingsPage() {
         <h3 className="mb-3 text-sm font-semibold">Business profile</h3>
         <div className="space-y-3">
           <Input label="Business name" value={biz.name} onChange={(e) => setBiz({ ...biz, name: e.target.value })} />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Phone" value={biz.phone} onChange={(e) => setBiz({ ...biz, phone: e.target.value })} />
             <Input label="Telegram" value={biz.telegram} onChange={(e) => setBiz({ ...biz, telegram: e.target.value })} />
           </div>
@@ -112,7 +112,7 @@ export default function SettingsPage() {
 
       <Card>
         <h3 className="mb-3 text-sm font-semibold">3D settings</h3>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid gap-3 sm:grid-cols-2">
           <Input label="Default odds" value={threeD.defaultOdds} onChange={(e) => setThreeD({ ...threeD, defaultOdds: e.target.value })} />
           <Input label="Default commission %" value={threeD.defaultCommissionRate} onChange={(e) => setThreeD({ ...threeD, defaultCommissionRate: e.target.value })} />
           <Input label="Max amount per number" value={threeD.maxPerNumber} onChange={(e) => setThreeD({ ...threeD, maxPerNumber: e.target.value })} />
@@ -126,16 +126,16 @@ export default function SettingsPage() {
       <Card>
         <h3 className="mb-3 text-sm font-semibold">About Us page content</h3>
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label="App name" value={about.appName} onChange={(e) => setAbout({ ...about, appName: e.target.value })} />
             <Input label="Version" value={about.version} onChange={(e) => setAbout({ ...about, version: e.target.value })} />
           </div>
           <Input label="Description" value={about.description} onChange={(e) => setAbout({ ...about, description: e.target.value })} />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Developer / company" value={about.developer} onChange={(e) => setAbout({ ...about, developer: e.target.value })} />
             <Input label="Contact phone" value={about.phone} onChange={(e) => setAbout({ ...about, phone: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Telegram" value={about.telegram} onChange={(e) => setAbout({ ...about, telegram: e.target.value })} />
             <Input label="Website" value={about.website} onChange={(e) => setAbout({ ...about, website: e.target.value })} />
           </div>

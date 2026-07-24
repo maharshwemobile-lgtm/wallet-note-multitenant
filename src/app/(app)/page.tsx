@@ -60,7 +60,7 @@ export default function DashboardPage() {
           <h1 className="text-xl font-bold">Dashboard</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400">{data.date}</p>
         </div>
-        <div className="flex gap-2">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
           <Input type="date" value={date || data.date} onChange={(e) => setDate(e.target.value)} />
           <Select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
             <option value="">All branches</option>

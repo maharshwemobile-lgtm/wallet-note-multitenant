@@ -94,7 +94,7 @@ export default function ItemsPage() {
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">Items</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {hasPerm("item.manage") && (
             <>
               <Button variant="secondary" onClick={() => setShowMeta(true)}>Categories & Units</Button>
@@ -149,11 +149,11 @@ export default function ItemsPage() {
       <Modal open={showNew} onClose={() => { setShowNew(false); setEditItem(null); }} title={editItem ? `Edit ${editItem.name}` : "New item"}>
         <div className="space-y-3">
           <Input label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label="SKU" value={form.sku} disabled={!!editItem} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
             <Input label="Barcode" value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Select label="Category" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
               <option value="">—</option>
               {meta.categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -163,7 +163,7 @@ export default function ItemsPage() {
               {meta.units.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
             </Select>
           </div>
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid gap-3 sm:grid-cols-3">
             <Input label="Cost price" value={form.costPrice} onChange={(e) => setForm({ ...form, costPrice: e.target.value })} inputMode="decimal" />
             <Input label="Selling price" value={form.sellingPrice} onChange={(e) => setForm({ ...form, sellingPrice: e.target.value })} inputMode="decimal" />
             <Input label="Min stock" type="number" value={form.minStock} onChange={(e) => setForm({ ...form, minStock: parseInt(e.target.value) || 0 })} />

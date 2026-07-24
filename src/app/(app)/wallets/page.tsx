@@ -72,7 +72,7 @@ export default function WalletsPage() {
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">Wallets</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {hasPerm("wallet.transfer") && (
             <Button variant="secondary" onClick={() => setShowTransfer(true)}>
               <ArrowLeftRight size={16} className="mr-1 inline" />Transfer
@@ -133,13 +133,13 @@ export default function WalletsPage() {
               }));
             }}
           />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="MMK-CASH-2" />
             <Select label="Type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
               {["CASH", "BANK", "MOBILE", "AGENT", "CUSTOMER", "EXPENSE", "CLEARING", "CUSTOM"].map((t) => <option key={t}>{t}</option>)}
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Select label="Currency" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
               <option>MMK</option><option>THB</option>
             </Select>
@@ -147,7 +147,7 @@ export default function WalletsPage() {
               {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
             </Select>
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Opening balance" value={form.openingBalance} onChange={(e) => setForm({ ...form, openingBalance: e.target.value })} inputMode="decimal" />
             <Input label="Minimum balance alert" value={form.minBalance} onChange={(e) => setForm({ ...form, minBalance: e.target.value })} inputMode="decimal" />
           </div>
@@ -176,7 +176,7 @@ export default function WalletsPage() {
             <option value="">Select…</option>
             {wallets.filter((w) => w.id !== transfer.sourceWalletId).map((w) => <option key={w.id} value={w.id}>{w.name} ({fmtMoney(w.currentBalance)} {w.currency})</option>)}
           </Select>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label={`Amount${source ? ` (${source.currency})` : ""}`} value={transfer.amount} onChange={(e) => setTransfer({ ...transfer, amount: e.target.value })} inputMode="decimal" />
             <Input label="Fee" value={transfer.fee} onChange={(e) => setTransfer({ ...transfer, fee: e.target.value })} inputMode="decimal" />
           </div>

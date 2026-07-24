@@ -84,7 +84,7 @@ export default function CustomersPage() {
       <Modal open={showNew} onClose={() => setShowNew(false)} title="New contact">
         <div className="space-y-3">
           <Input label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             <Select label="Type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
               {["CUSTOMER", "SUPPLIER", "AGENT", "CREDITOR", "DEBTOR", "OTHER"].map((t) => <option key={t}>{t}</option>)}

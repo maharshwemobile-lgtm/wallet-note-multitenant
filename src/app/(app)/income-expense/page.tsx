@@ -106,7 +106,7 @@ export default function IncomeExpensePage() {
             <option value="INCOME">Income</option>
             <option value="EXPENSE">Expense</option>
           </Select>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Select label="Category" value={form.categoryName} onChange={(e) => setForm({ ...form, categoryName: e.target.value })}>
               <option value="">Select…</option>
               {catOptions.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
@@ -114,7 +114,7 @@ export default function IncomeExpensePage() {
             </Select>
             <Input label="Date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} inputMode="decimal" />
             <Select label="Wallet" value={form.walletId} onChange={(e) => setForm({ ...form, walletId: e.target.value })}>
               <option value="">Select…</option>

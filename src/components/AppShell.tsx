@@ -169,7 +169,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           {/* Mobile drawer */}
           {drawer && (
             <div className="fixed inset-0 z-40 bg-black/50 lg:hidden" onClick={() => setDrawer(false)}>
-              <aside className="h-full w-64 bg-white dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
+              <aside className="h-full w-[min(18rem,88vw)] overflow-y-auto bg-white pb-[env(safe-area-inset-bottom)] dark:bg-gray-900" onClick={(e) => e.stopPropagation()}>
                 <div className="flex items-center justify-between border-b border-gray-200 p-4 dark:border-gray-800">
                   <span className="font-bold">Wallet Note</span>
                   <button onClick={() => setDrawer(false)}><X size={20} /></button>
@@ -181,12 +181,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <div className="flex min-w-0 flex-1 flex-col">
             {/* Top bar */}
-            <header className="no-print sticky top-0 z-30 flex items-center justify-between border-b border-gray-200 bg-white/90 px-4 py-2.5 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90">
-              <div className="flex items-center gap-3">
+            <header className="no-print sticky top-0 z-30 flex min-h-14 items-center justify-between border-b border-gray-200 bg-white/90 px-3 py-2 backdrop-blur dark:border-gray-800 dark:bg-gray-900/90 sm:px-4">
+              <div className="flex min-w-0 items-center gap-2 sm:gap-3">
                 <button className="rounded-lg p-1.5 hover:bg-gray-100 dark:hover:bg-gray-800 lg:hidden" onClick={() => setDrawer(true)}>
                   <Menu size={20} />
                 </button>
-                <span className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                <span className="truncate text-sm font-medium text-gray-500 dark:text-gray-400">
                   {me.user.name} · {me.user.roleName}
                 </span>
               </div>
@@ -200,7 +200,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
             </header>
 
-            <main className="flex-1 p-4 pb-24 lg:pb-6">
+            <main className="min-w-0 flex-1 p-3 pb-24 sm:p-4 lg:pb-6">
               {blockedMiniMartPath ? (
                 <div className="flex min-h-40 items-center justify-center">
                   <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
@@ -209,7 +209,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </main>
 
             {/* Mobile bottom nav */}
-            <nav className="no-print fixed inset-x-0 bottom-0 z-30 flex border-t border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:hidden">
+            <nav className="no-print fixed inset-x-0 bottom-0 z-30 flex border-t border-gray-200 bg-white pb-[env(safe-area-inset-bottom)] dark:border-gray-800 dark:bg-gray-900 lg:hidden">
               {mobileNav.map((n) => {
                 const active = n.href === "/" ? pathname === "/" : pathname.startsWith(n.href);
                 return (
@@ -217,12 +217,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                     key={n.href}
                     href={n.href}
                     className={cn(
-                      "flex flex-1 flex-col items-center gap-0.5 py-2 text-[11px] font-medium",
+                      "flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-2 text-[11px] font-medium",
                       active ? "text-blue-600" : "text-gray-500 dark:text-gray-400"
                     )}
                   >
                     <n.icon size={20} />
-                    {n.label.split(" ")[0]}
+                    <span className="max-w-full truncate">{n.label.split(" ")[0]}</span>
                   </Link>
                 );
               })}

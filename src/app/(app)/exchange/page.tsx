@@ -139,7 +139,7 @@ export default function ExchangePage() {
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">Money Exchange</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {hasPerm("exchange.rates") && <Button variant="secondary" onClick={() => { setRateForm({ buyRate: active?.buyRate ?? "", sellRate: active?.sellRate ?? "" }); setShowRate(true); }}>Update rate</Button>}
           {hasPerm("exchange.create") && <Button onClick={openNewExchange}><Plus size={16} className="mr-1 inline" />New exchange</Button>}
         </div>
@@ -186,7 +186,7 @@ export default function ExchangePage() {
             <option value="BUY_THB">Buy THB (pay MMK)</option>
             <option value="SELL_THB">Sell THB (receive MMK)</option>
           </Select>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label={`Amount (${fromCurrency})`} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} inputMode="decimal" />
             <Input label="Rate (MMK per 1 THB)" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} inputMode="decimal" />
           </div>
@@ -203,7 +203,7 @@ export default function ExchangePage() {
             <option value="">Select wallet…</option>
             {destWallets.map((w) => <option key={w.id} value={w.id}>{w.name} ({fmtMoney(w.currentBalance)})</option>)}
           </Select>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Service fee (MMK)" value={form.serviceFee} onChange={(e) => setForm({ ...form, serviceFee: e.target.value })} inputMode="decimal" />
             <Input label="Reference" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} />
           </div>

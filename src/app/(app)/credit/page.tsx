@@ -64,7 +64,7 @@ function CreditContent() {
           ...(isRec ? {} : { category: form.category || undefined }),
         },
       });
-      push(isRec ? "Credit recorded" : "Payable recorded");
+      push(isRec ? "Customer debt recorded" : "Payable recorded");
       setShowNew(false);
       setForm({ contactId: "", amount: "", dueDate: "", reference: "", notes: "", category: "" });
       load();
@@ -80,7 +80,7 @@ function CreditContent() {
     setBusy(true);
     try {
       await api(`${base}/${payItem.id}/payments`, { method: "POST", body: pay });
-      push(isRec ? "Collection recorded" : "Payment recorded");
+      push(isRec ? "Customer payment recorded" : "Payment recorded");
       setPayItem(null);
       setPay({ amount: "", walletId: "", notes: "" });
       load();
@@ -99,20 +99,20 @@ function CreditContent() {
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-xl font-bold">Credit & Payable</h1>
-        {canCreate && <Button onClick={() => setShowNew(true)}><Plus size={16} className="mr-1 inline" />{isRec ? "New credit" : "New payable"}</Button>}
+        {canCreate && <Button onClick={() => setShowNew(true)}><Plus size={16} className="mr-1 inline" />{isRec ? "Record debt" : "New payable"}</Button>}
       </div>
 
-      <div className="flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800 w-fit">
+      <div className="flex w-full gap-1 rounded-lg bg-gray-100 p-1 dark:bg-gray-800 sm:w-fit">
         {(["receivable", "payable"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={cn(
-              "rounded-md px-4 py-1.5 text-sm font-medium",
+              "min-w-0 flex-1 rounded-md px-3 py-2 text-sm font-medium sm:flex-none sm:px-4 sm:py-1.5",
               tab === t ? "bg-white shadow dark:bg-gray-700" : "text-gray-500"
             )}
           >
-            {t === "receivable" ? "Customer credit" : "Business payable"}
+            {t === "receivable" ? "Customers owe us" : "We owe suppliers"}
           </button>
         ))}
       </div>
@@ -124,38 +124,77 @@ function CreditContent() {
       {!items ? <Spinner /> : items.length === 0 ? (
         <Card><Empty message={`No ${tab} records`} /></Card>
       ) : (
-        <Table headers={["Txn", isRec ? "Customer" : "Supplier", "Original", "Paid", "Remaining", "Due date", "Aging", "Status", ""]} rightAlign={[2, 3, 4]}>
-          {items.map((it) => (
-            <tr key={it.id}>
-              <td className="px-3 py-2 text-xs">{it.txnNo}</td>
-              <td className="px-3 py-2 font-medium">{(isRec ? it.customer : it.supplier)?.name}</td>
-              <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(it.originalAmount)}</td>
-              <td className="px-3 py-2 text-right tabular-nums text-green-600">{fmtMoney(it.paidAmount)}</td>
-              <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtMoney(it.remainingAmount)}</td>
-              <td className="px-3 py-2 text-xs">{it.dueDate ?? "—"}</td>
-              <td className="px-3 py-2 text-xs">{it.aging === "CURRENT" ? "Current" : `${it.aging} days`}</td>
-              <td className="px-3 py-2"><Badge status={it.status} /></td>
-              <td className="px-3 py-2">
-                {canPay && it.status !== "PAID" && it.status !== "CANCELLED" && (
-                  <Button size="sm" variant="secondary" onClick={() => { setPay({ amount: "", walletId: "", notes: "" }); setPayItem(it); }}>
-                    {isRec ? "Collect" : "Pay"}
-                  </Button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </Table>
+        <>
+          <div className="space-y-2 md:hidden">
+            {items.map((it) => (
+              <Card key={it.id} className="space-y-3 p-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate font-semibold">{(isRec ? it.customer : it.supplier)?.name}</div>
+                    <div className="mt-0.5 text-xs text-gray-500">{it.txnNo}</div>
+                  </div>
+                  <Badge status={it.status} />
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div>
+                    <span className="block text-gray-500">Original</span>
+                    <b className="tabular-nums">{fmtMoney(it.originalAmount)}</b>
+                  </div>
+                  <div>
+                    <span className="block text-gray-500">Paid</span>
+                    <b className="tabular-nums text-green-600">{fmtMoney(it.paidAmount)}</b>
+                  </div>
+                  <div>
+                    <span className="block text-gray-500">Remaining</span>
+                    <b className="tabular-nums">{fmtMoney(it.remainingAmount)}</b>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
+                  <span>Due: {it.dueDate ?? "-"}</span>
+                  {canPay && it.status !== "PAID" && it.status !== "CANCELLED" && (
+                    <Button size="sm" variant="secondary" onClick={() => { setPay({ amount: "", walletId: "", notes: "" }); setPayItem(it); }}>
+                      {isRec ? "Record payment" : "Pay supplier"}
+                    </Button>
+                  )}
+                </div>
+              </Card>
+            ))}
+          </div>
+          <div className="hidden md:block">
+            <Table headers={["Txn", isRec ? "Customer" : "Supplier", "Original", "Paid", "Remaining", "Due date", "Aging", "Status", ""]} rightAlign={[2, 3, 4]}>
+              {items.map((it) => (
+                <tr key={it.id}>
+                  <td className="px-3 py-2 text-xs">{it.txnNo}</td>
+                  <td className="px-3 py-2 font-medium">{(isRec ? it.customer : it.supplier)?.name}</td>
+                  <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(it.originalAmount)}</td>
+                  <td className="px-3 py-2 text-right tabular-nums text-green-600">{fmtMoney(it.paidAmount)}</td>
+                  <td className="px-3 py-2 text-right font-semibold tabular-nums">{fmtMoney(it.remainingAmount)}</td>
+                  <td className="px-3 py-2 text-xs">{it.dueDate ?? "-"}</td>
+                  <td className="px-3 py-2 text-xs">{it.aging === "CURRENT" ? "Current" : `${it.aging} days`}</td>
+                  <td className="px-3 py-2"><Badge status={it.status} /></td>
+                  <td className="px-3 py-2">
+                    {canPay && it.status !== "PAID" && it.status !== "CANCELLED" && (
+                      <Button size="sm" variant="secondary" onClick={() => { setPay({ amount: "", walletId: "", notes: "" }); setPayItem(it); }}>
+                        {isRec ? "Record payment" : "Pay"}
+                      </Button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          </div>
+        </>
       )}
 
       {/* New */}
-      <Modal open={showNew} onClose={() => setShowNew(false)} title={isRec ? "New customer credit" : "New business payable"}>
+      <Modal open={showNew} onClose={() => setShowNew(false)} title={isRec ? "Record customer debt" : "New business payable"}>
         <div className="space-y-3">
           <Select label={isRec ? "Customer" : "Supplier / creditor"} value={form.contactId} onChange={(e) => setForm({ ...form, contactId: e.target.value })}>
             <option value="">Select…</option>
             {contactOptions.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.type})</option>)}
           </Select>
-          <div className="grid grid-cols-2 gap-3">
-            <Input label="Amount (MMK)" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} inputMode="decimal" />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input label={isRec ? "Amount customer owes (MMK)" : "Amount (MMK)"} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} inputMode="decimal" />
             <Input label="Due date" type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
           </div>
           {!isRec && <Input label="Expense category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Rent" />}
@@ -169,30 +208,31 @@ function CreditContent() {
       </Modal>
 
       {/* Collect / Pay */}
-      <Modal open={!!payItem} onClose={() => setPayItem(null)} title={isRec ? `Collect ${payItem?.txnNo}` : `Pay ${payItem?.txnNo}`}>
+      <Modal open={!!payItem} onClose={() => setPayItem(null)} title={isRec ? "Record customer payment" : `Pay ${payItem?.txnNo}`}>
         <div className="space-y-3">
           <p className="text-sm">
             Remaining: <b className="tabular-nums">{payItem && fmtMoney(payItem.remainingAmount)} {payItem?.currency}</b>
           </p>
-          <div className="flex gap-2">
+          <div className="flex items-end gap-2">
             <div className="flex-1">
               <Input label="Amount" value={pay.amount} onChange={(e) => setPay({ ...pay, amount: e.target.value })} inputMode="decimal" />
             </div>
-            <Button variant="secondary" size="sm" className="mt-6" onClick={() => payItem && setPay({ ...pay, amount: (Number(BigInt(payItem.remainingAmount)) / 100).toString() })}>
+            <Button variant="secondary" size="sm" onClick={() => payItem && setPay({ ...pay, amount: (Number(BigInt(payItem.remainingAmount)) / 100).toString() })}>
               Full
             </Button>
           </div>
-          <Select label={isRec ? "Deposit to wallet" : "Pay from wallet"} value={pay.walletId} onChange={(e) => setPay({ ...pay, walletId: e.target.value })}>
+          <Select label={isRec ? "Customer paid into" : "Pay from wallet"} value={pay.walletId} onChange={(e) => setPay({ ...pay, walletId: e.target.value })}>
             <option value="">Select…</option>
             {wallets.filter((w) => w.currency === (payItem?.currency ?? "MMK")).map((w) => (
-              <option key={w.id} value={w.id}>{w.name} ({fmtMoney(w.currentBalance)})</option>
+              <option key={w.id} value={w.id}>{isRec ? w.name : `${w.name} (${fmtMoney(w.currentBalance)})`}</option>
             ))}
           </Select>
+          {isRec && <p className="text-xs text-gray-500">The customer&apos;s payment will be added to this wallet. The wallet does not need an existing balance.</p>}
           <Input label="Notes" value={pay.notes} onChange={(e) => setPay({ ...pay, notes: e.target.value })} />
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setPayItem(null)}>Cancel</Button>
             <Button onClick={collect} disabled={busy || !pay.amount || !pay.walletId}>
-              {busy ? "Saving…" : "Confirm"}
+              {busy ? "Saving…" : isRec ? "Save payment" : "Confirm payment"}
             </Button>
           </div>
         </div>
