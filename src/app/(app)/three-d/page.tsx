@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { History, Plus } from "lucide-react";
 import { api } from "@/lib/client";
+import { todayBusinessDate } from "@/lib/dates";
 import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Modal, Spinner, Badge, Table, Empty, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
@@ -23,7 +24,13 @@ function ThreeDContent() {
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [results, setResults] = useState<OfficialResult[]>([]);
   const [showNew, setShowNew] = useState(() => search.get("new") === "1");
-  const [form, setForm] = useState({ name: "Morning", drawDate: "", drawTime: "12:01", cutoffTime: "11:45", defaultOdds: "500" });
+  const [form, setForm] = useState(() => ({
+    name: "Morning",
+    drawDate: todayBusinessDate(),
+    drawTime: "12:01",
+    cutoffTime: "11:45",
+    defaultOdds: "500",
+  }));
   const router = useRouter();
   const { push } = useToast();
   const { hasPerm } = useAuth();
@@ -105,7 +112,7 @@ function ThreeDContent() {
       <Modal open={showNew} onClose={() => setShowNew(false)} title="New 3D session">
         <div className="space-y-3">
           <Input label="Session name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          <Input label="Draw date" type="date" value={form.drawDate} onChange={(e) => setForm({ ...form, drawDate: e.target.value })} />
+          <Input label="Draw date" type="date" value={form.drawDate} onChange={(e) => setForm({ ...form, drawDate: e.target.value })} required />
           <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Draw time" type="time" value={form.drawTime} onChange={(e) => setForm({ ...form, drawTime: e.target.value })} />
             <Input label="Cut-off time" type="time" value={form.cutoffTime} onChange={(e) => setForm({ ...form, cutoffTime: e.target.value })} />
