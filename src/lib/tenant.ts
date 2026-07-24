@@ -14,6 +14,7 @@ export interface TenantRegistration {
   password: string;
   currency: "MMK" | "THB";
   timezone: string;
+  miniMartEnabled: boolean;
 }
 
 export async function assertBranchAccess(user: AuthUser, branchId: string) {
@@ -133,6 +134,13 @@ export async function registerTenant(input: TenantRegistration) {
             warnThreshold: "500000",
             sessions: [],
           }),
+        },
+      });
+      await tx.systemSetting.create({
+        data: {
+          businessId: business.id,
+          key: "modules",
+          value: JSON.stringify({ miniMartEnabled: input.miniMartEnabled }),
         },
       });
       await tx.auditLog.create({

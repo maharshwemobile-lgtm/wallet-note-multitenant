@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import {
@@ -17,6 +17,7 @@ interface Me {
     permissions: string[]; allBranches: boolean; branchIds: string[];
   };
   branches: { id: string; name: string; code: string }[];
+  modules: { miniMartEnabled: boolean };
 }
 
 const AuthCtx = createContext<{
@@ -24,7 +25,16 @@ const AuthCtx = createContext<{
   hasPerm: (p: string) => boolean;
   branches: Me["branches"];
   defaultBranchId: string;
-}>({ me: null, hasPerm: () => false, branches: [], defaultBranchId: "" });
+  miniMartEnabled: boolean;
+  refreshAuth: () => Promise<void>;
+}>({
+  me: null,
+  hasPerm: () => false,
+  branches: [],
+  defaultBranchId: "",
+  miniMartEnabled: false,
+  refreshAuth: async () => {},
+});
 
 export function useAuth() {
   return useContext(AuthCtx);
@@ -32,10 +42,10 @@ export function useAuth() {
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, perm: "dashboard.view" },
-  { href: "/pos", label: "Sales & POS", icon: ShoppingCart, perm: "sale.create" },
-  { href: "/purchases", label: "Purchases", icon: Truck, perm: "purchase.view" },
-  { href: "/items", label: "Items", icon: Package, perm: "item.view" },
-  { href: "/stock", label: "Stock", icon: Boxes, perm: "stock.view" },
+  { href: "/pos", label: "Sales & POS", icon: ShoppingCart, perm: "sale.create", miniMart: true },
+  { href: "/purchases", label: "Purchases", icon: Truck, perm: "purchase.view", miniMart: true },
+  { href: "/items", label: "Items", icon: Package, perm: "item.view", miniMart: true },
+  { href: "/stock", label: "Stock", icon: Boxes, perm: "stock.view", miniMart: true },
   { href: "/three-d", label: "3D Records", icon: Hash, perm: "three_d.view" },
   { href: "/exchange", label: "Exchange", icon: ArrowLeftRight, perm: "exchange.view" },
   { href: "/wallets", label: "Wallets", icon: Wallet, perm: "wallet.view" },
@@ -43,14 +53,14 @@ const NAV = [
   { href: "/income-expense", label: "Income & Expense", icon: Receipt, perm: "income_expense.view" },
   { href: "/reports", label: "Reports", icon: FileBarChart, perm: "report.view" },
   { href: "/customers", label: "Customers", icon: Users, perm: "customer.view" },
-  { href: "/suppliers", label: "Suppliers", icon: Building2, perm: "customer.view" },
+  { href: "/suppliers", label: "Suppliers", icon: Building2, perm: "customer.view", miniMart: true },
   { href: "/users", label: "Users & Roles", icon: UserCog, perm: "users.manage" },
   { href: "/settings", label: "Settings", icon: Settings, perm: "settings.manage" },
   { href: "/audit", label: "Audit Logs", icon: ScrollText, perm: "audit.view" },
   { href: "/about", label: "About Us", icon: Info, perm: null },
 ];
 
-const MOBILE_NAV = NAV.slice(0, 4);
+const MINI_MART_PATHS = ["/pos", "/sales", "/purchases", "/items", "/stock", "/suppliers"];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
@@ -59,6 +69,11 @@ export function AppShell({ children }: { children: ReactNode }) {
   const [dark, setDark] = useState(false);
   const pathname = usePathname();
   const router = useRouter();
+
+  const refreshAuth = useCallback(async () => {
+    const next = await api<Me>("/api/v1/auth/me");
+    setMe(next);
+  }, []);
 
   useEffect(() => {
     api<Me>("/api/v1/auth/me")
@@ -86,6 +101,13 @@ export function AppShell({ children }: { children: ReactNode }) {
     router.push("/login");
   }
 
+  const miniMartEnabled = me?.modules.miniMartEnabled ?? false;
+  const blockedMiniMartPath = !miniMartEnabled && MINI_MART_PATHS.some((path) => pathname.startsWith(path));
+
+  useEffect(() => {
+    if (me && blockedMiniMartPath) router.replace("/");
+  }, [blockedMiniMartPath, me, router]);
+
   if (loading || !me) {
     return (
       <div className="flex flex-1 items-center justify-center">
@@ -95,7 +117,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   const hasPerm = (p: string) => me.user.permissions.includes(p);
-  const visibleNav = NAV.filter((n) => !n.perm || hasPerm(n.perm));
+  const visibleNav = NAV.filter((n) => (!n.perm || hasPerm(n.perm)) && (!n.miniMart || miniMartEnabled));
+  const mobileNav = visibleNav.slice(0, 4);
 
   const sidebar = (
     <nav className="flex flex-col gap-0.5 p-3">
@@ -128,6 +151,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         hasPerm,
         branches: me.branches,
         defaultBranchId: me.branches[0]?.id ?? "",
+        miniMartEnabled,
+        refreshAuth,
       }}
     >
       <ToastProvider>
@@ -175,11 +200,17 @@ export function AppShell({ children }: { children: ReactNode }) {
               </div>
             </header>
 
-            <main className="flex-1 p-4 pb-24 lg:pb-6">{children}</main>
+            <main className="flex-1 p-4 pb-24 lg:pb-6">
+              {blockedMiniMartPath ? (
+                <div className="flex min-h-40 items-center justify-center">
+                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-gray-300 border-t-blue-600" />
+                </div>
+              ) : children}
+            </main>
 
             {/* Mobile bottom nav */}
             <nav className="no-print fixed inset-x-0 bottom-0 z-30 flex border-t border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900 lg:hidden">
-              {MOBILE_NAV.filter((n) => !n.perm || hasPerm(n.perm)).map((n) => {
+              {mobileNav.map((n) => {
                 const active = n.href === "/" ? pathname === "/" : pathname.startsWith(n.href);
                 return (
                   <Link

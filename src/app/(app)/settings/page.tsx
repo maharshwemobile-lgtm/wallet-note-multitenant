@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/client";
 import { Button, Card, Input, Spinner, useToast } from "@/components/ui";
+import { useAuth } from "@/components/AppShell";
 
 interface SettingsData {
   business: { id: string; name: string; phone?: string; address?: string; telegram?: string; website?: string; currency: string; timezone: string };
@@ -14,8 +15,10 @@ export default function SettingsPage() {
   const [biz, setBiz] = useState({ name: "", phone: "", address: "", telegram: "", website: "" });
   const [threeD, setThreeD] = useState({ defaultOdds: "500", defaultCommissionRate: "10", maxPerNumber: "", warnThreshold: "" });
   const [about, setAbout] = useState({ appName: "Wallet Note", version: "1.0.0", description: "", developer: "", phone: "", telegram: "", website: "", copyright: "" });
+  const [miniMartEnabled, setMiniMartEnabled] = useState(false);
   const [busy, setBusy] = useState(false);
   const { push } = useToast();
+  const { refreshAuth } = useAuth();
 
   const load = useCallback(() => {
     api<SettingsData>("/api/v1/settings").then((d) => {
@@ -28,6 +31,8 @@ export default function SettingsPage() {
       if (t) setThreeD({ ...threeD, ...t });
       const a = d.settings.about as typeof about | undefined;
       if (a) setAbout({ ...about, ...a });
+      const modules = d.settings.modules as { miniMartEnabled?: boolean } | undefined;
+      setMiniMartEnabled(modules ? modules.miniMartEnabled === true : true);
     }).catch((e) => push(e.message, "error"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [push]);
@@ -38,6 +43,22 @@ export default function SettingsPage() {
     try {
       await fn();
       push("Settings saved");
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Failed", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveModules() {
+    setBusy(true);
+    try {
+      await api("/api/v1/settings", {
+        method: "PUT",
+        body: { key: "modules", value: { miniMartEnabled } },
+      });
+      await refreshAuth();
+      push("Mini Mart setting saved");
     } catch (e) {
       push(e instanceof Error ? e.message : "Failed", "error");
     } finally {
@@ -64,6 +85,29 @@ export default function SettingsPage() {
           <p className="text-xs text-gray-500">Default currency: {data.business.currency} · Time zone: {data.business.timezone}</p>
           <Button disabled={busy} onClick={() => save(() => api("/api/v1/settings", { method: "PATCH", body: biz }))}>Save profile</Button>
         </div>
+      </Card>
+
+      <Card>
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-semibold">Mini Mart functions</h3>
+            <p className="mt-1 text-xs text-gray-500">
+              Items, stock, purchases, suppliers, and Sales &amp; POS
+            </p>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={miniMartEnabled}
+            onClick={() => setMiniMartEnabled((enabled) => !enabled)}
+            className={`relative h-7 w-12 shrink-0 rounded-full transition ${miniMartEnabled ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-700"}`}
+          >
+            <span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition ${miniMartEnabled ? "left-6" : "left-1"}`} />
+          </button>
+        </div>
+        <Button className="mt-3" disabled={busy} onClick={saveModules}>
+          Save Mini Mart setting
+        </Button>
       </Card>
 
       <Card>
