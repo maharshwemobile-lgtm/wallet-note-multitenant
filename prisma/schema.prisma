@@ -1,0 +1,690 @@
+// Wallet Note — database schema
+// Money amounts are stored as BigInt in minor units (1/100 of the currency unit)
+// to avoid floating-point errors. Rates/percentages are stored as decimal strings
+// and computed with decimal.js in the service layer.
+// Dev database is SQLite; the schema is kept PostgreSQL-compatible (UUID ids,
+// no SQLite-only features) so the datasource can be switched via DATABASE_URL.
+
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Business {
+  id        String   @id @default(uuid())
+  name      String
+  phone     String?
+  address   String?
+  telegram  String?
+  website   String?
+  logoUrl   String?
+  currency  String   @default("MMK")
+  timezone  String   @default("Asia/Yangon")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  branches  Branch[]
+  users     User[]
+  roles     Role[]
+  settings  SystemSetting[]
+}
+
+model Branch {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  name       String
+  code       String
+  address    String?
+  phone      String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  userBranches UserBranch[]
+
+  @@unique([businessId, code])
+}
+
+model Role {
+  id          String  @id @default(uuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  name        String
+  description String?
+  // JSON array of permission keys, e.g. ["three_d.view","wallet.transfer"]
+  permissions String
+  isSystem    Boolean @default(false)
+  users       User[]
+
+  @@unique([businessId, name])
+}
+
+model User {
+  id           String    @id @default(uuid())
+  businessId   String
+  business     Business  @relation(fields: [businessId], references: [id])
+  name         String
+  username     String    @unique
+  email        String?   @unique
+  phone        String?
+  passwordHash String
+  roleId       String
+  role         Role      @relation(fields: [roleId], references: [id])
+  allBranches  Boolean   @default(false)
+  active       Boolean   @default(true)
+  // 3D commission rate as decimal string percent, e.g. "10" = 10%
+  commissionRate String  @default("0")
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  branches     UserBranch[]
+  sessions     AuthSession[]
+  auditLogs    AuditLog[]
+  notifications Notification[]
+}
+
+model UserBranch {
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+
+  @@id([userId, branchId])
+}
+
+model AuthSession {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  @@index([userId])
+}
+
+// Shared contact directory: customers, suppliers, agents, creditors, debtors
+model Contact {
+  id            String    @id @default(uuid())
+  businessId    String
+  branchId      String?
+  name          String
+  phone         String?
+  telegram      String?
+  address       String?
+  type          String    @default("CUSTOMER") // CUSTOMER SUPPLIER AGENT CREDITOR DEBTOR OTHER
+  currency      String    @default("MMK")
+  creditLimit   BigInt    @default(0)
+  notes         String?
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  threeD        ThreeDTransaction[]
+  exchanges     ExchangeTransaction[]
+  receivables   Receivable[]
+  payables      Payable[]
+
+  @@index([businessId, type])
+  @@index([businessId, name])
+}
+
+model ThreeDSession {
+  id           String    @id @default(uuid())
+  businessId   String
+  branchId     String?
+  name         String    // Morning / Evening / custom
+  drawDate     String    // YYYY-MM-DD (business date)
+  drawTime     String?   // HH:mm
+  cutoffTime   String?   // HH:mm
+  status       String    @default("OPEN") // DRAFT OPEN CLOSED RESULT_ENTERED SETTLED CANCELLED
+  resultNumber String?   // "000".."999"
+  defaultOdds  String    @default("500") // payout multiplier as decimal string
+  notes        String?
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  transactions ThreeDTransaction[]
+  settlement   ThreeDSettlement?
+
+  @@index([businessId, drawDate])
+}
+
+model ThreeDTransaction {
+  id               String    @id @default(uuid())
+  txnNo            String    @unique
+  businessId       String
+  branchId         String
+  sessionId        String
+  session          ThreeDSession @relation(fields: [sessionId], references: [id])
+  agentId          String?
+  customerId       String?
+  customer         Contact?  @relation(fields: [customerId], references: [id])
+  customerName     String?
+  customerPhone    String?
+  number           String    // "000".."999", leading zeros preserved
+  betAmount        BigInt    // minor units
+  odds             String    // decimal string multiplier
+  potentialPayout  BigInt
+  commissionRate   String    @default("0") // percent decimal string
+  commissionAmount BigInt    @default(0)
+  netAmount        BigInt    // betAmount - commission
+  currency         String    @default("MMK")
+  isWinner         Boolean   @default(false)
+  winAmount        BigInt    @default(0)
+  paymentStatus    String    @default("PAID")     // PAID UNPAID
+  settlementStatus String    @default("PENDING")  // PENDING SETTLED CANCELLED
+  notes            String?
+  createdById      String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  @@index([sessionId, number])
+  @@index([businessId, branchId, createdAt])
+  @@index([customerId])
+}
+
+model ThreeDSettlement {
+  id              String   @id @default(uuid())
+  sessionId       String   @unique
+  session         ThreeDSession @relation(fields: [sessionId], references: [id])
+  resultNumber    String
+  grossCollected  BigInt
+  totalCommission BigInt
+  totalPayout     BigInt
+  netProfit       BigInt   // grossCollected - commission - payout (can be negative)
+  walletId        String?  // wallet used for payout/collection movement
+  settledById     String
+  settledAt       DateTime @default(now())
+  reopenedById    String?
+  reopenedAt      DateTime?
+  reopenReason    String?
+}
+
+model ExchangeRate {
+  id          String   @id @default(uuid())
+  businessId  String
+  branchId    String?
+  pair        String   // "THB/MMK"
+  buyRate     String   // decimal string, MMK per 1 THB when business buys THB
+  sellRate    String
+  effectiveAt DateTime @default(now())
+  setById     String
+  active      Boolean  @default(true)
+
+  @@index([businessId, pair, active])
+}
+
+model ExchangeTransaction {
+  id             String    @id @default(uuid())
+  txnNo          String    @unique
+  businessId     String
+  branchId       String
+  type           String    // BUY_THB SELL_THB BUY_MMK SELL_MMK CONVERT ADJUSTMENT
+  fromCurrency   String
+  toCurrency     String
+  fromAmount     BigInt    // minor units of fromCurrency (paid out of source wallet)
+  toAmount       BigInt    // minor units of toCurrency (into destination wallet)
+  rate           String    // decimal string applied
+  serviceFee     BigInt    @default(0) // in business default currency
+  additionalCost BigInt    @default(0)
+  profit         BigInt    @default(0)
+  sourceWalletId String
+  destWalletId   String
+  customerId     String?
+  customer       Contact?  @relation(fields: [customerId], references: [id])
+  agentId        String?
+  paymentMethod  String?
+  reference      String?
+  notes          String?
+  status         String    @default("COMPLETED") // DRAFT PENDING APPROVED COMPLETED CANCELLED REVERSED
+  createdById    String
+  approvedById   String?
+  reversedById   String?
+  reversedAt     DateTime?
+  reverseReason  String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  @@index([businessId, branchId, createdAt])
+}
+
+model Wallet {
+  id             String    @id @default(uuid())
+  businessId     String
+  branchId       String?
+  name           String
+  code           String
+  type           String    @default("CASH") // CASH BANK MOBILE AGENT CUSTOMER EXPENSE CLEARING CUSTOM
+  currency       String    @default("MMK")
+  openingBalance BigInt    @default(0)
+  currentBalance BigInt    @default(0)
+  minBalance     BigInt    @default(0)
+  active         Boolean   @default(true)
+  description    String?
+  version        Int       @default(0) // optimistic locking
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  ledger         WalletLedgerEntry[]
+
+  @@unique([businessId, code])
+}
+
+model WalletLedgerEntry {
+  id           String   @id @default(uuid())
+  walletId     String
+  wallet       Wallet   @relation(fields: [walletId], references: [id])
+  businessId   String
+  branchId     String?
+  direction    String   // DEBIT (money in) | CREDIT (money out)
+  amount       BigInt   // always positive, minor units of wallet currency
+  balanceAfter BigInt
+  refType      String   // OPENING CASH_IN CASH_OUT TRANSFER_IN TRANSFER_OUT EXCHANGE_IN EXCHANGE_OUT THREE_D_SETTLE CREDIT_COLLECT PAYABLE_PAY INCOME EXPENSE ADJUSTMENT REVERSAL
+  refId        String?
+  description  String?
+  createdById  String
+  createdAt    DateTime @default(now())
+
+  @@index([walletId, createdAt])
+  @@index([refType, refId])
+}
+
+model WalletTransfer {
+  id             String   @id @default(uuid())
+  txnNo          String   @unique
+  businessId     String
+  branchId       String?
+  sourceWalletId String
+  destWalletId   String
+  sourceAmount   BigInt
+  destAmount     BigInt
+  rate           String?  // required when currencies differ
+  fee            BigInt   @default(0)
+  reference      String?
+  notes          String?
+  status         String   @default("COMPLETED") // COMPLETED REVERSED
+  createdById    String
+  createdAt      DateTime @default(now())
+}
+
+model WalletReconciliation {
+  id             String   @id @default(uuid())
+  businessId     String
+  walletId       String
+  systemBalance  BigInt
+  countedBalance BigInt
+  difference     BigInt
+  date           String   // YYYY-MM-DD
+  notes          String?
+  reconciledById String
+  createdAt      DateTime @default(now())
+}
+
+model Receivable {
+  id              String    @id @default(uuid())
+  txnNo           String    @unique
+  businessId      String
+  branchId        String
+  customerId      String
+  customer        Contact   @relation(fields: [customerId], references: [id])
+  reference       String?
+  originalAmount  BigInt
+  paidAmount      BigInt    @default(0)
+  remainingAmount BigInt
+  currency        String    @default("MMK")
+  creditDate      String    // YYYY-MM-DD
+  dueDate         String?
+  agentId         String?
+  status          String    @default("UNPAID") // UNPAID PARTIAL PAID OVERDUE WRITTEN_OFF CANCELLED
+  notes           String?
+  createdById     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  payments        ReceivablePayment[]
+
+  @@index([businessId, status])
+}
+
+model ReceivablePayment {
+  id           String     @id @default(uuid())
+  receivableId String
+  receivable   Receivable @relation(fields: [receivableId], references: [id])
+  amount       BigInt
+  walletId     String
+  date         String
+  notes        String?
+  createdById  String
+  createdAt    DateTime   @default(now())
+}
+
+model Payable {
+  id              String    @id @default(uuid())
+  txnNo           String    @unique
+  businessId      String
+  branchId        String
+  supplierId      String
+  supplier        Contact   @relation(fields: [supplierId], references: [id])
+  reference       String?
+  originalAmount  BigInt
+  paidAmount      BigInt    @default(0)
+  remainingAmount BigInt
+  currency        String    @default("MMK")
+  payableDate     String
+  dueDate         String?
+  category        String?
+  status          String    @default("UNPAID")
+  notes           String?
+  createdById     String
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  deletedAt       DateTime?
+
+  payments        PayablePayment[]
+
+  @@index([businessId, status])
+}
+
+model PayablePayment {
+  id          String   @id @default(uuid())
+  payableId   String
+  payable     Payable  @relation(fields: [payableId], references: [id])
+  amount      BigInt
+  walletId    String
+  date        String
+  notes       String?
+  createdById String
+  createdAt   DateTime @default(now())
+}
+
+model Category {
+  id         String  @id @default(uuid())
+  businessId String
+  type       String  // INCOME | EXPENSE
+  name       String
+  active     Boolean @default(true)
+
+  @@unique([businessId, type, name])
+}
+
+model IncomeExpense {
+  id          String    @id @default(uuid())
+  txnNo       String    @unique
+  businessId  String
+  branchId    String
+  type        String    // INCOME | EXPENSE
+  categoryId  String?
+  categoryName String?
+  amount      BigInt
+  currency    String    @default("MMK")
+  walletId    String
+  date        String    // YYYY-MM-DD
+  reference   String?
+  description String?
+  status      String    @default("COMPLETED") // COMPLETED REVERSED
+  createdById String
+  approvedById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([businessId, type, date])
+}
+
+model DailyClose {
+  id           String    @id @default(uuid())
+  businessId   String
+  branchId     String
+  date         String    // YYYY-MM-DD
+  status       String    @default("OPEN") // OPEN SUBMITTED APPROVED CLOSED REOPENED
+  summary      String    // JSON snapshot of all computed totals
+  countedNotes String?
+  submittedById String?
+  approvedById String?
+  closedAt     DateTime?
+  reopenedById String?
+  reopenedAt   DateTime?
+  reopenReason String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@unique([branchId, date])
+}
+
+model AuditLog {
+  id           String   @id @default(uuid())
+  businessId   String
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id])
+  branchId     String?
+  action       String   // LOGIN LOGIN_FAILED CREATE UPDATE DELETE RESTORE APPROVE SETTLE REOPEN REVERSE ADJUST PERMISSION_CHANGE RATE_CHANGE DAILY_CLOSE
+  module       String
+  resourceType String?
+  resourceId   String?
+  before       String?  // JSON
+  after        String?  // JSON
+  ip           String?
+  userAgent    String?
+  reason       String?
+  createdAt    DateTime @default(now())
+
+  @@index([businessId, createdAt])
+  @@index([resourceType, resourceId])
+}
+
+model SystemSetting {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id])
+  key        String
+  value      String   // JSON
+  updatedAt  DateTime @updatedAt
+
+  @@unique([businessId, key])
+}
+
+model NumberSequence {
+  id         String @id @default(uuid())
+  businessId String
+  key        String // THREE_D EXCHANGE TRANSFER CREDIT PAYABLE INCOME EXPENSE CLOSE
+  prefix     String
+  next       Int    @default(1)
+
+  @@unique([businessId, key])
+}
+
+model Notification {
+  id         String    @id @default(uuid())
+  businessId String
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id])
+  type       String
+  title      String
+  body       String?
+  link       String?
+  readAt     DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([userId, readAt])
+}
+
+// ===== POS & Inventory (merged from ERP POS SYSTEM) =====
+
+model ItemCategory {
+  id         String  @id @default(uuid())
+  businessId String
+  name       String
+  parentId   String? // set for sub-categories
+  active     Boolean @default(true)
+
+  items      Item[]
+
+  @@unique([businessId, name, parentId])
+}
+
+model Unit {
+  id         String  @id @default(uuid())
+  businessId String
+  name       String  // pcs, kg, box…
+  active     Boolean @default(true)
+
+  items      Item[]
+
+  @@unique([businessId, name])
+}
+
+model Item {
+  id           String    @id @default(uuid())
+  businessId   String
+  name         String
+  sku          String
+  barcode      String?
+  categoryId   String?
+  category     ItemCategory? @relation(fields: [categoryId], references: [id])
+  unitId       String?
+  unit         Unit?     @relation(fields: [unitId], references: [id])
+  costPrice    BigInt    @default(0) // minor units
+  sellingPrice BigInt    @default(0)
+  currency     String    @default("MMK")
+  minStock     Int       @default(0)
+  active       Boolean   @default(true)
+  description  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  stockLevels  StockLevel[]
+  movements    StockMovement[]
+  purchaseLines PurchaseLine[]
+  saleLines    SaleLine[]
+
+  @@unique([businessId, sku])
+  @@index([businessId, name])
+}
+
+model StockLevel {
+  id       String @id @default(uuid())
+  itemId   String
+  item     Item   @relation(fields: [itemId], references: [id])
+  branchId String
+  quantity Int    @default(0)
+
+  @@unique([itemId, branchId])
+}
+
+model StockMovement {
+  id          String   @id @default(uuid())
+  businessId  String
+  itemId      String
+  item        Item     @relation(fields: [itemId], references: [id])
+  branchId    String
+  type        String   // PURCHASE SALE ADJUSTMENT PURCHASE_RETURN SALE_RETURN TRANSFER_IN TRANSFER_OUT
+  quantity    Int      // signed: positive = stock in, negative = stock out
+  qtyAfter    Int
+  refType     String?
+  refId       String?
+  notes       String?
+  createdById String
+  createdAt   DateTime @default(now())
+
+  @@index([itemId, branchId, createdAt])
+  @@index([refType, refId])
+}
+
+model Purchase {
+  id            String    @id @default(uuid())
+  txnNo         String    @unique
+  businessId    String
+  branchId      String
+  supplierId    String?
+  subtotal      BigInt
+  discount      BigInt    @default(0)
+  total         BigInt
+  paidAmount    BigInt    @default(0)
+  paymentStatus String    @default("UNPAID") // UNPAID PARTIAL PAID
+  status        String    @default("COMPLETED") // COMPLETED CANCELLED
+  walletId      String?
+  payableId     String?
+  date          String    // YYYY-MM-DD
+  reference     String?
+  notes         String?
+  createdById   String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  lines         PurchaseLine[]
+
+  @@index([businessId, branchId, date])
+}
+
+model PurchaseLine {
+  id         String   @id @default(uuid())
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id])
+  itemId     String
+  item       Item     @relation(fields: [itemId], references: [id])
+  quantity   Int
+  unitCost   BigInt
+  lineTotal  BigInt
+}
+
+model Sale {
+  id            String    @id @default(uuid())
+  txnNo         String    @unique
+  businessId    String
+  branchId      String
+  customerId    String?
+  subtotal      BigInt
+  discount      BigInt    @default(0)
+  total         BigInt
+  paidAmount    BigInt    @default(0)
+  paymentStatus String    @default("PAID") // PAID PARTIAL UNPAID
+  status        String    @default("COMPLETED") // COMPLETED CANCELLED
+  walletId      String?
+  receivableId  String?
+  totalCost     BigInt    @default(0)
+  profit        BigInt    @default(0) // total - discount... = revenue - cost
+  date          String
+  reference     String?
+  notes         String?
+  createdById   String
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+
+  lines         SaleLine[]
+
+  @@index([businessId, branchId, date])
+}
+
+model SaleLine {
+  id        String @id @default(uuid())
+  saleId    String
+  sale      Sale   @relation(fields: [saleId], references: [id])
+  itemId    String
+  item      Item   @relation(fields: [itemId], references: [id])
+  quantity  Int
+  unitPrice BigInt
+  unitCost  BigInt
+  lineTotal BigInt
+}

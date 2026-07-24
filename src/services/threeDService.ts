@@ -1,0 +1,215 @@
+import { Tx } from "@/lib/prisma";
+import { ApiError } from "@/lib/api";
+import { mulMinor, percentOf, isThreeDigit } from "@/lib/money";
+import { postLedger, reverseLedgerEntries } from "./walletService";
+import { audit } from "@/lib/audit";
+
+// 3D record calculations and settlement. All money in BigInt minor units.
+
+export function computeThreeD(betAmount: bigint, odds: string, commissionRate: string) {
+  const potentialPayout = mulMinor(betAmount, odds);
+  const commissionAmount = percentOf(betAmount, commissionRate);
+  const netAmount = betAmount - commissionAmount;
+  return { potentialPayout, commissionAmount, netAmount };
+}
+
+/** Parse bulk entry lines like "123=5000". Returns rows or per-line errors. */
+export function parseBulkLines(text: string): {
+  rows: { number: string; amount: string }[];
+  errors: { line: number; text: string; message: string }[];
+} {
+  const rows: { number: string; amount: string }[] = [];
+  const errors: { line: number; text: string; message: string }[] = [];
+  const lines = text.split(/\r?\n/);
+  lines.forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line) return;
+    const m = line.match(/^(\d{3})\s*[=\-:\s]\s*([\d,]+(?:\.\d+)?)$/);
+    if (!m) {
+      errors.push({ line: i + 1, text: line, message: "Expected format: 123=5000" });
+      return;
+    }
+    if (!isThreeDigit(m[1])) {
+      errors.push({ line: i + 1, text: line, message: "Number must be exactly three digits" });
+      return;
+    }
+    rows.push({ number: m[1], amount: m[2].replace(/,/g, "") });
+  });
+  return { rows, errors };
+}
+
+export interface SettlementPreview {
+  resultNumber: string;
+  totalRecords: number;
+  grossCollected: bigint;
+  totalCommission: bigint;
+  winningRecords: number;
+  totalPayout: bigint;
+  netProfit: bigint;
+}
+
+export async function previewSettlement(
+  tx: Tx,
+  sessionId: string,
+  resultNumber: string
+): Promise<SettlementPreview> {
+  if (!isThreeDigit(resultNumber)) throw new ApiError(422, "Result must be a three-digit number");
+  const txns = await tx.threeDTransaction.findMany({
+    where: { sessionId, deletedAt: null, settlementStatus: { not: "CANCELLED" } },
+  });
+  let gross = 0n, commission = 0n, payout = 0n, winners = 0;
+  for (const t of txns) {
+    gross += t.betAmount;
+    commission += t.commissionAmount;
+    if (t.number === resultNumber) {
+      payout += t.potentialPayout;
+      winners++;
+    }
+  }
+  return {
+    resultNumber,
+    totalRecords: txns.length,
+    grossCollected: gross,
+    totalCommission: commission,
+    winningRecords: winners,
+    totalPayout: payout,
+    netProfit: gross - commission - payout,
+  };
+}
+
+export async function settleSession(
+  tx: Tx,
+  opts: {
+    sessionId: string;
+    resultNumber: string;
+    walletId?: string;
+    userId: string;
+    businessId: string;
+  }
+) {
+  const session = await tx.threeDSession.findUnique({ where: { id: opts.sessionId } });
+  if (!session || session.businessId !== opts.businessId) throw new ApiError(404, "Session not found");
+  if (session.status === "SETTLED") throw new ApiError(422, "Session has already been settled");
+  if (session.status === "CANCELLED") throw new ApiError(422, "Session is cancelled");
+
+  const preview = await previewSettlement(tx, opts.sessionId, opts.resultNumber);
+
+  // Mark winners and settle every record
+  await tx.threeDTransaction.updateMany({
+    where: { sessionId: opts.sessionId, deletedAt: null, settlementStatus: "PENDING" },
+    data: { settlementStatus: "SETTLED" },
+  });
+  await tx.threeDTransaction.updateMany({
+    where: { sessionId: opts.sessionId, deletedAt: null, number: opts.resultNumber, settlementStatus: "SETTLED" },
+    data: { isWinner: true },
+  });
+  // winAmount = potentialPayout for winners
+  const winners = await tx.threeDTransaction.findMany({
+    where: { sessionId: opts.sessionId, deletedAt: null, isWinner: true },
+  });
+  for (const w of winners) {
+    await tx.threeDTransaction.update({ where: { id: w.id }, data: { winAmount: w.potentialPayout } });
+  }
+
+  const settlement = await tx.threeDSettlement.create({
+    data: {
+      sessionId: opts.sessionId,
+      resultNumber: preview.resultNumber,
+      grossCollected: preview.grossCollected,
+      totalCommission: preview.totalCommission,
+      totalPayout: preview.totalPayout,
+      netProfit: preview.netProfit,
+      walletId: opts.walletId,
+      settledById: opts.userId,
+    },
+  });
+
+  // Wallet movement: net effect of the session on the chosen wallet.
+  if (opts.walletId && preview.netProfit !== 0n) {
+    await postLedger(tx, {
+      businessId: opts.businessId,
+      walletId: opts.walletId,
+      direction: preview.netProfit > 0n ? "DEBIT" : "CREDIT",
+      amount: preview.netProfit > 0n ? preview.netProfit : -preview.netProfit,
+      refType: "THREE_D_SETTLE",
+      refId: settlement.id,
+      description: `3D settlement ${session.name} ${session.drawDate} result ${preview.resultNumber}`,
+      createdById: opts.userId,
+      allowNegative: true,
+    });
+  }
+
+  await tx.threeDSession.update({
+    where: { id: opts.sessionId },
+    data: { status: "SETTLED", resultNumber: preview.resultNumber },
+  });
+
+  await audit(tx, {
+    businessId: opts.businessId,
+    userId: opts.userId,
+    action: "SETTLE",
+    module: "three_d",
+    resourceType: "ThreeDSession",
+    resourceId: opts.sessionId,
+    after: preview,
+  });
+
+  return { settlement, preview };
+}
+
+export async function reopenSettlement(
+  tx: Tx,
+  opts: { sessionId: string; reason: string; userId: string; businessId: string }
+) {
+  const settlement = await tx.threeDSettlement.findUnique({
+    where: { sessionId: opts.sessionId },
+    include: { session: { select: { businessId: true } } },
+  });
+  if (!settlement || settlement.session.businessId !== opts.businessId)
+    throw new ApiError(404, "No settlement found for this session");
+  if (settlement.reopenedAt) throw new ApiError(422, "Settlement was already reopened");
+  if (!opts.reason.trim()) throw new ApiError(422, "A reason is required to reopen a settlement");
+
+  await reverseLedgerEntries(tx, opts.businessId, "THREE_D_SETTLE", settlement.id, opts.userId, opts.reason);
+
+  await tx.threeDTransaction.updateMany({
+    where: { sessionId: opts.sessionId, settlementStatus: "SETTLED" },
+    data: { settlementStatus: "PENDING", isWinner: false, winAmount: 0n },
+  });
+  await tx.threeDSettlement.update({
+    where: { id: settlement.id },
+    data: { reopenedById: opts.userId, reopenedAt: new Date(), reopenReason: opts.reason },
+  });
+  await tx.threeDSession.update({
+    where: { id: opts.sessionId },
+    data: { status: "CLOSED", resultNumber: null },
+  });
+
+  await audit(tx, {
+    businessId: opts.businessId,
+    userId: opts.userId,
+    action: "REOPEN",
+    module: "three_d",
+    resourceType: "ThreeDSession",
+    resourceId: opts.sessionId,
+    reason: opts.reason,
+    before: settlement,
+  });
+}
+
+/** Exposure summary per number for a session. */
+export async function sessionExposure(tx: Tx, sessionId: string) {
+  const txns = await tx.threeDTransaction.findMany({
+    where: { sessionId, deletedAt: null, settlementStatus: { not: "CANCELLED" } },
+    select: { number: true, betAmount: true, potentialPayout: true },
+  });
+  const map = new Map<string, { number: string; totalStake: bigint; potentialPayout: bigint; count: number }>();
+  for (const t of txns) {
+    const cur = map.get(t.number) ?? { number: t.number, totalStake: 0n, potentialPayout: 0n, count: 0 };
+    cur.totalStake += t.betAmount;
+    cur.potentialPayout += t.potentialPayout;
+    cur.count++;
+    map.set(t.number, cur);
+  }
+  return [...map.values()].sort((a, b) => (b.potentialPayout > a.potentialPayout ? 1 : -1));
+}

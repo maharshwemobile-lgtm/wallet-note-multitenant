@@ -1,0 +1,76 @@
+// Granular permission keys and default role permission sets.
+
+export const ALL_PERMISSIONS = [
+  "dashboard.view",
+  "three_d.view", "three_d.create", "three_d.edit", "three_d.delete",
+  "three_d.settle", "three_d.reopen", "three_d.view_profit",
+  "exchange.view", "exchange.create", "exchange.edit", "exchange.delete",
+  "exchange.approve", "exchange.reverse", "exchange.rates",
+  "wallet.view", "wallet.create", "wallet.adjust", "wallet.transfer", "wallet.reconcile",
+  "credit.view", "credit.create", "credit.collect",
+  "payable.view", "payable.create", "payable.pay",
+  "income_expense.view", "income_expense.create",
+  "customer.view", "customer.manage",
+  "report.view", "report.export",
+  "daily_close.view", "daily_close.create", "daily_close.approve", "daily_close.reopen",
+  "settings.manage",
+  "users.manage",
+  "audit.view",
+  "item.view", "item.manage",
+  "stock.view", "stock.adjust",
+  "purchase.view", "purchase.create", "purchase.cancel",
+  "sale.view", "sale.create", "sale.cancel",
+] as const;
+
+export type Permission = (typeof ALL_PERMISSIONS)[number];
+
+const AGENT_PERMS: Permission[] = [
+  "dashboard.view",
+  "three_d.view", "three_d.create",
+  "exchange.view", "exchange.create",
+  "wallet.view",
+  "credit.view", "credit.create", "credit.collect",
+  "customer.view",
+];
+
+const CASHIER_PERMS: Permission[] = [
+  "dashboard.view",
+  "item.view", "stock.view", "sale.view", "sale.create",
+  "wallet.view", "wallet.transfer",
+  "income_expense.view", "income_expense.create",
+  "credit.view", "credit.collect",
+  "payable.view", "payable.pay",
+  "customer.view",
+];
+
+const ACCOUNTANT_PERMS: Permission[] = [
+  "dashboard.view",
+  "item.view", "stock.view", "purchase.view", "sale.view",
+  "three_d.view", "three_d.view_profit",
+  "exchange.view",
+  "wallet.view", "wallet.reconcile",
+  "credit.view", "credit.create", "credit.collect",
+  "payable.view", "payable.create", "payable.pay",
+  "income_expense.view", "income_expense.create",
+  "customer.view", "customer.manage",
+  "report.view", "report.export",
+  "daily_close.view", "daily_close.create", "daily_close.approve",
+  "audit.view",
+];
+
+const ADMIN_PERMS: Permission[] = ALL_PERMISSIONS.filter(
+  (p) => p !== "settings.manage"
+) as Permission[];
+
+export const DEFAULT_ROLES: { name: string; description: string; permissions: Permission[] }[] = [
+  { name: "Owner", description: "Full system access", permissions: [...ALL_PERMISSIONS] },
+  { name: "Admin", description: "Daily operations management", permissions: ADMIN_PERMS },
+  { name: "Agent", description: "3D and exchange entry", permissions: AGENT_PERMS },
+  { name: "Cashier", description: "Cash and wallet operations", permissions: CASHIER_PERMS },
+  { name: "Accountant", description: "Accounting and reports", permissions: ACCOUNTANT_PERMS },
+  { name: "Viewer", description: "Read-only access", permissions: ["dashboard.view", "three_d.view", "exchange.view", "wallet.view", "credit.view", "payable.view", "income_expense.view", "customer.view", "report.view", "daily_close.view"] },
+];
+
+export function hasPermission(userPerms: string[], required: Permission): boolean {
+  return userPerms.includes(required);
+}
