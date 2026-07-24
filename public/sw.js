@@ -1,4 +1,4 @@
-const CACHE = "wallet-note-v2";
+const CACHE = "wallet-note-v3-pos";
 const STATIC = [
   "/offline.html",
   "/icon-192.png",
