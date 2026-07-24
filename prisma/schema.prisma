@@ -166,7 +166,7 @@ model ThreeDSession {
 
 model ThreeDTransaction {
   id               String    @id @default(uuid())
-  txnNo            String    @unique
+  txnNo            String
   businessId       String
   branchId         String
   sessionId        String
@@ -197,6 +197,7 @@ model ThreeDTransaction {
   @@index([sessionId, number])
   @@index([businessId, branchId, createdAt])
   @@index([customerId])
+  @@unique([businessId, txnNo])
 }
 
 model ThreeDSettlement {
@@ -232,7 +233,7 @@ model ExchangeRate {
 
 model ExchangeTransaction {
   id             String    @id @default(uuid())
-  txnNo          String    @unique
+  txnNo          String
   businessId     String
   branchId       String
   type           String    // BUY_THB SELL_THB BUY_MMK SELL_MMK CONVERT ADJUSTMENT
@@ -263,6 +264,7 @@ model ExchangeTransaction {
   deletedAt      DateTime?
 
   @@index([businessId, branchId, createdAt])
+  @@unique([businessId, txnNo])
 }
 
 model Wallet {
@@ -309,7 +311,7 @@ model WalletLedgerEntry {
 
 model WalletTransfer {
   id             String   @id @default(uuid())
-  txnNo          String   @unique
+  txnNo          String
   businessId     String
   branchId       String?
   sourceWalletId String
@@ -323,6 +325,8 @@ model WalletTransfer {
   status         String   @default("COMPLETED") // COMPLETED REVERSED
   createdById    String
   createdAt      DateTime @default(now())
+
+  @@unique([businessId, txnNo])
 }
 
 model WalletReconciliation {
@@ -340,7 +344,7 @@ model WalletReconciliation {
 
 model Receivable {
   id              String    @id @default(uuid())
-  txnNo           String    @unique
+  txnNo           String
   businessId      String
   branchId        String
   customerId      String
@@ -363,6 +367,7 @@ model Receivable {
   payments        ReceivablePayment[]
 
   @@index([businessId, status])
+  @@unique([businessId, txnNo])
 }
 
 model ReceivablePayment {
@@ -379,7 +384,7 @@ model ReceivablePayment {
 
 model Payable {
   id              String    @id @default(uuid())
-  txnNo           String    @unique
+  txnNo           String
   businessId      String
   branchId        String
   supplierId      String
@@ -402,6 +407,7 @@ model Payable {
   payments        PayablePayment[]
 
   @@index([businessId, status])
+  @@unique([businessId, txnNo])
 }
 
 model PayablePayment {
@@ -428,7 +434,7 @@ model Category {
 
 model IncomeExpense {
   id          String    @id @default(uuid())
-  txnNo       String    @unique
+  txnNo       String
   businessId  String
   branchId    String
   type        String    // INCOME | EXPENSE
@@ -448,6 +454,7 @@ model IncomeExpense {
   deletedAt   DateTime?
 
   @@index([businessId, type, date])
+  @@unique([businessId, txnNo])
 }
 
 model DailyClose {
@@ -612,7 +619,7 @@ model StockMovement {
 
 model Purchase {
   id            String    @id @default(uuid())
-  txnNo         String    @unique
+  txnNo         String
   businessId    String
   branchId      String
   supplierId    String?
@@ -635,6 +642,7 @@ model Purchase {
   lines         PurchaseLine[]
 
   @@index([businessId, branchId, date])
+  @@unique([businessId, txnNo])
 }
 
 model PurchaseLine {
@@ -650,7 +658,7 @@ model PurchaseLine {
 
 model Sale {
   id            String    @id @default(uuid())
-  txnNo         String    @unique
+  txnNo         String
   businessId    String
   branchId      String
   customerId    String?
@@ -675,6 +683,7 @@ model Sale {
   lines         SaleLine[]
 
   @@index([businessId, branchId, date])
+  @@unique([businessId, txnNo])
 }
 
 model SaleLine {

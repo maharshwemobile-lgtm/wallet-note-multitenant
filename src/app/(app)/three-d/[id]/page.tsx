@@ -5,6 +5,7 @@ import { api } from "@/lib/client";
 import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Select, Modal, Spinner, Badge, Table, Empty, StatCard, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { autoInsertThreeDEquals } from "@/lib/threeDEntry";
 
 interface Detail {
   session: { id: string; name: string; drawDate: string; status: string; resultNumber?: string; defaultOdds: string; settlement?: { id: string; netProfit: string; totalPayout: string; grossCollected: string; totalCommission: string } };
@@ -237,7 +238,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <span className="mb-1 block text-sm font-medium">Numbers — one per line as number=amount</span>
             <textarea
               value={entry.bulkText}
-              onChange={(e) => setEntry({ ...entry, bulkText: e.target.value })}
+              onChange={(e) => setEntry({ ...entry, bulkText: autoInsertThreeDEquals(e.target.value) })}
               rows={8}
               placeholder={"123=5000\n456=3000\n007=2000"}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-sm dark:border-gray-700 dark:bg-gray-800"

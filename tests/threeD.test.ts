@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { computeThreeD, parseBulkLines } from "../src/services/threeDService";
+import { autoInsertThreeDEquals } from "../src/lib/threeDEntry";
 
 describe("3D calculations", () => {
   it("computes payout, commission and net amount", () => {
@@ -25,6 +26,12 @@ describe("3D calculations", () => {
 });
 
 describe("bulk entry parsing", () => {
+  it("inserts equals after exactly three digits on each line", () => {
+    expect(autoInsertThreeDEquals("123")).toBe("123=");
+    expect(autoInsertThreeDEquals("123=500\n007")).toBe("123=500\n007=");
+    expect(autoInsertThreeDEquals("12")).toBe("12");
+  });
+
   it("parses number=amount lines", () => {
     const { rows, errors } = parseBulkLines("123=5000\n456=3000\n007=2000");
     expect(errors).toHaveLength(0);
