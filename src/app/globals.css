@@ -1,5 +1,4 @@
 @import "tailwindcss";
-@import "./pos.css";
 
 @custom-variant dark (&:where(.dark, .dark *));
 
