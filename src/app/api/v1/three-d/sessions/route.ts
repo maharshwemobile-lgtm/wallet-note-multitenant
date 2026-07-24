@@ -4,8 +4,10 @@ import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 import { todayBusinessDate, isValidBusinessDate } from "@/lib/dates";
 import { assertBranchAccess } from "@/lib/tenant";
+import { closeExpiredThreeDSessions } from "@/services/thaiLottoService";
 
 export const GET = withAuth("three_d.view", async ({ req, user }) => {
+  await closeExpiredThreeDSessions();
   const sp = req.nextUrl.searchParams;
   const { skip, take, page, pageSize } = pagination(req);
   const where = {

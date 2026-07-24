@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus } from "lucide-react";
+import { History, Plus } from "lucide-react";
 import { api } from "@/lib/client";
 import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Modal, Spinner, Badge, Table, Empty, useToast } from "@/components/ui";
@@ -14,10 +14,14 @@ interface Session {
   totalBet: string; totalPotentialPayout: string;
   _count: { transactions: number };
 }
+interface OfficialResult {
+  id: string; drawDate: string; drawTime?: string; sessionName: string; resultNumber: string;
+}
 
 function ThreeDContent() {
   const search = useSearchParams();
   const [sessions, setSessions] = useState<Session[] | null>(null);
+  const [results, setResults] = useState<OfficialResult[]>([]);
   const [showNew, setShowNew] = useState(() => search.get("new") === "1");
   const [form, setForm] = useState({ name: "Morning", drawDate: "", drawTime: "12:01", cutoffTime: "11:45", defaultOdds: "500" });
   const router = useRouter();
@@ -28,6 +32,9 @@ function ThreeDContent() {
     api<{ sessions: Session[] }>("/api/v1/three-d/sessions")
       .then((d) => setSessions(d.sessions))
       .catch((e) => push(e.message, "error"));
+    api<{ results: OfficialResult[] }>("/api/v1/three-d/results?pageSize=20")
+      .then((data) => setResults(data.results))
+      .catch(() => {});
   }, [push]);
   useEffect(load, [load]);
 
@@ -73,6 +80,27 @@ function ThreeDContent() {
           ))}
         </Table>
       )}
+
+      <Card>
+        <div className="mb-3 flex items-center gap-2">
+          <History size={18} className="text-blue-600" />
+          <h2 className="text-sm font-semibold">Official 3D result history</h2>
+        </div>
+        {results.length === 0 ? (
+          <Empty message="Official result history is waiting for the API provider." />
+        ) : (
+          <Table headers={["Draw date", "Session", "Time", "Result"]}>
+            {results.map((result) => (
+              <tr key={result.id}>
+                <td className="px-3 py-2.5">{result.drawDate}</td>
+                <td className="px-3 py-2.5">{result.sessionName}</td>
+                <td className="px-3 py-2.5">{result.drawTime ?? "-"}</td>
+                <td className="px-3 py-2.5 font-mono text-lg font-bold text-blue-600">{result.resultNumber}</td>
+              </tr>
+            ))}
+          </Table>
+        )}
+      </Card>
 
       <Modal open={showNew} onClose={() => setShowNew(false)} title="New 3D session">
         <div className="space-y-3">

@@ -217,6 +217,21 @@ model ThreeDSettlement {
   reopenReason    String?
 }
 
+model ThreeDOfficialResult {
+  id           String   @id @default(uuid())
+  drawDate     String
+  sessionName  String
+  drawTime     String?
+  resultNumber String
+  source       String   @default("THAI_LOTTO_RAPIDAPI")
+  sourceKey    String   @unique
+  rawPayload   String?
+  fetchedAt    DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([drawDate])
+}
+
 model ExchangeRate {
   id          String   @id @default(uuid())
   businessId  String
