@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 const HOST = "thai-lotto-new-api.p.rapidapi.com";
 const RESULTS_URL = `https://${HOST}/api/v1/results`;
 const HISTORY_URL = `https://${HOST}/api/v1/threed`;
+const LOTTERY_URL = `https://${HOST}/api/v1/lottery`;
 
 export interface ThaiThreeDResult {
   drawDate: string;
@@ -64,7 +65,7 @@ export function parseThaiThreeDHistory(payload: unknown, now = new Date()): Thai
       record.drawDate ?? record.date ?? record.resultDate ?? record.created_at
     );
     const number = textValue(record, [
-      "resultNumber", "threeD", "threed", "result", "number",
+      "resultNumber", "mmThreeD", "threeD", "threed", "result", "number",
     ]).trim();
 
     if (date && /^\d{3}$/.test(number)) {
@@ -147,7 +148,7 @@ export async function syncThaiThreeDHistory() {
   if (!key) throw new Error("RAPIDAPI_KEY is not configured");
   const payloads: unknown[] = [];
   const warnings: string[] = [];
-  for (const url of [RESULTS_URL, HISTORY_URL]) {
+  for (const url of [RESULTS_URL, HISTORY_URL, LOTTERY_URL]) {
     try {
       const response = await fetch(url, {
         headers: { "X-RapidAPI-Key": key, "X-RapidAPI-Host": HOST },

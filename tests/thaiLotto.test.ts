@@ -27,6 +27,18 @@ describe("Thai Lotto integration", () => {
     });
   });
 
+  it("maps the official lottery mmThreeD result", () => {
+    const result = parseThaiThreeDHistory({
+      date: "16-07-2026",
+      firstPriceNumber: "639214",
+      mmThreeD: "214",
+    });
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      drawDate: "2026-07-16", sessionName: "Official", resultNumber: "214",
+    });
+  });
+
   it("closes at the configured cutoff in the business timezone", () => {
     const session = { drawDate: "2026-07-24", cutoffTime: "11:45", drawTime: "12:01" };
     expect(isSessionCutoffPassed(session, new Date("2026-07-24T05:14:00Z"), "Asia/Yangon")).toBe(false);
