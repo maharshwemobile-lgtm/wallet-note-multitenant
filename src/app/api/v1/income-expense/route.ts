@@ -16,6 +16,7 @@ export const GET = withAuth("income_expense.view", async ({ req, user }) => {
   const where = {
     businessId: user.businessId,
     deletedAt: null,
+    status: "COMPLETED",
     ...branchScope(user),
     ...(sp.get("type") ? { type: sp.get("type")! } : {}),
     ...(sp.get("date") ? { date: sp.get("date")! } : {}),

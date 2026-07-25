@@ -15,6 +15,7 @@ export const GET = withAuth("three_d.view", async ({ req, user }) => {
   const where = {
     businessId: user.businessId,
     deletedAt: null,
+    settlementStatus: { not: "CANCELLED" },
     ...branchScope(user),
     ...(sp.get("sessionId") ? { sessionId: sp.get("sessionId")! } : {}),
     ...(sp.get("number") ? { number: sp.get("number")! } : {}),

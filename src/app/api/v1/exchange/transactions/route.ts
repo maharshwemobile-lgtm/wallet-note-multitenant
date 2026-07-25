@@ -16,7 +16,7 @@ export const GET = withAuth("exchange.view", async ({ req, user }) => {
     deletedAt: null,
     ...branchScope(user),
     ...(sp.get("type") ? { type: sp.get("type")! } : {}),
-    ...(sp.get("status") ? { status: sp.get("status")! } : {}),
+    ...(sp.get("status") ? { status: sp.get("status")! } : { status: "COMPLETED" }),
     ...(sp.get("q")
       ? { OR: [{ txnNo: { contains: sp.get("q")! } }, { reference: { contains: sp.get("q")! } }] }
       : {}),

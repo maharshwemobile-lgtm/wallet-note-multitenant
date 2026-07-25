@@ -20,13 +20,13 @@ export const GET = withAuth("dashboard.view", async ({ req, user }) => {
 
   const [recentThreeD, recentExchanges, pendingSessions, moduleSetting] = await Promise.all([
     playEdition ? Promise.resolve([]) : prisma.threeDTransaction.findMany({
-      where: { businessId: user.businessId, deletedAt: null },
+      where: { businessId: user.businessId, deletedAt: null, settlementStatus: { not: "CANCELLED" } },
       orderBy: { createdAt: "desc" },
       take: 8,
       include: { session: { select: { name: true } } },
     }),
     prisma.exchangeTransaction.findMany({
-      where: { businessId: user.businessId, deletedAt: null },
+      where: { businessId: user.businessId, deletedAt: null, status: "COMPLETED" },
       orderBy: { createdAt: "desc" },
       take: 8,
     }),

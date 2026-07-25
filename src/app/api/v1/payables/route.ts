@@ -17,7 +17,7 @@ export const GET = withAuth("payable.view", async ({ req, user }) => {
     businessId: user.businessId,
     deletedAt: null,
     ...branchScope(user),
-    ...(sp.get("status") ? { status: sp.get("status")! } : {}),
+    ...(sp.get("status") ? { status: sp.get("status")! } : { status: { not: "CANCELLED" } }),
     ...(sp.get("q") ? { OR: [{ txnNo: { contains: sp.get("q")! } }, { reference: { contains: sp.get("q")! } }] } : {}),
   };
   const [items, total, agg] = await Promise.all([

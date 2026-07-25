@@ -13,15 +13,15 @@ export const GET = withAuth("customer.view", async ({ user, params }) => {
   const playEdition = isPlayEdition();
   const [threeD, exchanges, receivables, recAgg, payAgg] = await Promise.all([
     playEdition ? Promise.resolve([]) : prisma.threeDTransaction.findMany({
-      where: { customerId: contact.id, deletedAt: null },
+      where: { customerId: contact.id, deletedAt: null, settlementStatus: { not: "CANCELLED" } },
       orderBy: { createdAt: "desc" }, take: 20,
     }),
     prisma.exchangeTransaction.findMany({
-      where: { customerId: contact.id, deletedAt: null },
+      where: { customerId: contact.id, deletedAt: null, status: "COMPLETED" },
       orderBy: { createdAt: "desc" }, take: 20,
     }),
     prisma.receivable.findMany({
-      where: { customerId: contact.id, deletedAt: null },
+      where: { customerId: contact.id, deletedAt: null, status: { not: "CANCELLED" } },
       orderBy: { createdAt: "desc" }, take: 20,
       include: { payments: true },
     }),

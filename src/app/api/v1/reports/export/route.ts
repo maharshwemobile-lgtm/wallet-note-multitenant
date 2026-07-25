@@ -30,7 +30,13 @@ export const GET = withAuth("report.export", async ({ req, user }) => {
 
   if (type === "three_d") {
     const txns = await prisma.threeDTransaction.findMany({
-      where: { businessId: user.businessId, deletedAt: null, createdAt: range, ...branchScope(user) },
+      where: {
+        businessId: user.businessId,
+        deletedAt: null,
+        settlementStatus: { not: "CANCELLED" },
+        createdAt: range,
+        ...branchScope(user),
+      },
       include: { session: { select: { name: true, drawDate: true } }, customer: { select: { name: true } } },
       orderBy: { createdAt: "asc" },
     });
@@ -47,7 +53,13 @@ export const GET = withAuth("report.export", async ({ req, user }) => {
 
   if (type === "exchange") {
     const txns = await prisma.exchangeTransaction.findMany({
-      where: { businessId: user.businessId, deletedAt: null, createdAt: range, ...branchScope(user) },
+      where: {
+        businessId: user.businessId,
+        deletedAt: null,
+        status: "COMPLETED",
+        createdAt: range,
+        ...branchScope(user),
+      },
       include: { customer: { select: { name: true } } },
       orderBy: { createdAt: "asc" },
     });
