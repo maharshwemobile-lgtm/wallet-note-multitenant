@@ -2,8 +2,7 @@
 // Money amounts are stored as BigInt in minor units (1/100 of the currency unit)
 // to avoid floating-point errors. Rates/percentages are stored as decimal strings
 // and computed with decimal.js in the service layer.
-// Dev database is SQLite; the schema is kept PostgreSQL-compatible (UUID ids,
-// no SQLite-only features) so the datasource can be switched via DATABASE_URL.
+// PostgreSQL is used for development and production.
 
 generator client {
   provider      = "prisma-client-js"

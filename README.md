@@ -1,119 +1,153 @@
 # Wallet Note
 
-Internal business-management and accounting web application for:
+**အခမဲ့အသုံးပြုနိုင်သော Multi-tenant Wallet Note၊ Mini Mart POS နှင့် 3D
+မှတ်တမ်းစနစ်**
 
-- **3D number-record management** — sessions, bulk entry, exposure tracking, settlement, reopen with reversal
-- **THB/MMK currency exchange** — rate board with history, buy/sell, profit calculation, atomic dual-wallet updates, reversal
-- **Multi-wallet ledger** — double-entry-style ledger; balances only ever change through ledger entries
-- **Customer credit & business payable** — partial collection/payment, aging, due dates
-- **Income/expense, daily close, reports** — daily summaries, locking closed dates, CSV export, charts
-- **RBAC** — six default roles, custom roles, granular permissions enforced server-side
-- **Audit logs** — every important action recorded with before/after values
-- **PWA** — installable, offline fallback (financial writes never complete silently offline)
+[Live App](https://walletnote.maharshwe.online) |
+[Latest Release](https://github.com/maharshwemobile-lgtm/wallet-note-multitenant/releases/latest) |
+[VPS Handoff Prompt](PROJECT_PROMPT.md)
 
-**Stack:** Next.js (App Router) · TypeScript · Tailwind CSS · Prisma · SQLite (dev) / PostgreSQL (prod) · Vitest · Docker
+Wallet Note သည် ချဲမှတ်တမ်း၊ ငွေလွှဲမှတ်တမ်းနှင့် အသေးစားလုပ်ငန်းစာရင်းများ
+မှတ်သားလိုသူများအပြင် Mini Mart ဖွင့်ထားသူများပါ အသုံးပြုနိုင်သော Web App
+ဖြစ်ပါတယ်။ လူတိုင်းအခမဲ့ Register လုပ်နိုင်ပြီး Account တစ်ခုချင်းစီ၏ Data ကို
+PostgreSQL Database တွင် သီးသန့်ခွဲထားပါတယ်။
 
-## Money handling
+English: Wallet Note is a free multi-tenant business-record, 3D-management, and
+Mini Mart POS web application. Every registered business has an isolated
+PostgreSQL workspace.
 
-All amounts are stored as **BigInt minor units** (1/100 of the currency unit) — never floating point.
-Rates, odds, and percentages are decimal strings computed with `decimal.js`. See `src/lib/money.ts`.
+## အဓိကလုပ်ဆောင်ချက်များ
 
-## Quick start (development)
+- **Wallet Note Mode** - ငွေစာရင်း၊ ငွေလွှဲ၊ အကြွေးရရန်/ပေးရန်နှင့်
+  ဝင်ငွေ/ထွက်ငွေ မှတ်တမ်းများ
+- **Mini Mart Mode** - အရောင်းနှင့် POS၊ ကုန်ပစ္စည်း၊ Stock၊ အဝယ်နှင့်
+  Supplier စီမံခန့်ခွဲမှု
+- **3D မှတ်တမ်းများ** - Session၊ Bulk Entry၊ Exposure၊ Settlement၊ Result
+  History နှင့် CSV Template Export/Import
+- **Multi-wallet Ledger** - Wallet လက်ကျန်ပြောင်းလဲမှုအားလုံးကို Ledger
+  Entry ဖြင့် စနစ်တကျသိမ်းဆည်းခြင်း
+- **Customer Credit & Payable** - အကြွေးရရန်၊ ပေးရန်နှင့် အရစ်ကျငွေသွင်းမှု
+- **Reports & Audit Logs** - Report များ၊ CSV Export နှင့် လုပ်ဆောင်ချက်
+  မှတ်တမ်းများ
+- **Users & Roles** - Owner၊ Admin၊ Agent၊ Cashier၊ Accountant၊ Viewer နှင့်
+  Custom Permission များ
+- **PWA & Mobile View** - ဖုန်းနှင့် Desktop နှစ်မျိုးလုံးအဆင်ပြေပြီး
+  Home Screen သို့ App အဖြစ်ထည့်သွင်းနိုင်ခြင်း
+- **Myanmar / English** - မြန်မာနှင့် အင်္ဂလိပ် Language ပြောင်းလဲအသုံးပြုနိုင်ခြင်း
 
-```bash
-# 1. Install
+## Data လုံခြုံရေး
+
+- Business တစ်ခုချင်းစီ၏ Data ကို `businessId` ဖြင့် သီးသန့်ခွဲထားပါတယ်။
+- Branch၊ Session နှင့် User Permission ကို API Server ဘက်တွင် စစ်ဆေးပါတယ်။
+- အရေးကြီးသော Save၊ Update၊ Delete၊ Import၊ Settlement နှင့် Admin
+  လုပ်ဆောင်ချက်များကို Audit Log မှတ်တမ်းတင်ပါတယ်။
+- ငွေကြေးပမာဏများကို Floating-point မသုံးဘဲ `BigInt` minor units ဖြင့်
+  သိမ်းဆည်းပါတယ်။
+- Database အပြောင်းအလဲအများစုကို Transaction အတွင်း အပြီးလုပ်ဆောင်ပါတယ်။
+
+## Developer
+
+<img src="public/khun-myint-aung.jpg" alt="Khun Myint Aung" width="180">
+
+| အချက်အလက် | အသေးစိတ် |
+| --- | --- |
+| Developer | **Khun Myint Aung** |
+| Organization | **Mahar Shwe Mobile** |
+| Location | Hsisheng Township, Shan State, Taunggyi |
+| Facebook | [My Choice My Life](https://www.facebook.com/Mychoicemylife2018) |
+| Telegram | [@Mylifemychoice68](https://t.me/Mylifemychoice68) |
+| Community | [Telegram Community](https://t.me/+2gc9ml7iMgk1ZThl) |
+| TikTok | [@maharshwemobile](https://www.tiktok.com/@maharshwemobile) |
+| Website | [maharshwe.online](https://maharshwe.online/) |
+
+ဒီ Project ကို Community အတွက် အခမဲ့မျှဝေထားပါတယ်။ Bug Report၊ အကြံပြုချက်နှင့်
+အသုံးပြုနည်းမေးမြန်းမှုများကို Facebook သို့မဟုတ် Telegram Community မှတစ်ဆင့်
+ဆက်သွယ်နိုင်ပါတယ်။
+
+## Technology
+
+- Next.js App Router
+- React and TypeScript
+- Tailwind CSS
+- Prisma ORM
+- PostgreSQL
+- Zod validation
+- Vitest
+- PM2 and Nginx production deployment
+
+## Local Development
+
+လိုအပ်ချက်များ:
+
+- Node.js 20 or newer
+- PostgreSQL
+- Git
+
+```powershell
+git clone https://github.com/maharshwemobile-lgtm/wallet-note-multitenant.git
+cd wallet-note-multitenant
 npm install
+Copy-Item .env.example .env
+```
 
-# 2. Configure — copy the example env and set AUTH_SECRET
-cp .env.example .env    # dev default DATABASE_URL="file:./dev.db" works out of the box
+`.env` ထဲမှ `DATABASE_URL` နှင့် `AUTH_SECRET` ကို ကိုယ့် Local Development
+Environment အတွက်သာ ဖြည့်ပါ။ Production secret များကို မသုံးပါနှင့်။
 
-# 3. Database setup + migration
+```powershell
 npx prisma migrate dev
-
-# 4. Seed demo data
 npx prisma db seed
-
-# 5. Run
 npm run dev
 ```
 
-Open http://localhost:3000 and sign in.
+Browser တွင် [http://localhost:3000](http://localhost:3000) ကိုဖွင့်ပါ။
 
-### Development test credentials (seed data — development only)
+### Development Seed Accounts
 
-| Username     | Role       | Password       |
-| ------------ | ---------- | -------------- |
-| `owner`      | Owner      | `Password123!` |
-| `admin`      | Admin      | `Password123!` |
-| `agent`      | Agent      | `Password123!` |
+အောက်ပါ Account များသည် Local Development Seed Data အတွက်သာဖြစ်ပါတယ်။
+Production တွင် လုံးဝမသုံးရပါ။
+
+| Username | Role | Password |
+| --- | --- | --- |
+| `owner` | Owner | `Password123!` |
+| `admin` | Admin | `Password123!` |
+| `agent` | Agent | `Password123!` |
 | `accountant` | Accountant | `Password123!` |
 
-**Never use these credentials in production.** Create real users from *Users & Roles* and delete or disable the seed accounts.
+## Quality Checks
 
-## Commands
-
-| Task             | Command                          |
-| ---------------- | -------------------------------- |
-| Install          | `npm install`                    |
-| Database setup   | `npx prisma migrate dev`         |
-| Migration (prod) | `npx prisma migrate deploy`      |
-| Seed             | `npx prisma db seed`             |
-| Development      | `npm run dev`                    |
-| Testing          | `npm test`                       |
-| Production build | `npm run build`                  |
-| Production start | `npm start`                      |
-| Docker deploy    | `docker compose -f docker/docker-compose.yml up -d --build` |
-
-## Production deployment (Docker)
-
-1. Copy `.env.example` → `.env` next to `docker/docker-compose.yml`; set `DB_PASSWORD`, `AUTH_SECRET`, `APP_URL`.
-2. Switch the Prisma datasource provider in `prisma/schema.prisma` from `sqlite` to `postgresql` and commit a migration (`npx prisma migrate dev`) against a Postgres URL.
-3. `docker compose -f docker/docker-compose.yml up -d --build`
-4. Run migrations inside the container: `docker compose exec app npx prisma migrate deploy`
-5. Health check: `GET /api/health`
-
-### Backup & restore
-
-- Backup: `docker compose exec db pg_dump -U walletnote walletnote > backup-$(date +%F).sql`
-- Restore: `docker compose exec -T db psql -U walletnote walletnote < backup-YYYY-MM-DD.sql`
-- Keep daily backups off-server; test restores regularly. SQLite dev DB is the single file `prisma/dev.db`.
-
-## Architecture
-
+```powershell
+npm run lint
+npm test
+npm run build
+git diff --check
 ```
+
+## Project Structure
+
+```text
 src/
-  app/            Next.js pages + /api/v1 REST route handlers
-  components/     UI kit (Card, Table, Modal, toast…) + AppShell
-  lib/            prisma, auth, api helpers, money, permissions, audit, sequence, dates
-  services/       business logic (walletService, threeDService, exchangeService, creditService, summaryService)
-prisma/           schema, migrations, seed
-tests/            Vitest unit tests for financial calculations
-docker/           Dockerfile, docker-compose.yml, nginx.conf
+  app/          Next.js pages and REST API routes
+  components/   UI components, AppShell, language and PWA controls
+  lib/          Authentication, tenant, money and utility functions
+  services/     Wallet, POS, 3D, exchange and accounting logic
+prisma/         PostgreSQL schema, migrations and seed data
+tests/          Automated tests
+public/         Public images, icons and PWA assets
 ```
 
-Key invariants:
+## VPS Recovery
 
-- **Wallet balances** are only mutated by `walletService.postLedger`, always inside a DB transaction, with optimistic locking.
-- **Settlements, exchanges, transfers, collections and payments** are transaction-safe; reversals create compensating ledger entries — history is never destroyed.
-- **Closed dates** block new transactions (`closeGuard.assertDateOpen`); reopening requires a reason and is audited.
-- **Permissions** are enforced in every API route via `withAuth(permission, handler)` — the frontend only hides buttons.
-- **3D numbers** are 3-character strings; leading zeros are significant (`001` ≠ `010` ≠ `100`).
+Windows ပြန်တင်ခြင်း သို့မဟုတ် Development PC ပြောင်းလဲခြင်းအတွက်
+[PROJECT_PROMPT.md](PROJECT_PROMPT.md) ကိုဖတ်ပါ။ အဲဒီဖိုင်တွင် GitHub ကနေ Source
+ပြန်ယူခြင်း၊ VPS ရှိ လက်ရှိ PM2/Nginx Release ကိုရှာခြင်း၊ Candidate Deployment
+စမ်းသပ်ခြင်းနှင့် အခြား VPS Project များကို မထိရမည့်စည်းမျဉ်းများ ပါဝင်ပါတယ်။
 
-## API
+SSH private key၊ `.env.production`၊ Database URL၊ API Key၊ Password နှင့် Token
+များကို GitHub ထဲ မတင်ပါနှင့်။
 
-Versioned REST under `/api/v1/*`: auth, dashboard, three-d (sessions/transactions/settle/reopen), exchange (rates/transactions/reverse), wallets (+ledger/adjust), wallet-transfers, reconciliations, receivables (+payments), payables (+payments), income-expense, categories, customers, daily-close (+reopen), reports (summary/export), users, roles, settings, audit-logs, branches.
+## License
 
-All responses: `{ ok: true, data }` or `{ ok: false, error, details? }`. Money values are serialized as strings of minor units.
+ဤ Project ကို [MIT License](LICENSE) ဖြင့် အခမဲ့အသုံးပြု၊ ပြင်ဆင်နှင့်
+မျှဝေနိုင်ပါတယ်။ မူရင်း Copyright နှင့် License Notice ကို ဆက်လက်ထည့်သွင်းထားရပါမယ်။
 
-## Permission matrix (defaults)
-
-| Role       | Highlights |
-| ---------- | ---------- |
-| Owner      | Everything, including settings and reopening closed records |
-| Admin      | Everything except system settings |
-| Agent      | 3D + exchange entry, own credit records; no company-wide profit |
-| Cashier    | Wallet transfers, income/expense, collections/payments |
-| Accountant | All accounting views, reconciliation, reports, daily close |
-| Viewer     | Read-only |
-
-Custom roles with any permission combination can be created in *Users & Roles*.
+Copyright (c) 2026 Khun Myint Aung.
