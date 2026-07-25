@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Building2, RefreshCw, Search, ShieldCheck, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
-import { Button, Card } from "@/components/ui";
+import { Button, Card, Select } from "@/components/ui";
 import { fmtDateTime } from "@/lib/format";
 
 interface AdminStats {
@@ -22,6 +22,17 @@ interface AdminStats {
     lastSessionAt: string | null;
     createdAt: string;
   }[];
+  activityLogs: {
+    id: string;
+    businessName: string;
+    userName: string;
+    username: string;
+    action: string;
+    module: string;
+    resourceType: string | null;
+    reason: string | null;
+    createdAt: string;
+  }[];
   updatedAt: string;
 }
 
@@ -39,6 +50,8 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [activityQuery, setActivityQuery] = useState("");
+  const [activityAction, setActivityAction] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -70,6 +83,17 @@ export default function AdminPage() {
     user.username.toLowerCase().includes(needle) ||
     user.name.toLowerCase().includes(needle) ||
     user.businessName.toLowerCase().includes(needle)
+  );
+  const activityNeedle = activityQuery.trim().toLowerCase();
+  const activityActions = [...new Set((data?.activityLogs ?? []).map((log) => log.action))].sort();
+  const visibleActivity = (data?.activityLogs ?? []).filter((log) =>
+    (!activityAction || log.action === activityAction) &&
+    (!activityNeedle ||
+      log.username.toLowerCase().includes(activityNeedle) ||
+      log.userName.toLowerCase().includes(activityNeedle) ||
+      log.businessName.toLowerCase().includes(activityNeedle) ||
+      log.module.toLowerCase().includes(activityNeedle) ||
+      log.resourceType?.toLowerCase().includes(activityNeedle))
   );
 
   return (
@@ -171,6 +195,66 @@ export default function AdminPage() {
           </div>
           <footer className="border-t border-gray-200 px-4 py-3 text-xs text-gray-500 dark:border-gray-800">
             Showing {visibleUsers.length.toLocaleString()} of {(data?.users.length ?? 0).toLocaleString()} loaded users
+          </footer>
+        </section>
+
+        <section className="border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+          <header className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
+            <div>
+              <h2 className="text-sm font-semibold">Activity Audit Logs</h2>
+              <p className="mt-1 text-xs text-gray-500">Latest 500 activities across registered businesses.</p>
+            </div>
+            <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-[18rem_12rem]">
+              <label className="relative">
+                <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                <input
+                  value={activityQuery}
+                  onChange={(event) => setActivityQuery(event.target.value)}
+                  placeholder="Search username, business, module"
+                  className="min-h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm dark:border-gray-700 dark:bg-gray-800"
+                />
+              </label>
+              <Select value={activityAction} onChange={(event) => setActivityAction(event.target.value)}>
+                <option value="">All actions</option>
+                {activityActions.map((action) => <option key={action} value={action}>{action}</option>)}
+              </Select>
+            </div>
+          </header>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] text-sm">
+              <thead className="border-b border-gray-200 bg-gray-50 text-left text-xs text-gray-500 dark:border-gray-800 dark:bg-gray-950">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Time</th>
+                  <th className="px-4 py-3 font-medium">Business</th>
+                  <th className="px-4 py-3 font-medium">User</th>
+                  <th className="px-4 py-3 font-medium">Username</th>
+                  <th className="px-4 py-3 font-medium">Action</th>
+                  <th className="px-4 py-3 font-medium">Module</th>
+                  <th className="px-4 py-3 font-medium">Resource</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
+                {visibleActivity.map((log) => (
+                  <tr key={log.id}>
+                    <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-500">{fmtDateTime(log.createdAt)}</td>
+                    <td className="px-4 py-3 font-medium">{log.businessName}</td>
+                    <td className="px-4 py-3">{log.userName}</td>
+                    <td className="px-4 py-3 font-mono font-semibold text-blue-700 dark:text-blue-400">{log.username}</td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold dark:bg-gray-800">{log.action}</span>
+                    </td>
+                    <td className="px-4 py-3">{log.module}</td>
+                    <td className="px-4 py-3 text-gray-500">{log.resourceType ?? "-"}</td>
+                  </tr>
+                ))}
+                {!loading && visibleActivity.length === 0 && (
+                  <tr><td colSpan={7} className="px-4 py-10 text-center text-gray-500">No activity logs found.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <footer className="border-t border-gray-200 px-4 py-3 text-xs text-gray-500 dark:border-gray-800">
+            Showing {visibleActivity.length.toLocaleString()} of {(data?.activityLogs.length ?? 0).toLocaleString()} loaded activities
           </footer>
         </section>
 

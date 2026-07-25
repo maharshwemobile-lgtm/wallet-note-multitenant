@@ -17,6 +17,7 @@ export async function GET() {
       registeredToday,
       registrationAuditRecords,
       users,
+      activityLogs,
     ] = await Promise.all([
       prisma.business.count(),
       prisma.user.count({ where: { deletedAt: null } }),
@@ -51,7 +52,33 @@ export async function GET() {
           },
         },
       }),
+      prisma.auditLog.findMany({
+        orderBy: { createdAt: "desc" },
+        take: 500,
+        select: {
+          id: true,
+          businessId: true,
+          action: true,
+          module: true,
+          resourceType: true,
+          reason: true,
+          createdAt: true,
+          user: {
+            select: {
+              name: true,
+              username: true,
+            },
+          },
+        },
+      }),
     ]);
+
+    const activityBusinessIds = [...new Set(activityLogs.map((log) => log.businessId))];
+    const activityBusinesses = await prisma.business.findMany({
+      where: { id: { in: activityBusinessIds } },
+      select: { id: true, name: true },
+    });
+    const activityBusinessNames = new Map(activityBusinesses.map((business) => [business.id, business.name]));
 
     return NextResponse.json(
       {
@@ -72,6 +99,17 @@ export async function GET() {
             hasValidSession: user.sessions.length > 0,
             lastSessionAt: user.sessions[0]?.createdAt ?? null,
             createdAt: user.createdAt,
+          })),
+          activityLogs: activityLogs.map((log) => ({
+            id: log.id,
+            businessName: activityBusinessNames.get(log.businessId) ?? "Unknown business",
+            userName: log.user?.name ?? "System",
+            username: log.user?.username ?? "system",
+            action: log.action,
+            module: log.module,
+            resourceType: log.resourceType,
+            reason: log.reason,
+            createdAt: log.createdAt,
           })),
           updatedAt: now.toISOString(),
         },
