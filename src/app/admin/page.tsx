@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Building2, RefreshCw, Search, ShieldCheck, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
 import { Button, Card, Select } from "@/components/ui";
 import { fmtDateTime } from "@/lib/format";
@@ -18,6 +18,7 @@ interface AdminStats {
     username: string;
     businessName: string;
     active: boolean;
+    registeredToday: boolean;
     hasValidSession: boolean;
     lastSessionAt: string | null;
     createdAt: string;
@@ -50,8 +51,11 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [userScope, setUserScope] = useState<"all" | "today">("all");
   const [activityQuery, setActivityQuery] = useState("");
   const [activityAction, setActivityAction] = useState("");
+  const userAuditRef = useRef<HTMLElement>(null);
+  const activityAuditRef = useRef<HTMLElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -77,8 +81,22 @@ export default function AdminPage() {
     };
   }, [load]);
 
+  const openUserAudit = (scope: "all" | "today") => {
+    setUserScope(scope);
+    window.requestAnimationFrame(() => {
+      userAuditRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
+  const openActivityAudit = () => {
+    window.requestAnimationFrame(() => {
+      activityAuditRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
+
   const needle = query.trim().toLowerCase();
-  const visibleUsers = (data?.users ?? []).filter((user) =>
+  const scopedUsers = (data?.users ?? []).filter((user) => userScope === "all" || user.registeredToday);
+  const visibleUsers = scopedUsers.filter((user) =>
     !needle ||
     user.username.toLowerCase().includes(needle) ||
     user.name.toLowerCase().includes(needle) ||
@@ -98,7 +116,7 @@ export default function AdminPage() {
 
   return (
     <main className="min-h-screen bg-gray-50 px-3 py-4 dark:bg-gray-950 sm:px-6 sm:py-6">
-      <div className="mx-auto max-w-5xl space-y-4">
+      <div className="mx-auto max-w-[1600px] space-y-4">
         <header className="flex min-h-14 flex-wrap items-center justify-between gap-3 border-b border-gray-200 pb-4 dark:border-gray-800">
           <div className="flex min-w-0 items-center gap-3">
             <div className="rounded-lg bg-blue-600 p-2 text-white">
@@ -124,8 +142,8 @@ export default function AdminPage() {
         <section className="grid grid-cols-2 gap-3 lg:grid-cols-3">
           {stats.map((item) => {
             const Icon = item.icon;
-            return (
-              <Card key={item.key} className="min-h-28">
+            const content = (
+              <Card className="min-h-28">
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-xs font-medium text-gray-500">{item.label}</span>
                   <Icon size={18} className={item.tone} />
@@ -135,26 +153,93 @@ export default function AdminPage() {
                 </div>
               </Card>
             );
+
+            if (item.key === "registeredAccounts") {
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => openUserAudit("all")}
+                  aria-label="Show all registered user details"
+                  className="text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  {content}
+                </button>
+              );
+            }
+
+            if (item.key === "registeredToday") {
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => openUserAudit("today")}
+                  aria-label="Show users registered today"
+                  className="text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  {content}
+                </button>
+              );
+            }
+
+            if (item.key === "registrationAuditRecords") {
+              return (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={openActivityAudit}
+                  aria-label="Show activity audit logs"
+                  className="text-left transition hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                >
+                  {content}
+                </button>
+              );
+            }
+
+            return <div key={item.key}>{content}</div>;
           })}
         </section>
 
-        <section className="border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+        <div className="grid items-start gap-4 xl:grid-cols-2">
+        <section ref={userAuditRef} className="scroll-mt-4 border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
             <div>
-              <h2 className="text-sm font-semibold">Registered User Audit</h2>
+              <h2 className="text-sm font-semibold">
+                {userScope === "today" ? "Registered Today User Details" : "Registered User Audit"}
+              </h2>
               <p className="mt-1 text-xs text-gray-500">
-                PostgreSQL user records, newest first. A valid session does not necessarily mean the user is online now.
+                {userScope === "today"
+                  ? "Users registered since midnight today."
+                  : "PostgreSQL user records, newest first. A valid session does not necessarily mean the user is online now."}
               </p>
             </div>
-            <label className="relative w-full sm:w-72">
-              <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search username, owner, business"
-                className="min-h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm dark:border-gray-700 dark:bg-gray-800"
-              />
-            </label>
+            <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-[auto_18rem]">
+              <div className="flex rounded-lg border border-gray-300 p-1 dark:border-gray-700">
+                <button
+                  type="button"
+                  onClick={() => setUserScope("all")}
+                  className={`min-h-8 px-3 text-xs font-semibold ${userScope === "all" ? "bg-blue-600 text-white" : "text-gray-600 dark:text-gray-300"}`}
+                >
+                  All users
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setUserScope("today")}
+                  className={`min-h-8 px-3 text-xs font-semibold ${userScope === "today" ? "bg-blue-600 text-white" : "text-gray-600 dark:text-gray-300"}`}
+                >
+                  Today
+                </button>
+              </div>
+              <label className="relative">
+                <Search className="absolute left-3 top-2.5 text-gray-400" size={16} />
+                <input
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Search username, owner, business"
+                  className="min-h-10 w-full rounded-lg border border-gray-300 bg-white pl-9 pr-3 text-sm dark:border-gray-700 dark:bg-gray-800"
+                />
+              </label>
+            </div>
           </header>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[760px] text-sm">
@@ -194,11 +279,11 @@ export default function AdminPage() {
             </table>
           </div>
           <footer className="border-t border-gray-200 px-4 py-3 text-xs text-gray-500 dark:border-gray-800">
-            Showing {visibleUsers.length.toLocaleString()} of {(data?.users.length ?? 0).toLocaleString()} loaded users
+            Showing {visibleUsers.length.toLocaleString()} of {scopedUsers.length.toLocaleString()} {userScope === "today" ? "users registered today" : "loaded users"}
           </footer>
         </section>
 
-        <section className="border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+        <section ref={activityAuditRef} className="scroll-mt-4 border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
           <header className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
             <div>
               <h2 className="text-sm font-semibold">Activity Audit Logs</h2>
@@ -257,6 +342,7 @@ export default function AdminPage() {
             Showing {visibleActivity.length.toLocaleString()} of {(data?.activityLogs.length ?? 0).toLocaleString()} loaded activities
           </footer>
         </section>
+        </div>
 
         <div className="flex items-center justify-between gap-3 text-xs text-gray-500">
           <span>Auto refresh: 30 seconds</span>

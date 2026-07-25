@@ -31,7 +31,7 @@ export async function GET() {
         distinct: ["userId"],
         select: { userId: true },
       }),
-      prisma.business.count({ where: { createdAt: { gte: today } } }),
+      prisma.user.count({ where: { createdAt: { gte: today }, deletedAt: null } }),
       prisma.auditLog.count({ where: { action: "REGISTER", module: "auth" } }),
       prisma.user.findMany({
         where: { deletedAt: null },
@@ -96,6 +96,7 @@ export async function GET() {
             username: user.username,
             businessName: user.business.name,
             active: user.active,
+            registeredToday: user.createdAt >= today,
             hasValidSession: user.sessions.length > 0,
             lastSessionAt: user.sessions[0]?.createdAt ?? null,
             createdAt: user.createdAt,
