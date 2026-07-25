@@ -13,7 +13,6 @@ export default function RegisterPage() {
   const router = useRouter();
   const [form, setForm] = useState({
     businessName: "",
-    ownerName: "",
     username: "",
     email: "",
     phone: "",
@@ -47,7 +46,6 @@ export default function RegisterPage() {
         method: "POST",
         body: {
           businessName: form.businessName,
-          ownerName: form.ownerName,
           username: form.username,
           email: form.email,
           phone: form.phone || undefined,
@@ -86,22 +84,13 @@ export default function RegisterPage() {
             autoFocus
             required
           />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input
-              label="Your name"
-              value={form.ownerName}
-              onChange={(event) => update("ownerName", event.target.value)}
-              autoComplete="name"
-              required
-            />
-            <Input
-              label="Phone"
-              type="tel"
-              value={form.phone}
-              onChange={(event) => update("phone", event.target.value)}
-              autoComplete="tel"
-            />
-          </div>
+          <Input
+            label="Phone"
+            type="tel"
+            value={form.phone}
+            onChange={(event) => update("phone", event.target.value)}
+            autoComplete="tel"
+          />
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
               label="Username"
@@ -153,7 +142,7 @@ export default function RegisterPage() {
           {error && <p className="text-sm text-red-600">{error}</p>}
           <Button
             type="submit"
-            disabled={loading || !form.businessName || !form.ownerName || !form.username || !form.email || !form.password}
+            disabled={loading || !form.businessName || !form.username || !form.email || !form.password}
             className="w-full"
           >
             {loading ? "Creating account..." : "Create free account"}

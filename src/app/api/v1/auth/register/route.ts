@@ -6,7 +6,7 @@ import { registerTenant } from "@/lib/tenant";
 
 const schema = z.object({
   businessName: z.string().trim().min(2).max(80),
-  ownerName: z.string().trim().min(2).max(80),
+  ownerName: z.string().trim().min(2).max(80).optional(),
   username: z.string().trim().toLowerCase().min(3).max(40),
   email: z.string().trim().toLowerCase().email().max(160),
   phone: z.string().trim().max(30).optional(),

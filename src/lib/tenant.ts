@@ -8,7 +8,7 @@ import { moduleSetting, type ModuleMode } from "@/lib/modules";
 
 export interface TenantRegistration {
   businessName: string;
-  ownerName: string;
+  ownerName?: string;
   username: string;
   email: string;
   phone?: string;
@@ -89,7 +89,7 @@ export async function registerTenant(input: TenantRegistration) {
       const owner = await tx.user.create({
         data: {
           businessId: business.id,
-          name: input.ownerName,
+          name: input.ownerName?.trim() || username,
           username,
           email,
           phone: input.phone,
