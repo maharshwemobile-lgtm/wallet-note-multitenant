@@ -45,6 +45,7 @@ export function PwaInstall({ compact = false }: { compact?: boolean }) {
   async function install() {
     if (!installPrompt) return;
 
+    await fetch("/full-app", { credentials: "same-origin" });
     await installPrompt.prompt();
     const result = await installPrompt.userChoice;
     if (result.outcome === "accepted") setInstalled(true);
