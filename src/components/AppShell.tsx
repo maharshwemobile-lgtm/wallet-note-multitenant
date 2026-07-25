@@ -56,7 +56,7 @@ const NAV = [
   { href: "/purchases", label: "Purchases", icon: Truck, perm: "purchase.view", miniMart: true },
   { href: "/items", label: "Items", icon: Package, perm: "item.view", miniMart: true },
   { href: "/stock", label: "Stock", icon: Boxes, perm: "stock.view", miniMart: true },
-  { href: "/three-d", label: "3D Records", icon: Hash, perm: "three_d.view", walletNote: true },
+  { href: "/three-d", label: "3D Records", icon: Hash, perm: "three_d.view" },
   { href: "/exchange", label: "Exchange", icon: ArrowLeftRight, perm: "exchange.view", walletNote: true },
   { href: "/wallets", label: "Wallets", icon: Wallet, perm: "wallet.view", walletNote: true },
   { href: "/credit", label: "Credit & Payable", icon: HandCoins, perm: "credit.view", walletNote: true },
@@ -71,7 +71,7 @@ const NAV = [
 ];
 
 const MINI_MART_PATHS = ["/pos", "/sales", "/purchases", "/items", "/stock", "/suppliers"];
-const WALLET_NOTE_PATHS = ["/three-d", "/exchange", "/wallets", "/credit", "/income-expense"];
+const WALLET_NOTE_PATHS = ["/exchange", "/wallets", "/credit", "/income-expense"];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
@@ -254,7 +254,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </nav>
 
             {/* Floating new-transaction button (mobile) */}
-            {!playEdition && walletNoteEnabled && hasPerm("three_d.create") && (
+            {!playEdition && hasPerm("three_d.create") && (
               <Link
                 href="/three-d?new=1"
                 className="no-print fixed bottom-16 right-4 z-30 rounded-full bg-blue-600 p-3.5 text-white shadow-lg lg:hidden"

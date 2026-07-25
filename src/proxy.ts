@@ -22,12 +22,12 @@ export function proxy(request: NextRequest) {
     destination.pathname = "/";
     destination.search = "";
     const response = NextResponse.redirect(destination);
-    response.cookies.set("wn_edition", "play", {
+    response.cookies.set("wn_edition", "", {
       httpOnly: true,
       sameSite: "lax",
       secure: true,
       path: "/",
-      maxAge: 60 * 60 * 24 * 365,
+      maxAge: 0,
     });
     return response;
   }
