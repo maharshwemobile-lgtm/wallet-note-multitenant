@@ -1,119 +1,185 @@
-# Wallet Note Project Prompt
+# Wallet Note VPS Handoff Prompt
 
-Use this prompt when continuing development, testing, releasing, and deploying
-the Wallet Note project with Codex or another coding agent.
+This document is the recovery and continuation prompt for the production
+Wallet Note project after reinstalling or replacing the local Windows PC.
 
-## Project Information
+Copy the prompt below into a new Codex task after Windows setup.
 
-- Local project: `C:\Users\KMA\Documents\New project\wallet-note-deploy`
-- GitHub repository: `https://github.com/maharshwemobile-lgtm/wallet-note-multitenant`
+---
+
+## Prompt
+
+I need you to continue development and production management of my existing
+Wallet Note application.
+
+### Production Resources
+
+- GitHub source repository:
+  `https://github.com/maharshwemobile-lgtm/wallet-note-multitenant`
 - Live website: `https://walletnote.maharshwe.online`
-- VPS host: `165.22.2.177`
-- SSH key: `C:\Users\KMA\.ssh\maharshwe_codex_vps`
-- Database: PostgreSQL
+- VPS SSH host: `root@165.22.2.177`
+- SSH private key: I will provide its new Windows path.
+- Production database: PostgreSQL on the VPS
 - Process manager: PM2
+- PM2 application name: `wallet-note`
 - Reverse proxy: Nginx
-- Application type: Multi-tenant SaaS
+- Nginx site:
+  `/etc/nginx/sites-enabled/walletnote.maharshwe.online`
+- Scheduled 3D synchronization:
+  `/etc/cron.d/wallet-note-three-d`
+- Application architecture: Next.js standalone, PostgreSQL, multi-tenant SaaS
 
-## Main Instructions
+The previous Windows project path no longer exists and must not be assumed.
+Clone the GitHub repository into a suitable folder on this new PC and use that
+clone as the development source.
 
-Work only inside the local project path listed above. Do not use or modify
-another project folder, repository, worktree, or website.
+### First-Time Recovery on the New PC
 
-Complete the requested feature from source inspection through implementation,
-testing, GitHub release, and final VPS deployment. Do not stop after providing
-only a plan.
+1. Confirm that Git, Node.js 20 or newer, npm, and GitHub authentication are
+   available.
+2. Clone the GitHub repository into a new local folder.
+3. Read `PROJECT_PROMPT.md`, `README.md`, `package.json`, the Prisma schema, and
+   the current Git status before changing files.
+4. Use the SSH key path I provide to connect to the VPS.
+5. Discover the current live release and port from PM2 and Nginx. Do not assume
+   that an old release directory or port is still current:
 
-## Engineering Rules
+   ```powershell
+   ssh -i "<NEW_SSH_KEY_PATH>" root@165.22.2.177 "pm2 describe wallet-note"
+   ssh -i "<NEW_SSH_KEY_PATH>" root@165.22.2.177 "grep -n proxy_pass /etc/nginx/sites-enabled/walletnote.maharshwe.online"
+   ```
 
-1. Inspect the existing source, database schema, APIs, permissions, tests, and
-   UI conventions before editing.
-2. Preserve the current UI design. Add new functionality using the existing
-   components, layout, colors, and interaction patterns.
-3. Do not use hardcoded application data. Use real APIs and PostgreSQL.
-4. Keep every business's data isolated by tenant or business ID.
-5. Enforce tenant, branch, session, and permission checks on the server. Client
-   checks alone are not sufficient.
-6. Never expose one user's or business's data to another tenant.
-7. Make new interfaces responsive on desktop and mobile.
-8. Add appropriate English and Myanmar labels for new user-facing features.
-9. Preserve existing user changes and avoid unrelated refactoring.
-10. Do not commit API keys, passwords, database URLs, tokens, private keys, or
-    production environment files to GitHub.
-11. Record important create, update, delete, import, export, settlement, and
-    administrative actions in the audit log where appropriate.
-12. Return clear validation errors that identify the affected field or row.
+6. Check the live health endpoint:
 
-## Requested Feature
+   ```powershell
+   Invoke-RestMethod "https://walletnote.maharshwe.online/api/health"
+   ```
 
-Implement the following request completely:
+7. Treat GitHub as the source-code source of truth. The VPS standalone release
+   is a production build and must not be used as the normal development source.
+8. The current production `.env.production` remains on the VPS. Never display,
+   download unnecessarily, commit, or expose its secrets.
 
-`[WRITE THE NEW FEATURE REQUEST HERE]`
+### New Feature Request
 
-Examples:
+Implement this request completely:
 
-- Add a new Wallet Note or Mini Mart function.
-- Fix an API, saving, login, mobile layout, or validation problem.
-- Add CSV template, export, preview, validation, and import functionality.
-- Add tenant-safe admin reporting or audit records.
+`[WRITE THE NEW FEATURE OR FIX HERE]`
 
-## Required Development Flow
+Do not stop after analysis or a plan. Continue through implementation, testing,
+GitHub publishing, candidate deployment, and final live verification.
 
-1. Check the Git working tree and preserve unrelated changes.
-2. Inspect the relevant frontend, API routes, services, database models,
-   permissions, and automated tests.
-3. Implement the complete frontend and backend behavior.
-4. Add server-side authorization and tenant isolation.
-5. Add or update focused automated tests.
-6. Run formatting or diff checks, lint, all automated tests, TypeScript checks,
-   and the production build.
-7. Fix all relevant failures before publishing.
-8. Commit only the intended files with a clear commit message.
-9. Push the completed commit to the GitHub `main` branch.
-10. Create a new GitHub release with clear release notes.
+### Project Safety Rules
 
-## VPS Deployment Flow
+1. Preserve the current Wallet Note UI and existing user workflows unless the
+   request explicitly requires a redesign.
+2. Do not use hardcoded production data. Use the real API and PostgreSQL.
+3. Enforce business, tenant, branch, session, and permission boundaries on the
+   server.
+4. Never allow one registered business to read or modify another business's
+   data.
+5. Keep desktop and mobile layouts responsive.
+6. Maintain English and Myanmar labels for new visible functionality.
+7. Preserve unrelated user changes in the local Git working tree.
+8. Do not commit API keys, passwords, tokens, SSH keys, database URLs, or
+   production environment files.
+9. Add audit records for important data and administrative actions.
+10. Add clear validation messages and focused automated tests.
 
-1. Build a fresh Next.js standalone production package.
-2. Upload it as a new, uniquely named release directory.
-3. Copy the production environment file from the current live release without
-   displaying or committing its secrets.
-4. Start the new release on an unused candidate port.
-5. Verify candidate health, PostgreSQL connectivity, authentication protection,
-   static assets, and the new API or feature.
-6. Switch Nginx to the candidate only after verification succeeds.
-7. Update any Wallet Note cron jobs to the new live port.
-8. Rename and save the PM2 process configuration.
-9. Verify the public live domain, database health, authentication boundary, and
-   new feature again.
-10. Remove the previous release and temporary archive only after the new release
-    is confirmed healthy.
-11. Verify the absolute old release path before deleting it.
-12. Check VPS disk usage after cleanup.
+### Resources That Must Not Be Modified
 
-Do not modify `app.maharshwe.shop`, `maharshwe.online/pos`, or unrelated PM2,
-Nginx, database, repository, or project resources.
+This VPS hosts other applications. Do not modify, restart, delete, redeploy, or
+reconfigure any unrelated resource, including:
 
-## Status Updates
+- `app.maharshwe.shop`
+- `maharshwe.online/pos`
+- PM2 applications other than `wallet-note`
+- Nginx sites other than `walletnote.maharshwe.online`
+- unrelated databases, repositories, cron files, and `/var/www` directories
 
-Provide short Myanmar-language progress updates while:
+### Required Development Checks
 
-- inspecting the source;
-- implementing frontend and API changes;
-- running tests and the production build;
-- pushing to GitHub;
-- testing the VPS candidate;
-- completing the live deployment.
+1. Inspect the relevant frontend, APIs, services, Prisma models, permissions,
+   tenant filtering, and tests.
+2. Implement the frontend and backend behavior end to end.
+3. Run:
 
-## Final Report
+   ```powershell
+   npm install
+   npm run lint
+   npm test
+   npm run build
+   git diff --check
+   ```
+
+4. Resolve relevant failures before publishing.
+5. Commit only the intended files with a clear commit message.
+6. Push to the GitHub `main` branch.
+7. Create a new GitHub release with accurate release notes.
+
+### Required VPS Deployment Procedure
+
+1. Read the current PM2 process and Nginx configuration to discover the live
+   release directory and port.
+2. Check disk space before uploading. The VPS disk is small, so do not retain
+   unnecessary archives or old releases.
+3. Build a fresh Next.js standalone package from the GitHub-backed local source.
+4. Upload it into a new uniquely named directory under `/var/www`.
+5. Copy `.env.production` from the currently running Wallet Note release into
+   the candidate release without printing its contents.
+6. Start the candidate on an unused localhost port with a temporary PM2 name.
+7. Verify the candidate before switching traffic:
+   - application health;
+   - PostgreSQL connectivity;
+   - authentication protection;
+   - static assets;
+   - the newly implemented UI/API behavior;
+   - tenant and permission boundaries.
+8. Run `nginx -t` before reloading Nginx.
+9. Point only the Wallet Note Nginx site to the verified candidate port.
+10. Update only `/etc/cron.d/wallet-note-three-d` if its localhost port changed.
+11. Replace the old `wallet-note` PM2 process with the verified candidate and
+    run `pm2 save`.
+12. Verify the public domain and API health again.
+13. Remove the previous Wallet Note release and temporary archive only after the
+    new release is confirmed healthy.
+14. Resolve and verify the exact absolute old release path before deleting it.
+15. Check disk usage after cleanup.
+
+### Progress and Final Report
+
+Give short Myanmar-language progress updates while inspecting, editing, testing,
+publishing, candidate testing, and deploying.
 
 At completion, report:
 
-- the features implemented;
-- validation and tenant-safety behavior;
-- lint, test, and production-build results;
-- the live website link;
-- the GitHub release link;
-- database and API health;
-- any incomplete work or remaining risk.
+- implemented features;
+- tenant and validation protections;
+- lint, tests, and production-build results;
+- live website link;
+- GitHub release link;
+- live database and API status;
+- any incomplete item or remaining risk.
+
+---
+
+## Before Reinstalling Windows
+
+The live website and PostgreSQL data remain on the VPS and are not removed by a
+Windows reinstall. However, access credentials stored only on this PC can be
+lost.
+
+Back up these items to an encrypted USB drive or another secure offline
+location:
+
+1. `C:\Users\KMA\.ssh\maharshwe_codex_vps`
+2. `C:\Users\KMA\.ssh\maharshwe_codex_vps.pub`
+3. Any separate VPS, domain registrar, DNS, GitHub, RapidAPI, or email recovery
+   credentials that are not already available on another trusted device.
+
+Never upload the private SSH key to GitHub, the public repository, chat, or an
+unencrypted cloud folder.
+
+After restoring the private key on the new Windows installation, restrict its
+file permissions and provide its new local path when starting a Codex task.
 
