@@ -25,7 +25,7 @@ interface AdminStats {
   activityLogs: {
     id: string;
     businessName: string;
-    userName: string;
+    userDisplayName: string;
     username: string;
     action: string;
     module: string;
@@ -90,7 +90,7 @@ export default function AdminPage() {
     (!activityAction || log.action === activityAction) &&
     (!activityNeedle ||
       log.username.toLowerCase().includes(activityNeedle) ||
-      log.userName.toLowerCase().includes(activityNeedle) ||
+      log.userDisplayName.toLowerCase().includes(activityNeedle) ||
       log.businessName.toLowerCase().includes(activityNeedle) ||
       log.module.toLowerCase().includes(activityNeedle) ||
       log.resourceType?.toLowerCase().includes(activityNeedle))
@@ -238,7 +238,7 @@ export default function AdminPage() {
                   <tr key={log.id}>
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-500">{fmtDateTime(log.createdAt)}</td>
                     <td className="px-4 py-3 font-medium">{log.businessName}</td>
-                    <td className="px-4 py-3">{log.userName}</td>
+                    <td className="px-4 py-3">{log.userDisplayName}</td>
                     <td className="px-4 py-3 font-mono font-semibold text-blue-700 dark:text-blue-400">{log.username}</td>
                     <td className="px-4 py-3">
                       <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold dark:bg-gray-800">{log.action}</span>

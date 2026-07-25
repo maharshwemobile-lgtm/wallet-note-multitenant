@@ -103,7 +103,7 @@ export async function GET() {
           activityLogs: activityLogs.map((log) => ({
             id: log.id,
             businessName: activityBusinessNames.get(log.businessId) ?? "Unknown business",
-            userName: log.user?.name ?? "System",
+            userDisplayName: log.user?.name ?? "System",
             username: log.user?.username ?? "system",
             action: log.action,
             module: log.module,
