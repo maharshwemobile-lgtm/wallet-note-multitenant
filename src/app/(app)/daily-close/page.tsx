@@ -26,7 +26,7 @@ export default function DailyClosePage() {
   const [reopenReason, setReopenReason] = useState("");
   const [busy, setBusy] = useState(false);
   const { push } = useToast();
-  const { hasPerm, branches, defaultBranchId } = useAuth();
+  const { hasPerm, branches, defaultBranchId, playEdition } = useAuth();
 
   const load = useCallback(() => {
     api<{ items: Close[] }>("/api/v1/daily-close").then((d) => setItems(d.items)).catch((e) => push(e.message, "error"));
@@ -100,10 +100,10 @@ export default function DailyClosePage() {
           {s && (
             <div className="mt-4 space-y-3">
               <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm lg:grid-cols-3">
-                <div className="font-semibold text-gray-500 lg:col-span-3">3D — {preview!.date}</div>
-                <div>Records: <b>{s.threeD.totalRecords}</b></div>
-                <div>Total: <b className="tabular-nums">{fmtMoney(s.threeD.totalBet)}</b></div>
-                <div>Settled P/L: <b className={`tabular-nums ${BigInt(s.threeD.settledProfit) >= 0n ? "text-green-600" : "text-red-600"}`}>{fmtMoney(s.threeD.settledProfit)}</b></div>
+                {!playEdition && <div className="font-semibold text-gray-500 lg:col-span-3">3D — {preview!.date}</div>}
+                {!playEdition && <div>Records: <b>{s.threeD.totalRecords}</b></div>}
+                {!playEdition && <div>Total: <b className="tabular-nums">{fmtMoney(s.threeD.totalBet)}</b></div>}
+                {!playEdition && <div>Settled P/L: <b className={`tabular-nums ${BigInt(s.threeD.settledProfit) >= 0n ? "text-green-600" : "text-red-600"}`}>{fmtMoney(s.threeD.settledProfit)}</b></div>}
                 <div className="font-semibold text-gray-500 lg:col-span-3">Exchange</div>
                 <div>Buy THB: <b className="tabular-nums">{fmtMoney(s.exchange.buyVolumeThb)}</b></div>
                 <div>Sell THB: <b className="tabular-nums">{fmtMoney(s.exchange.sellVolumeThb)}</b></div>
@@ -117,7 +117,7 @@ export default function DailyClosePage() {
                 <div>Paid: <b className="tabular-nums">{fmtMoney(s.payable.paid)}</b></div>
                 <div>Income − Expense: <b className="tabular-nums">{fmtMoney((BigInt(s.general.otherIncome) - BigInt(s.general.expense)).toString())}</b></div>
               </div>
-              {BigInt(s.threeD.unsettledAmount) > 0n && (
+              {!playEdition && BigInt(s.threeD.unsettledAmount) > 0n && (
                 <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
                   Warning: {fmtMoney(s.threeD.unsettledAmount)} MMK of 3D records are not settled. Settle all sessions before closing.
                 </p>

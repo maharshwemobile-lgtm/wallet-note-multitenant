@@ -2,11 +2,13 @@ import { withAuth, json } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { computeDaySummary } from "@/services/summaryService";
 import { todayBusinessDate } from "@/lib/dates";
+import { isPlayEdition } from "@/lib/edition";
 
 export const GET = withAuth("dashboard.view", async ({ req, user }) => {
   const sp = req.nextUrl.searchParams;
   const date = sp.get("date") ?? todayBusinessDate();
   const branchId = sp.get("branchId");
+  const playEdition = isPlayEdition();
 
   const branchIds = branchId
     ? [branchId]
@@ -17,7 +19,7 @@ export const GET = withAuth("dashboard.view", async ({ req, user }) => {
   const summary = await computeDaySummary(prisma, user.businessId, date, branchIds);
 
   const [recentThreeD, recentExchanges, pendingSessions, moduleSetting] = await Promise.all([
-    prisma.threeDTransaction.findMany({
+    playEdition ? Promise.resolve([]) : prisma.threeDTransaction.findMany({
       where: { businessId: user.businessId, deletedAt: null },
       orderBy: { createdAt: "desc" },
       take: 8,
@@ -28,7 +30,7 @@ export const GET = withAuth("dashboard.view", async ({ req, user }) => {
       orderBy: { createdAt: "desc" },
       take: 8,
     }),
-    prisma.threeDSession.findMany({
+    playEdition ? Promise.resolve([]) : prisma.threeDSession.findMany({
       where: { businessId: user.businessId, status: { in: ["OPEN", "CLOSED", "RESULT_ENTERED"] } },
       orderBy: { drawDate: "desc" },
       take: 5,
@@ -80,8 +82,22 @@ export const GET = withAuth("dashboard.view", async ({ req, user }) => {
     };
   }
 
+  const safeSummary = playEdition
+    ? {
+        ...summary,
+        threeD: {
+          totalRecords: 0,
+          totalBet: 0n,
+          totalPotentialPayout: 0n,
+          totalCommission: 0n,
+          settledProfit: 0n,
+          unsettledAmount: 0n,
+        },
+      }
+    : summary;
+
   return json({
-    date, summary, recentThreeD, recentExchanges, pendingSessions,
+    date, summary: safeSummary, recentThreeD, recentExchanges, pendingSessions,
     rates,
     pos,
   });

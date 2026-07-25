@@ -2,6 +2,7 @@ import { withAuth, json, ApiError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { computeDaySummary } from "@/services/summaryService";
 import { todayBusinessDate, addDays, isValidBusinessDate } from "@/lib/dates";
+import { isPlayEdition } from "@/lib/edition";
 
 export const GET = withAuth("report.view", async ({ req, user }) => {
   const sp = req.nextUrl.searchParams;
@@ -16,14 +17,15 @@ export const GET = withAuth("report.view", async ({ req, user }) => {
 
   const branchId = sp.get("branchId");
   const branchIds = branchId ? [branchId] : user.allBranches ? undefined : user.branchIds;
+  const playEdition = isPlayEdition();
 
   const daily = [];
   for (const date of days) {
     const s = await computeDaySummary(prisma, user.businessId, date, branchIds);
     daily.push({
       date,
-      threeDBet: s.threeD.totalBet,
-      threeDProfit: s.threeD.settledProfit,
+      threeDBet: playEdition ? 0n : s.threeD.totalBet,
+      threeDProfit: playEdition ? 0n : s.threeD.settledProfit,
       exchangeProfit: s.exchange.profit,
       income: s.general.otherIncome,
       expense: s.general.expense,

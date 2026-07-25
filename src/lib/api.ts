@@ -3,6 +3,7 @@ import { ZodError, ZodType } from "zod";
 import { getAuthUser, can, AuthUser } from "./auth";
 import type { Permission } from "./permissions";
 import { MoneyError } from "./money";
+import { isPlayEdition, isThreeDPath } from "./edition";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code?: string) {
@@ -42,6 +43,9 @@ export function withAuth(perm: Permission | null, handler: Handler) {
     try {
       const user = await getAuthUser();
       if (!user) return errorJson(401, "Not signed in");
+      if (isPlayEdition() && isThreeDPath(req.nextUrl.pathname)) {
+        return errorJson(404, "Not available in this edition");
+      }
       if (perm && !can(user, perm)) {
         return errorJson(403, "You do not have permission to perform this action");
       }

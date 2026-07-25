@@ -12,6 +12,7 @@ import { Spinner } from "@/components/ui";
 import {
   DEFAULT_ABOUT, externalUrl, mergeAbout, telegramUrl, tiktokUrl, type AboutContent,
 } from "@/lib/about";
+import { useAuth } from "@/components/AppShell";
 
 interface Donation {
   title: string;
@@ -61,6 +62,7 @@ function DonationCard({ item }: { item: Donation }) {
 
 export default function AboutPage() {
   const [about, setAbout] = useState<AboutContent | null>(null);
+  const { playEdition } = useAuth();
 
   useEffect(() => {
     api<{ settings: { about?: Partial<AboutContent> } }>("/api/v1/settings?key=about")
@@ -69,13 +71,13 @@ export default function AboutPage() {
   }, []);
 
   const donations = useMemo(() => {
-    if (!about) return [];
+    if (!about || playEdition) return [];
     return [
       { title: "For Local KBZ Pay", subtitle: "Myanmar local donation", name: about.kbzName, payload: about.kbzPayload },
       { title: "For World Wide Crypto", subtitle: "USDT Deposit · BNB Smart Chain (BEP20)", name: about.cryptoName, payload: about.cryptoPayload },
       { title: "For Thailand PromptPay", subtitle: "Thai QR Payment", name: about.promptPayName, payload: about.promptPayPayload },
     ].filter((item) => item.payload);
-  }, [about]);
+  }, [about, playEdition]);
 
   if (!about) return <Spinner />;
 

@@ -21,6 +21,7 @@ interface Me {
   };
   branches: { id: string; name: string; code: string }[];
   modules: { mode: ModuleMode; miniMartEnabled: boolean; walletNoteEnabled: boolean };
+  edition: "FULL" | "PLAY";
 }
 
 const AuthCtx = createContext<{
@@ -31,6 +32,7 @@ const AuthCtx = createContext<{
   miniMartEnabled: boolean;
   walletNoteEnabled: boolean;
   moduleMode: ModuleMode;
+  playEdition: boolean;
   refreshAuth: () => Promise<void>;
 }>({
   me: null,
@@ -40,6 +42,7 @@ const AuthCtx = createContext<{
   miniMartEnabled: false,
   walletNoteEnabled: true,
   moduleMode: "WALLET_ONLY",
+  playEdition: false,
   refreshAuth: async () => {},
 });
 
@@ -111,6 +114,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const miniMartEnabled = me?.modules.miniMartEnabled ?? false;
   const walletNoteEnabled = me?.modules.walletNoteEnabled ?? true;
+  const playEdition = me?.edition === "PLAY";
   const blockedMiniMartPath = !miniMartEnabled && MINI_MART_PATHS.some((path) => pathname.startsWith(path));
   const blockedWalletNotePath = !walletNoteEnabled && WALLET_NOTE_PATHS.some((path) => pathname.startsWith(path));
   const blockedModulePath = blockedMiniMartPath || blockedWalletNotePath;
@@ -130,6 +134,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const hasPerm = (p: string) => me.user.permissions.includes(p);
   const visibleNav = NAV.filter((n) =>
     (!n.perm || hasPerm(n.perm)) &&
+    (!playEdition || n.href !== "/three-d") &&
     (!n.miniMart || miniMartEnabled) &&
     (!n.walletNote || walletNoteEnabled)
   );
@@ -169,6 +174,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         miniMartEnabled,
         walletNoteEnabled,
         moduleMode: me.modules.mode,
+        playEdition,
         refreshAuth,
       }}
     >
@@ -248,7 +254,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </nav>
 
             {/* Floating new-transaction button (mobile) */}
-            {walletNoteEnabled && hasPerm("three_d.create") && (
+            {!playEdition && walletNoteEnabled && hasPerm("three_d.create") && (
               <Link
                 href="/three-d?new=1"
                 className="no-print fixed bottom-16 right-4 z-30 rounded-full bg-blue-600 p-3.5 text-white shadow-lg lg:hidden"

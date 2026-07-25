@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { api } from "@/lib/client";
 import { Button, Card, Input, Spinner, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
@@ -20,7 +21,7 @@ export default function SettingsPage() {
   const [moduleMode, setModuleMode] = useState<ModuleMode>("WALLET_ONLY");
   const [busy, setBusy] = useState(false);
   const { push } = useToast();
-  const { refreshAuth } = useAuth();
+  const { refreshAuth, playEdition } = useAuth();
 
   const load = useCallback(() => {
     api<SettingsData>("/api/v1/settings").then((d) => {
@@ -118,7 +119,7 @@ export default function SettingsPage() {
         </Button>
       </Card>
 
-      <Card>
+      {!playEdition && <Card>
         <h3 className="mb-3 text-sm font-semibold">3D settings</h3>
         <div className="grid gap-3 sm:grid-cols-2">
           <Input label="Default odds" value={threeD.defaultOdds} onChange={(e) => setThreeD({ ...threeD, defaultOdds: e.target.value })} />
@@ -129,7 +130,7 @@ export default function SettingsPage() {
         <Button className="mt-3" disabled={busy} onClick={() => save(() => api("/api/v1/settings", { method: "PUT", body: { key: "three_d", value: threeD } }))}>
           Save 3D settings
         </Button>
-      </Card>
+      </Card>}
 
       <Card>
         <h3 className="mb-3 text-sm font-semibold">About Us page content</h3>
@@ -159,7 +160,7 @@ export default function SettingsPage() {
             <Input label="Customer live URL" value={about.customerLiveUrl} onChange={(e) => setAbout({ ...about, customerLiveUrl: e.target.value })} />
           </div>
           <Input label="Copyright" value={about.copyright} onChange={(e) => setAbout({ ...about, copyright: e.target.value })} />
-          <div className="border-t border-gray-200 pt-3 dark:border-gray-800">
+          {!playEdition && <div className="border-t border-gray-200 pt-3 dark:border-gray-800">
             <h4 className="mb-3 text-sm font-semibold">Donation QR details</h4>
             <div className="space-y-3">
               <Input label="KBZ Pay display name" value={about.kbzName} onChange={(e) => setAbout({ ...about, kbzName: e.target.value })} />
@@ -168,10 +169,18 @@ export default function SettingsPage() {
               <Input label="PromptPay display name" value={about.promptPayName} onChange={(e) => setAbout({ ...about, promptPayName: e.target.value })} />
               <Input label="PromptPay QR payload" value={about.promptPayPayload} onChange={(e) => setAbout({ ...about, promptPayPayload: e.target.value })} />
             </div>
-          </div>
+          </div>}
           <Button disabled={busy} onClick={() => save(() => api("/api/v1/settings", { method: "PUT", body: { key: "about", value: about } }))}>
             Save About content
           </Button>
+        </div>
+      </Card>
+
+      <Card>
+        <h3 className="text-sm font-semibold">Privacy and account</h3>
+        <div className="mt-3 flex flex-wrap gap-3 text-sm">
+          <Link className="font-medium text-blue-600 hover:text-blue-700" href="/privacy">Privacy policy</Link>
+          <Link className="font-medium text-red-600 hover:text-red-700" href="/account-deletion">Request account deletion</Link>
         </div>
       </Card>
     </div>

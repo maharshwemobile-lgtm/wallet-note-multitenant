@@ -2,6 +2,7 @@ import { z } from "zod";
 import { withAuth, json, parseBody, ApiError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
+import { isPlayEdition } from "@/lib/edition";
 
 // Settings are namespaced JSON documents per business: about, three_d, exchange, business_profile…
 
@@ -13,7 +14,11 @@ export const GET = withAuth(null, async ({ req, user }) => {
   });
   return json({
     business,
-    settings: Object.fromEntries(settings.map((s) => [s.key, JSON.parse(s.value)])),
+    settings: Object.fromEntries(
+      settings
+        .filter((setting) => !isPlayEdition() || setting.key !== "three_d")
+        .map((setting) => [setting.key, JSON.parse(setting.value)])
+    ),
   });
 });
 
@@ -24,6 +29,9 @@ const schema = z.object({
 
 export const PUT = withAuth("settings.manage", async ({ req, user }) => {
   const body = await parseBody(req, schema);
+  if (isPlayEdition() && body.key === "three_d") {
+    throw new ApiError(404, "Not available in this edition");
+  }
   const setting = await prisma.$transaction(async (tx) => {
     const before = await tx.systemSetting.findUnique({
       where: { businessId_key: { businessId: user.businessId, key: body.key } },

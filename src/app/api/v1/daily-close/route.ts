@@ -5,6 +5,22 @@ import { assertBranchAccess } from "@/lib/tenant";
 import { computeDaySummary } from "@/services/summaryService";
 import { audit } from "@/lib/audit";
 import { todayBusinessDate, isValidBusinessDate } from "@/lib/dates";
+import { isPlayEdition } from "@/lib/edition";
+
+function playSafeSummary<T extends { threeD: unknown }>(summary: T): T {
+  if (!isPlayEdition()) return summary;
+  return {
+    ...summary,
+    threeD: {
+      totalRecords: 0,
+      totalBet: 0n,
+      totalPotentialPayout: 0n,
+      totalCommission: 0n,
+      settledProfit: 0n,
+      unsettledAmount: 0n,
+    },
+  };
+}
 
 export const GET = withAuth("daily_close.view", async ({ req, user }) => {
   const sp = req.nextUrl.searchParams;
@@ -20,7 +36,7 @@ export const GET = withAuth("daily_close.view", async ({ req, user }) => {
     const existing = await prisma.dailyClose.findUnique({
       where: { branchId_date: { branchId, date } },
     });
-    return json({ date, branchId, summary, existing });
+    return json({ date, branchId, summary: playSafeSummary(summary), existing });
   }
 
   const where = { businessId: user.businessId };
@@ -49,7 +65,7 @@ export const POST = withAuth("daily_close.create", async ({ req, user }) => {
       throw new ApiError(422, `${body.date} is already closed for this branch`);
 
     // Block closing when unsettled 3D sessions remain for the date
-    const unsettledSessions = await tx.threeDSession.count({
+    const unsettledSessions = isPlayEdition() ? 0 : await tx.threeDSession.count({
       where: {
         businessId: user.businessId,
         drawDate: body.date,
@@ -59,7 +75,7 @@ export const POST = withAuth("daily_close.create", async ({ req, user }) => {
     if (unsettledSessions > 0)
       throw new ApiError(422, `${unsettledSessions} 3D session(s) for ${body.date} are not settled yet`);
 
-    const summary = await computeDaySummary(tx, user.businessId, body.date, [body.branchId]);
+    const summary = playSafeSummary(await computeDaySummary(tx, user.businessId, body.date, [body.branchId]));
     const summaryJson = JSON.stringify(summary, (_k, v) => (typeof v === "bigint" ? v.toString() : v));
 
     const c = existing

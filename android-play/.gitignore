@@ -1,0 +1,11 @@
+/.gradle/
+/.idea/
+/app/build/
+/build/
+/local.properties
+/*.apk
+/*.aab
+/*.idsig
+/*.jks
+/*.keystore
+/*-password.txt

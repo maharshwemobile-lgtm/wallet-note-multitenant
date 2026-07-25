@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/client";
 import { fmtDateTime } from "@/lib/format";
 import { Button, Card, Select, Spinner, Table, Empty, useToast } from "@/components/ui";
+import { useAuth } from "@/components/AppShell";
 
 interface Log {
   id: string; action: string; module: string; resourceType?: string; resourceId?: string;
@@ -18,6 +19,7 @@ export default function AuditPage() {
   const [moduleFilter, setModuleFilter] = useState("");
   const [expanded, setExpanded] = useState<string | null>(null);
   const { push } = useToast();
+  const { playEdition } = useAuth();
 
   const load = useCallback(() => {
     const params = new URLSearchParams({ page: String(page) });
@@ -35,7 +37,7 @@ export default function AuditPage() {
         <h1 className="text-xl font-bold">Audit Logs</h1>
         <Select value={moduleFilter} onChange={(e) => { setModuleFilter(e.target.value); setPage(1); }}>
           <option value="">All modules</option>
-          {["auth", "three_d", "exchange", "wallet", "credit", "payable", "income_expense", "customer", "daily_close", "users", "settings"].map((m) => (
+          {["auth", ...(playEdition ? [] : ["three_d"]), "exchange", "wallet", "credit", "payable", "income_expense", "customer", "daily_close", "users", "settings"].map((m) => (
             <option key={m} value={m}>{m}</option>
           ))}
         </Select>

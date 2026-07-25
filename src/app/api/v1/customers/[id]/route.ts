@@ -3,14 +3,16 @@ import { withAuth, json, parseBody, ApiError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { toMinor } from "@/lib/money";
 import { audit } from "@/lib/audit";
+import { isPlayEdition } from "@/lib/edition";
 
 export const GET = withAuth("customer.view", async ({ user, params }) => {
   const contact = await prisma.contact.findUnique({ where: { id: params.id } });
   if (!contact || contact.businessId !== user.businessId || contact.deletedAt)
     throw new ApiError(404, "Contact not found");
 
+  const playEdition = isPlayEdition();
   const [threeD, exchanges, receivables, recAgg, payAgg] = await Promise.all([
-    prisma.threeDTransaction.findMany({
+    playEdition ? Promise.resolve([]) : prisma.threeDTransaction.findMany({
       where: { customerId: contact.id, deletedAt: null },
       orderBy: { createdAt: "desc" }, take: 20,
     }),

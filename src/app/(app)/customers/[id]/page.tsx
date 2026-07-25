@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, use } from "react";
 import { api } from "@/lib/client";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { Card, Spinner, Badge, Table, Empty, StatCard, useToast } from "@/components/ui";
+import { useAuth } from "@/components/AppShell";
 
 interface Data {
   contact: { id: string; name: string; phone?: string; telegram?: string; address?: string; type: string; creditLimit: string; notes?: string };
@@ -18,6 +19,7 @@ export default function CustomerDetail({ params }: { params: Promise<{ id: strin
   const { id } = use(params);
   const [data, setData] = useState<Data | null>(null);
   const { push } = useToast();
+  const { playEdition } = useAuth();
 
   const load = useCallback(() => {
     api<Data>(`/api/v1/customers/${id}`).then(setData).catch((e) => push(e.message, "error"));
@@ -60,7 +62,7 @@ export default function CustomerDetail({ params }: { params: Promise<{ id: strin
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card>
+        {!playEdition && <Card>
           <h3 className="mb-3 text-sm font-semibold">3D records</h3>
           {data.threeD.length === 0 ? <Empty message="No 3D records" /> : (
             <Table headers={["Txn", "Number", "Bet", "Date"]} rightAlign={[2]}>
@@ -74,7 +76,7 @@ export default function CustomerDetail({ params }: { params: Promise<{ id: strin
               ))}
             </Table>
           )}
-        </Card>
+        </Card>}
         <Card>
           <h3 className="mb-3 text-sm font-semibold">Exchange history</h3>
           {data.exchanges.length === 0 ? <Empty message="No exchange records" /> : (

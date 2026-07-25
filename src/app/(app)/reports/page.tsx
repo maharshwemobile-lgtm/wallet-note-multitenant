@@ -23,7 +23,7 @@ export default function ReportsPage() {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
   const { push } = useToast();
-  const { hasPerm } = useAuth();
+  const { hasPerm, playEdition } = useAuth();
 
   const load = useCallback(() => {
     const params = new URLSearchParams();
@@ -60,8 +60,8 @@ export default function ReportsPage() {
       <p className="text-sm text-gray-500">Business report · {report.from} to {report.to} · generated {new Date().toLocaleString()}</p>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card><div className="text-xs uppercase text-gray-500">3D volume</div><div className="text-lg font-bold tabular-nums">{fmtMoney(report.totals.threeDBet, "MMK")}</div></Card>
-        <Card><div className="text-xs uppercase text-gray-500">3D profit</div><div className={`text-lg font-bold tabular-nums ${BigInt(report.totals.threeDProfit) >= 0n ? "text-green-600" : "text-red-600"}`}>{fmtMoney(report.totals.threeDProfit, "MMK")}</div></Card>
+        {!playEdition && <Card><div className="text-xs uppercase text-gray-500">3D volume</div><div className="text-lg font-bold tabular-nums">{fmtMoney(report.totals.threeDBet, "MMK")}</div></Card>}
+        {!playEdition && <Card><div className="text-xs uppercase text-gray-500">3D profit</div><div className={`text-lg font-bold tabular-nums ${BigInt(report.totals.threeDProfit) >= 0n ? "text-green-600" : "text-red-600"}`}>{fmtMoney(report.totals.threeDProfit, "MMK")}</div></Card>}
         <Card><div className="text-xs uppercase text-gray-500">Exchange profit</div><div className={`text-lg font-bold tabular-nums ${BigInt(report.totals.exchangeProfit) >= 0n ? "text-green-600" : "text-red-600"}`}>{fmtMoney(report.totals.exchangeProfit, "MMK")}</div></Card>
         <Card><div className="text-xs uppercase text-gray-500">Income − Expense</div><div className="text-lg font-bold tabular-nums">{fmtMoney((BigInt(report.totals.income) - BigInt(report.totals.expense)).toString(), "MMK")}</div></Card>
       </div>
@@ -81,15 +81,15 @@ export default function ReportsPage() {
           </ResponsiveContainer>
         </Card>
         <Card>
-          <h3 className="mb-3 text-sm font-semibold">3D sales & profit trend</h3>
+          <h3 className="mb-3 text-sm font-semibold">{playEdition ? "Exchange profit trend" : "3D sales & profit trend"}</h3>
           <ResponsiveContainer width="100%" height={240}>
             <LineChart data={chartData}>
               <XAxis dataKey="date" fontSize={11} />
               <YAxis fontSize={11} width={70} />
               <Tooltip formatter={(v) => Number(v).toLocaleString()} />
               <Legend />
-              <Line dataKey="threeDBet" stroke="#2563eb" name="3D volume" dot={false} />
-              <Line dataKey="threeDProfit" stroke="#16a34a" name="3D profit" dot={false} />
+              {!playEdition && <Line dataKey="threeDBet" stroke="#2563eb" name="3D volume" dot={false} />}
+              {!playEdition && <Line dataKey="threeDProfit" stroke="#16a34a" name="3D profit" dot={false} />}
               <Line dataKey="exchangeProfit" stroke="#d97706" name="Exchange profit" dot={false} />
             </LineChart>
           </ResponsiveContainer>
@@ -98,12 +98,17 @@ export default function ReportsPage() {
 
       <Card>
         <h3 className="mb-3 text-sm font-semibold">Daily breakdown</h3>
-        <Table headers={["Date", "3D volume", "3D P/L", "Exchange P/L", "Income", "Expense", "Collected", "Paid", "Net cash"]} rightAlign={[1, 2, 3, 4, 5, 6, 7, 8]}>
+        <Table
+          headers={playEdition
+            ? ["Date", "Exchange P/L", "Income", "Expense", "Collected", "Paid", "Net cash"]
+            : ["Date", "3D volume", "3D P/L", "Exchange P/L", "Income", "Expense", "Collected", "Paid", "Net cash"]}
+          rightAlign={playEdition ? [1, 2, 3, 4, 5, 6] : [1, 2, 3, 4, 5, 6, 7, 8]}
+        >
           {report.daily.map((d) => (
             <tr key={d.date}>
               <td className="px-3 py-2 text-xs">{d.date}</td>
-              <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(d.threeDBet)}</td>
-              <td className={`px-3 py-2 text-right tabular-nums ${BigInt(d.threeDProfit) >= 0n ? "text-green-600" : "text-red-600"}`}>{fmtMoney(d.threeDProfit)}</td>
+              {!playEdition && <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(d.threeDBet)}</td>}
+              {!playEdition && <td className={`px-3 py-2 text-right tabular-nums ${BigInt(d.threeDProfit) >= 0n ? "text-green-600" : "text-red-600"}`}>{fmtMoney(d.threeDProfit)}</td>}
               <td className={`px-3 py-2 text-right tabular-nums ${BigInt(d.exchangeProfit) >= 0n ? "text-green-600" : "text-red-600"}`}>{fmtMoney(d.exchangeProfit)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(d.income)}</td>
               <td className="px-3 py-2 text-right tabular-nums">{fmtMoney(d.expense)}</td>
@@ -119,9 +124,9 @@ export default function ReportsPage() {
         <Card className="no-print">
           <h3 className="mb-3 text-sm font-semibold">Export data (CSV)</h3>
           <div className="flex flex-wrap gap-2">
-            <a href={`/api/v1/reports/export?type=three_d&from=${report.from}&to=${report.to}`} download>
+            {!playEdition && <a href={`/api/v1/reports/export?type=three_d&from=${report.from}&to=${report.to}`} download>
               <Button variant="secondary"><Download size={16} className="mr-1 inline" />3D records</Button>
-            </a>
+            </a>}
             <a href={`/api/v1/reports/export?type=exchange&from=${report.from}&to=${report.to}`} download>
               <Button variant="secondary"><Download size={16} className="mr-1 inline" />Exchange records</Button>
             </a>

@@ -24,7 +24,7 @@ export default function UsersPage() {
   const [showNewRole, setShowNewRole] = useState(false);
   const [busy, setBusy] = useState(false);
   const { push } = useToast();
-  const { branches } = useAuth();
+  const { branches, playEdition } = useAuth();
 
   const emptyUser = { name: "", username: "", password: "", roleId: "", allBranches: false, branchIds: [] as string[], commissionRate: "0", phone: "" };
   const [uform, setUform] = useState(emptyUser);
@@ -115,7 +115,7 @@ export default function UsersPage() {
           <option value="">Select…</option>
           {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
         </Select>
-        <Input label="3D commission %" value={uform.commissionRate} onChange={(e) => setUform({ ...uform, commissionRate: e.target.value })} />
+        {!playEdition && <Input label="3D commission %" value={uform.commissionRate} onChange={(e) => setUform({ ...uform, commissionRate: e.target.value })} />}
       </div>
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" checked={uform.allBranches} onChange={(e) => setUform({ ...uform, allBranches: e.target.checked })} />

@@ -35,7 +35,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashData | null>(null);
   const [date, setDate] = useState("");
   const [branchId, setBranchId] = useState("");
-  const { branches, miniMartEnabled, walletNoteEnabled } = useAuth();
+  const { branches, miniMartEnabled, walletNoteEnabled, playEdition } = useAuth();
   const { push } = useToast();
   const router = useRouter();
 
@@ -91,9 +91,9 @@ export default function DashboardPage() {
         {walletNoteEnabled && <>
         <StatCard label="Total MMK Balance" value={fmtMoney(s.wallets.totalMmk, "MMK")} onClick={() => router.push("/wallets")} />
         <StatCard label="Total THB Balance" value={fmtMoney(s.wallets.totalThb, "THB")} onClick={() => router.push("/wallets")} />
-        <StatCard label="3D Total Today" value={fmtMoney(s.threeD.totalBet, "MMK")} sub={`${s.threeD.totalRecords} records`} onClick={() => router.push("/three-d")} />
-        <StatCard label="3D Payout Exposure" value={fmtMoney(s.threeD.totalPotentialPayout, "MMK")} tone="amber" onClick={() => router.push("/three-d")} />
-        <StatCard label="3D Settled P/L" value={fmtMoney(s.threeD.settledProfit, "MMK")} tone={BigInt(s.threeD.settledProfit) >= 0n ? "green" : "red"} onClick={() => router.push("/three-d")} />
+        {!playEdition && <StatCard label="3D Total Today" value={fmtMoney(s.threeD.totalBet, "MMK")} sub={`${s.threeD.totalRecords} records`} onClick={() => router.push("/three-d")} />}
+        {!playEdition && <StatCard label="3D Payout Exposure" value={fmtMoney(s.threeD.totalPotentialPayout, "MMK")} tone="amber" onClick={() => router.push("/three-d")} />}
+        {!playEdition && <StatCard label="3D Settled P/L" value={fmtMoney(s.threeD.settledProfit, "MMK")} tone={BigInt(s.threeD.settledProfit) >= 0n ? "green" : "red"} onClick={() => router.push("/three-d")} />}
         <StatCard label="Exchange Buy (THB)" value={fmtMoney(s.exchange.buyVolumeThb, "THB")} onClick={() => router.push("/exchange")} />
         <StatCard label="Exchange Sell (THB)" value={fmtMoney(s.exchange.sellVolumeThb, "THB")} onClick={() => router.push("/exchange")} />
         <StatCard label="Exchange Profit" value={fmtMoney(s.exchange.profit, "MMK")} tone={BigInt(s.exchange.profit) >= 0n ? "green" : "red"} onClick={() => router.push("/exchange")} />
@@ -102,7 +102,7 @@ export default function DashboardPage() {
         <StatCard label="Today's Income" value={fmtMoney(s.general.otherIncome, "MMK")} tone="green" onClick={() => router.push("/income-expense")} />
         <StatCard label="Today's Expense" value={fmtMoney(s.general.expense, "MMK")} tone="red" onClick={() => router.push("/income-expense")} />
         <StatCard label="Net Cash Movement" value={fmtMoney(s.general.netCashMovement, "MMK")} tone={BigInt(s.general.netCashMovement) >= 0n ? "green" : "red"} />
-        <StatCard label="Unsettled 3D" value={fmtMoney(s.threeD.unsettledAmount, "MMK")} tone="amber" onClick={() => router.push("/three-d")} />
+        {!playEdition && <StatCard label="Unsettled 3D" value={fmtMoney(s.threeD.unsettledAmount, "MMK")} tone="amber" onClick={() => router.push("/three-d")} />}
         <StatCard label="Credit Collected Today" value={fmtMoney(s.credit.collected, "MMK")} tone="green" onClick={() => router.push("/credit")} />
         <StatCard label="Payable Paid Today" value={fmtMoney(s.payable.paid, "MMK")} onClick={() => router.push("/credit?tab=payable")} />
         </>}
@@ -134,7 +134,8 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {walletNoteEnabled && <div className="grid gap-4 lg:grid-cols-3">
+      {walletNoteEnabled && <div className={`grid gap-4 ${playEdition ? "" : "lg:grid-cols-3"}`}>
+        {!playEdition && (
         <Card>
           <h3 className="mb-3 text-sm font-semibold">Pending 3D sessions</h3>
           {data.pendingSessions.length === 0 && <p className="text-sm text-gray-500">No pending sessions</p>}
@@ -149,6 +150,8 @@ export default function DashboardPage() {
             ))}
           </ul>
         </Card>
+        )}
+        {!playEdition && (
         <Card>
           <h3 className="mb-3 text-sm font-semibold">Recent 3D records</h3>
           <ul className="space-y-2">
@@ -161,6 +164,7 @@ export default function DashboardPage() {
             ))}
           </ul>
         </Card>
+        )}
         <Card>
           <h3 className="mb-3 text-sm font-semibold">Recent exchanges</h3>
           <ul className="space-y-2">

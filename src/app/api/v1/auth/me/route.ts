@@ -1,6 +1,7 @@
 import { withAuth, json } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { parseModuleAccess } from "@/lib/modules";
+import { appEdition } from "@/lib/edition";
 
 export const GET = withAuth(null, async ({ user }) => {
   const [branches, moduleSetting] = await Promise.all([
@@ -27,5 +28,5 @@ export const GET = withAuth(null, async ({ user }) => {
     }
   }
 
-  return json({ user, branches, modules });
+  return json({ user, branches, modules, edition: appEdition() });
 });

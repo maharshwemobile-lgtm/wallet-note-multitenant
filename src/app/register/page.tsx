@@ -196,6 +196,10 @@ export default function RegisterPage() {
         <div className="mt-3 flex justify-center">
           <PwaInstall />
         </div>
+        <div className="mt-4 flex justify-center gap-4 text-xs">
+          <Link className="text-gray-500 hover:text-blue-600" href="/privacy">Privacy</Link>
+          <Link className="text-gray-500 hover:text-red-600" href="/account-deletion">Delete account</Link>
+        </div>
       </Card>
     </main>
   );
