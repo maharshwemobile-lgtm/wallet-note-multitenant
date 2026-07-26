@@ -16,6 +16,7 @@ import {
   sendMessage, answerCallbackQuery,
   keyboard, btn, TgUpdate,
 } from "./telegram";
+import { parseModuleAccess, type FeatureKey, type FeatureVisibility } from "./modules";
 
 // ---------------------------------------------------------------------------
 // Session state: one row per (owner user, chat), tracking the guided-entry
@@ -110,23 +111,37 @@ function can(user: AuthUser, perm: string): boolean {
 // Menu
 // ---------------------------------------------------------------------------
 
-function mainMenu(user: AuthUser) {
+async function businessFeatures(businessId: string): Promise<FeatureVisibility> {
+  const setting = await prisma.systemSetting.findUnique({
+    where: { businessId_key: { businessId, key: "modules" } },
+    select: { value: true },
+  });
+  if (!setting) return parseModuleAccess({ miniMartEnabled: true }).features;
+  try {
+    return parseModuleAccess(JSON.parse(setting.value)).features;
+  } catch {
+    return parseModuleAccess({ miniMartEnabled: true }).features;
+  }
+}
+
+function mainMenu(user: AuthUser, features: FeatureVisibility) {
   const row1 = [];
-  if (can(user, "three_d.create")) row1.push(btn("🔢 3D", "menu:3d"));
-  if (can(user, "income_expense.create")) row1.push(btn("💰 Income", "menu:income"));
-  if (can(user, "income_expense.create")) row1.push(btn("💸 Expense", "menu:expense"));
+  if (features.threeD && can(user, "three_d.create")) row1.push(btn("🔢 3D", "menu:3d"));
+  if (features.incomeExpense && can(user, "income_expense.create")) row1.push(btn("💰 Income", "menu:income"));
+  if (features.incomeExpense && can(user, "income_expense.create")) row1.push(btn("💸 Expense", "menu:expense"));
   const row2 = [];
-  if (can(user, "wallet.transfer")) row2.push(btn("🔁 Transfer", "menu:transfer"));
-  if (can(user, "wallet.withdraw")) row2.push(btn("➖ Withdraw", "menu:withdraw"));
-  if (can(user, "exchange.create")) row2.push(btn("💱 Exchange", "menu:exchange"));
+  if (features.transfers && can(user, "wallet.transfer")) row2.push(btn("🔁 Transfer", "menu:transfer"));
+  if (features.withdraw && can(user, "wallet.withdraw")) row2.push(btn("➖ Withdraw", "menu:withdraw"));
+  if (features.exchange && can(user, "exchange.create")) row2.push(btn("💱 Exchange", "menu:exchange"));
   const rows = [row1, row2].filter((r) => r.length > 0);
   return keyboard(rows);
 }
 
 async function showMenu(chatId: string, user: AuthUser, greeting?: string) {
   await clearSession(user.id, chatId);
+  const features = await businessFeatures(user.businessId);
   const text = greeting ?? `Quick start — ${user.name} (${user.roleName})\nPick what you want to record:`;
-  await sendMessage(chatId, text, { replyMarkup: mainMenu(user) });
+  await sendMessage(chatId, text, { replyMarkup: mainMenu(user, features) });
 }
 
 const CANCEL_ROW = [btn("✕ Cancel", "cancel")];
@@ -555,6 +570,15 @@ const FLOW_REQUIRED_PERM: Record<string, string> = {
   "3d": "three_d.create",
 };
 
+const FLOW_FEATURE: Record<string, FeatureKey> = {
+  income: "incomeExpense",
+  expense: "incomeExpense",
+  withdraw: "withdraw",
+  transfer: "transfers",
+  exchange: "exchange",
+  "3d": "threeD",
+};
+
 /** ownerUserId identifies whose bot this webhook belongs to — resolved from
  *  the webhook URL by the caller (one bot = one Wallet Note user). */
 export async function handleUpdate(update: TgUpdate, ownerUserId: string) {
@@ -622,6 +646,10 @@ async function handleCallback(ownerUserId: string, cq: { id: string; message?: {
     const key = data.slice(5);
     const perm = FLOW_REQUIRED_PERM[key];
     if (perm && !can(user, perm)) return sendMessage(chatId, "You don't have permission for that.");
+    const feature = FLOW_FEATURE[key];
+    if (feature && !(await businessFeatures(user.businessId))[feature]) {
+      return sendMessage(chatId, "This function is turned off in Wallet Note Settings.");
+    }
     if (key === "income") return startIncomeExpense(chatId, user, "INCOME");
     if (key === "expense") return startIncomeExpense(chatId, user, "EXPENSE");
     if (key === "withdraw") return startIncomeExpense(chatId, user, "WITHDRAW");

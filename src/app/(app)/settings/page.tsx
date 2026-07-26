@@ -5,7 +5,13 @@ import Link from "next/link";
 import { api } from "@/lib/client";
 import { Button, Card, Input, Spinner, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
-import { moduleSetting, parseModuleAccess, type ModuleMode } from "@/lib/modules";
+import {
+  defaultFeaturesForMode,
+  FEATURE_DEFINITIONS,
+  moduleSettingFromFeatures,
+  parseModuleAccess,
+  type FeatureVisibility,
+} from "@/lib/modules";
 import { DEFAULT_ABOUT, mergeAbout, type AboutContent } from "@/lib/about";
 
 interface SettingsData {
@@ -18,7 +24,9 @@ export default function SettingsPage() {
   const [biz, setBiz] = useState({ name: "", phone: "", address: "", telegram: "", website: "" });
   const [threeD, setThreeD] = useState({ defaultOdds: "500", defaultCommissionRate: "10", maxPerNumber: "", warnThreshold: "" });
   const [about, setAbout] = useState<AboutContent>(DEFAULT_ABOUT);
-  const [moduleMode, setModuleMode] = useState<ModuleMode>("WALLET_ONLY");
+  const [features, setFeatures] = useState<FeatureVisibility>(
+    defaultFeaturesForMode("WALLET_ONLY")
+  );
   const [busy, setBusy] = useState(false);
   const { push } = useToast();
   const { refreshAuth, playEdition } = useAuth();
@@ -34,7 +42,7 @@ export default function SettingsPage() {
       if (t) setThreeD({ ...threeD, ...t });
       const a = d.settings.about as Partial<AboutContent> | undefined;
       setAbout(mergeAbout(a));
-      setModuleMode(parseModuleAccess(d.settings.modules ?? { miniMartEnabled: true }).mode);
+      setFeatures(parseModuleAccess(d.settings.modules ?? { miniMartEnabled: true }).features);
     }).catch((e) => push(e.message, "error"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [push]);
@@ -57,7 +65,7 @@ export default function SettingsPage() {
     try {
       await api("/api/v1/settings", {
         method: "PUT",
-        body: { key: "modules", value: moduleSetting(moduleMode) },
+        body: { key: "modules", value: moduleSettingFromFeatures(features) },
       });
       await refreshAuth();
       push("Module setting saved");
@@ -90,32 +98,44 @@ export default function SettingsPage() {
       </Card>
 
       <Card>
-        <div>
-          <h3 className="text-sm font-semibold">Workspace functions</h3>
-          <p className="mt-1 text-xs text-gray-500">Show only the functions this business uses.</p>
-          <div className="mt-3 grid gap-2 sm:grid-cols-3">
-            {([
-              ["WALLET_ONLY", "Wallet Note only"],
-              ["MINI_MART_ONLY", "Mini Mart only"],
-              ["BOTH", "Both"],
-            ] as const).map(([mode, label]) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setModuleMode(mode)}
-                className={`min-h-11 rounded-lg border px-3 py-2 text-sm font-medium transition ${
-                  moduleMode === mode
-                    ? "border-blue-600 bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300"
-                    : "border-gray-300 text-gray-600 dark:border-gray-700 dark:text-gray-300"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
+        <h3 className="text-sm font-semibold">Sidebar functions</h3>
+        {(["Mini Mart", "Wallet Note", "General"] as const).map((group) => (
+          <div key={group} className="mt-4">
+            <h4 className="mb-2 text-xs font-semibold uppercase text-gray-500">{group}</h4>
+            <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-700">
+              {FEATURE_DEFINITIONS
+                .filter((item) => item.group === group && (!playEdition || item.key !== "threeD"))
+                .map((item) => (
+                <div key={item.key} className="flex min-h-12 items-center justify-between gap-4 px-3 py-2">
+                  <span className="text-sm font-medium text-gray-700 dark:text-gray-200">{item.label}</span>
+                  <button
+                    type="button"
+                    role="switch"
+                    aria-checked={features[item.key]}
+                    aria-label={`${item.label} ${features[item.key] ? "on" : "off"}`}
+                    onClick={() =>
+                      setFeatures((current) => ({
+                        ...current,
+                        [item.key]: !current[item.key],
+                      }))
+                    }
+                    className={`relative h-7 w-12 shrink-0 rounded-full transition ${
+                      features[item.key] ? "bg-blue-600" : "bg-gray-300 dark:bg-gray-700"
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow-sm transition ${
+                        features[item.key] ? "left-6" : "left-1"
+                      }`}
+                    />
+                  </button>
+                </div>
+                ))}
+            </div>
           </div>
-        </div>
+        ))}
         <Button className="mt-3" disabled={busy} onClick={saveModules}>
-          Save workspace functions
+          Save sidebar functions
         </Button>
       </Card>
 

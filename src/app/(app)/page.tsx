@@ -35,7 +35,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashData | null>(null);
   const [date, setDate] = useState("");
   const [branchId, setBranchId] = useState("");
-  const { branches, miniMartEnabled, walletNoteEnabled, playEdition } = useAuth();
+  const { branches, featureEnabled, playEdition } = useAuth();
   const { push } = useToast();
   const router = useRouter();
 
@@ -69,7 +69,7 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {walletNoteEnabled && data.rates.length > 0 && (
+      {featureEnabled("exchange") && data.rates.length > 0 && (
         <Card className="flex flex-wrap items-center gap-6 py-3">
           {data.rates.map((r) => (
             <div key={r.pair} className="text-sm">
@@ -82,33 +82,41 @@ export default function DashboardPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-        {miniMartEnabled && data.pos && (
+        {featureEnabled("pos") && data.pos && (
           <>
             <StatCard label="Today's Sales" value={fmtMoney(data.pos.salesTotal, "MMK")} sub={`${data.pos.salesCount} sale(s)`} onClick={() => router.push("/sales")} />
             <StatCard label="Sales Profit" value={fmtMoney(data.pos.salesProfit, "MMK")} tone={BigInt(data.pos.salesProfit) >= 0n ? "green" : "red"} onClick={() => router.push("/sales")} />
           </>
         )}
-        {!playEdition && <StatCard label="3D Total Today" value={fmtMoney(s.threeD.totalBet, "MMK")} sub={`${s.threeD.totalRecords} records`} onClick={() => router.push("/three-d")} />}
-        {!playEdition && <StatCard label="3D Payout Exposure" value={fmtMoney(s.threeD.totalPotentialPayout, "MMK")} tone="amber" onClick={() => router.push("/three-d")} />}
-        {!playEdition && <StatCard label="3D Settled P/L" value={fmtMoney(s.threeD.settledProfit, "MMK")} tone={BigInt(s.threeD.settledProfit) >= 0n ? "green" : "red"} onClick={() => router.push("/three-d")} />}
-        {!playEdition && <StatCard label="Unsettled 3D" value={fmtMoney(s.threeD.unsettledAmount, "MMK")} tone="amber" onClick={() => router.push("/three-d")} />}
-        {walletNoteEnabled && <>
+        {!playEdition && featureEnabled("threeD") && <StatCard label="3D Total Today" value={fmtMoney(s.threeD.totalBet, "MMK")} sub={`${s.threeD.totalRecords} records`} onClick={() => router.push("/three-d")} />}
+        {!playEdition && featureEnabled("threeD") && <StatCard label="3D Payout Exposure" value={fmtMoney(s.threeD.totalPotentialPayout, "MMK")} tone="amber" onClick={() => router.push("/three-d")} />}
+        {!playEdition && featureEnabled("threeD") && <StatCard label="3D Settled P/L" value={fmtMoney(s.threeD.settledProfit, "MMK")} tone={BigInt(s.threeD.settledProfit) >= 0n ? "green" : "red"} onClick={() => router.push("/three-d")} />}
+        {!playEdition && featureEnabled("threeD") && <StatCard label="Unsettled 3D" value={fmtMoney(s.threeD.unsettledAmount, "MMK")} tone="amber" onClick={() => router.push("/three-d")} />}
+        {featureEnabled("wallets") && <>
         <StatCard label="Total MMK Balance" value={fmtMoney(s.wallets.totalMmk, "MMK")} onClick={() => router.push("/wallets")} />
         <StatCard label="Total THB Balance" value={fmtMoney(s.wallets.totalThb, "THB")} onClick={() => router.push("/wallets")} />
+        </>}
+        {featureEnabled("exchange") && <>
         <StatCard label="Exchange Buy (THB)" value={fmtMoney(s.exchange.buyVolumeThb, "THB")} onClick={() => router.push("/exchange")} />
         <StatCard label="Exchange Sell (THB)" value={fmtMoney(s.exchange.sellVolumeThb, "THB")} onClick={() => router.push("/exchange")} />
         <StatCard label="Exchange Profit" value={fmtMoney(s.exchange.profit, "MMK")} tone={BigInt(s.exchange.profit) >= 0n ? "green" : "red"} onClick={() => router.push("/exchange")} />
+        </>}
+        {featureEnabled("credit") && <>
         <StatCard label="Customer Receivable" value={fmtMoney(s.credit.outstanding, "MMK")} tone="blue" onClick={() => router.push("/credit")} />
         <StatCard label="Business Payable" value={fmtMoney(s.payable.outstanding, "MMK")} tone="amber" onClick={() => router.push("/credit?tab=payable")} />
+        </>}
+        {featureEnabled("incomeExpense") && <>
         <StatCard label="Today's Income" value={fmtMoney(s.general.otherIncome, "MMK")} tone="green" onClick={() => router.push("/income-expense")} />
         <StatCard label="Today's Expense" value={fmtMoney(s.general.expense, "MMK")} tone="red" onClick={() => router.push("/income-expense")} />
         <StatCard label="Net Cash Movement" value={fmtMoney(s.general.netCashMovement, "MMK")} tone={BigInt(s.general.netCashMovement) >= 0n ? "green" : "red"} />
+        </>}
+        {featureEnabled("credit") && <>
         <StatCard label="Credit Collected Today" value={fmtMoney(s.credit.collected, "MMK")} tone="green" onClick={() => router.push("/credit")} />
         <StatCard label="Payable Paid Today" value={fmtMoney(s.payable.paid, "MMK")} onClick={() => router.push("/credit?tab=payable")} />
         </>}
       </div>
 
-      {miniMartEnabled && data.pos && data.pos.lowStock.length > 0 && (
+      {featureEnabled("stock") && data.pos && data.pos.lowStock.length > 0 && (
         <Card className="border-red-300 dark:border-red-800">
           <h3 className="mb-2 text-sm font-semibold text-red-700 dark:text-red-400">Low stock alerts</h3>
           <ul className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
@@ -121,7 +129,7 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {walletNoteEnabled && s.wallets.lowBalance.length > 0 && (
+      {featureEnabled("wallets") && s.wallets.lowBalance.length > 0 && (
         <Card className="border-amber-300 dark:border-amber-700">
           <h3 className="mb-2 text-sm font-semibold text-amber-700 dark:text-amber-400">Low wallet balance alerts</h3>
           <ul className="space-y-1 text-sm">
@@ -134,8 +142,8 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      <div className={`grid gap-4 ${walletNoteEnabled ? "lg:grid-cols-3" : "lg:grid-cols-2"}`}>
-        {!playEdition && (
+      <div className="grid gap-4 lg:grid-cols-3">
+        {!playEdition && featureEnabled("threeD") && (
         <Card>
           <h3 className="mb-3 text-sm font-semibold">Pending 3D sessions</h3>
           {data.pendingSessions.length === 0 && <p className="text-sm text-gray-500">No pending sessions</p>}
@@ -151,7 +159,7 @@ export default function DashboardPage() {
           </ul>
         </Card>
         )}
-        {!playEdition && (
+        {!playEdition && featureEnabled("threeD") && (
         <Card>
           <h3 className="mb-3 text-sm font-semibold">Recent 3D records</h3>
           <ul className="space-y-2">
@@ -165,7 +173,7 @@ export default function DashboardPage() {
           </ul>
         </Card>
         )}
-        {walletNoteEnabled && <Card>
+        {featureEnabled("exchange") && <Card>
           <h3 className="mb-3 text-sm font-semibold">Recent exchanges</h3>
           <ul className="space-y-2">
             {data.recentExchanges.map((t) => (

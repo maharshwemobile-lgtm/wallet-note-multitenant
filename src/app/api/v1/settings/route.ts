@@ -3,6 +3,7 @@ import { withAuth, json, parseBody, ApiError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 import { isPlayEdition } from "@/lib/edition";
+import { moduleSettingFromFeatures, parseModuleAccess } from "@/lib/modules";
 
 // Settings are namespaced JSON documents per business: about, three_d, exchange, business_profile…
 
@@ -32,20 +33,23 @@ export const PUT = withAuth("settings.manage", async ({ req, user }) => {
   if (isPlayEdition() && body.key === "three_d") {
     throw new ApiError(404, "Not available in this edition");
   }
+  const value = body.key === "modules"
+    ? moduleSettingFromFeatures(parseModuleAccess(body.value).features)
+    : body.value;
   const setting = await prisma.$transaction(async (tx) => {
     const before = await tx.systemSetting.findUnique({
       where: { businessId_key: { businessId: user.businessId, key: body.key } },
     });
     const s = await tx.systemSetting.upsert({
       where: { businessId_key: { businessId: user.businessId, key: body.key } },
-      create: { businessId: user.businessId, key: body.key, value: JSON.stringify(body.value) },
-      update: { value: JSON.stringify(body.value) },
+      create: { businessId: user.businessId, key: body.key, value: JSON.stringify(value) },
+      update: { value: JSON.stringify(value) },
     });
     await audit(tx, {
       businessId: user.businessId, userId: user.id,
       action: "UPDATE", module: "settings", resourceType: "SystemSetting", resourceId: s.id,
       before: before ? JSON.parse(before.value) : undefined,
-      after: body.value,
+      after: value,
     });
     return s;
   });

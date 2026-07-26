@@ -4,7 +4,12 @@ import { prisma } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
 import { DEFAULT_ROLES } from "@/lib/permissions";
 import type { AuthUser } from "@/lib/auth";
-import { moduleSetting, type ModuleMode } from "@/lib/modules";
+import {
+  moduleSetting,
+  moduleSettingForCategory,
+  type BusinessCategory,
+  type ModuleMode,
+} from "@/lib/modules";
 
 export interface TenantRegistration {
   businessName: string;
@@ -15,7 +20,8 @@ export interface TenantRegistration {
   password: string;
   currency: "MMK" | "THB";
   timezone: string;
-  moduleMode: ModuleMode;
+  businessCategory?: BusinessCategory;
+  moduleMode?: ModuleMode;
 }
 
 export async function assertBranchAccess(user: AuthUser, branchId: string) {
@@ -141,7 +147,11 @@ export async function registerTenant(input: TenantRegistration) {
         data: {
           businessId: business.id,
           key: "modules",
-          value: JSON.stringify(moduleSetting(input.moduleMode)),
+          value: JSON.stringify(
+            input.businessCategory
+              ? moduleSettingForCategory(input.businessCategory)
+              : moduleSetting(input.moduleMode ?? "WALLET_ONLY")
+          ),
         },
       });
       await tx.auditLog.create({
@@ -153,7 +163,11 @@ export async function registerTenant(input: TenantRegistration) {
           module: "auth",
           resourceType: "Business",
           resourceId: business.id,
-          after: JSON.stringify({ businessName: business.name, username }),
+          after: JSON.stringify({
+            businessName: business.name,
+            username,
+            businessCategory: input.businessCategory ?? "LEGACY",
+          }),
         },
       });
 

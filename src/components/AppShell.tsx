@@ -13,7 +13,7 @@ import { api } from "@/lib/client";
 import { ToastProvider, cn } from "./ui";
 import { PwaInstall } from "./PwaInstall";
 import { LanguageSwitch } from "./LanguageProvider";
-import type { ModuleMode } from "@/lib/modules";
+import type { FeatureKey, FeatureVisibility, ModuleMode } from "@/lib/modules";
 
 interface Me {
   user: {
@@ -21,7 +21,12 @@ interface Me {
     permissions: string[]; allBranches: boolean; branchIds: string[];
   };
   branches: { id: string; name: string; code: string }[];
-  modules: { mode: ModuleMode; miniMartEnabled: boolean; walletNoteEnabled: boolean };
+  modules: {
+    mode: ModuleMode;
+    miniMartEnabled: boolean;
+    walletNoteEnabled: boolean;
+    features: FeatureVisibility;
+  };
   edition: "FULL" | "PLAY";
 }
 
@@ -33,6 +38,7 @@ const AuthCtx = createContext<{
   miniMartEnabled: boolean;
   walletNoteEnabled: boolean;
   moduleMode: ModuleMode;
+  featureEnabled: (feature: FeatureKey) => boolean;
   playEdition: boolean;
   refreshAuth: () => Promise<void>;
 }>({
@@ -43,6 +49,7 @@ const AuthCtx = createContext<{
   miniMartEnabled: false,
   walletNoteEnabled: true,
   moduleMode: "WALLET_ONLY",
+  featureEnabled: () => false,
   playEdition: false,
   refreshAuth: async () => {},
 });
@@ -53,29 +60,32 @@ export function useAuth() {
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, perm: "dashboard.view" },
-  { href: "/pos", label: "Sales & POS", icon: ShoppingCart, perm: "sale.create", miniMart: true },
-  { href: "/purchases", label: "Purchases", icon: Truck, perm: "purchase.view", miniMart: true },
-  { href: "/items", label: "Items", icon: Package, perm: "item.view", miniMart: true },
-  { href: "/stock", label: "Stock", icon: Boxes, perm: "stock.view", miniMart: true },
-  { href: "/three-d", label: "3D Records", icon: Hash, perm: "three_d.view" },
-  { href: "/exchange", label: "Exchange", icon: ArrowLeftRight, perm: "exchange.view", walletNote: true },
-  { href: "/wallets", label: "Wallets", icon: Wallet, perm: "wallet.view", walletNote: true },
-  { href: "/transfers", label: "Transfer", icon: Send, perm: "wallet.transfer", walletNote: true },
-  { href: "/withdraw", label: "Withdraw", icon: MinusCircle, perm: "wallet.withdraw", walletNote: true },
-  { href: "/credit", label: "Credit & Payable", icon: HandCoins, perm: "credit.view", walletNote: true },
-  { href: "/income-expense", label: "Income & Expense", icon: Receipt, perm: "income_expense.view", walletNote: true },
-  { href: "/reports", label: "Reports", icon: FileBarChart, perm: "report.view" },
-  { href: "/customers", label: "Customers", icon: Users, perm: "customer.view" },
-  { href: "/suppliers", label: "Suppliers", icon: Building2, perm: "customer.view", miniMart: true },
-  { href: "/users", label: "Users & Roles", icon: UserCog, perm: "users.manage" },
+  { href: "/pos", label: "Sales & POS", icon: ShoppingCart, perm: "sale.create", feature: "pos" },
+  { href: "/purchases", label: "Purchases", icon: Truck, perm: "purchase.view", feature: "purchases" },
+  { href: "/items", label: "Items", icon: Package, perm: "item.view", feature: "items" },
+  { href: "/stock", label: "Stock", icon: Boxes, perm: "stock.view", feature: "stock" },
+  { href: "/three-d", label: "3D Records", icon: Hash, perm: "three_d.view", feature: "threeD" },
+  { href: "/exchange", label: "Exchange", icon: ArrowLeftRight, perm: "exchange.view", feature: "exchange" },
+  { href: "/wallets", label: "Wallets", icon: Wallet, perm: "wallet.view", feature: "wallets" },
+  { href: "/transfers", label: "Transfer", icon: Send, perm: "wallet.transfer", feature: "transfers" },
+  { href: "/withdraw", label: "Withdraw", icon: MinusCircle, perm: "wallet.withdraw", feature: "withdraw" },
+  { href: "/credit", label: "Credit & Payable", icon: HandCoins, perm: "credit.view", feature: "credit" },
+  { href: "/income-expense", label: "Income & Expense", icon: Receipt, perm: "income_expense.view", feature: "incomeExpense" },
+  { href: "/reports", label: "Reports", icon: FileBarChart, perm: "report.view", feature: "reports" },
+  { href: "/customers", label: "Customers", icon: Users, perm: "customer.view", feature: "customers" },
+  { href: "/suppliers", label: "Suppliers", icon: Building2, perm: "customer.view", feature: "suppliers" },
+  { href: "/users", label: "Users & Roles", icon: UserCog, perm: "users.manage", feature: "users" },
   { href: "/settings", label: "Settings", icon: Settings, perm: "settings.manage" },
-  { href: "/audit", label: "Audit Logs", icon: ScrollText, perm: "audit.view" },
-  { href: "/telegram", label: "Telegram", icon: MessageCircle, perm: null },
-  { href: "/about", label: "About Us", icon: Info, perm: null },
-];
-
-const MINI_MART_PATHS = ["/pos", "/sales", "/purchases", "/items", "/stock", "/suppliers"];
-const WALLET_NOTE_PATHS = ["/exchange", "/wallets", "/transfers", "/withdraw", "/credit", "/income-expense"];
+  { href: "/audit", label: "Audit Logs", icon: ScrollText, perm: "audit.view", feature: "audit" },
+  { href: "/telegram", label: "Telegram", icon: MessageCircle, perm: null, feature: "telegram" },
+  { href: "/about", label: "About Us", icon: Info, perm: null, feature: "about" },
+] satisfies {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  perm: string | null;
+  feature?: FeatureKey;
+}[];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);
@@ -119,9 +129,13 @@ export function AppShell({ children }: { children: ReactNode }) {
   const miniMartEnabled = me?.modules.miniMartEnabled ?? false;
   const walletNoteEnabled = me?.modules.walletNoteEnabled ?? true;
   const playEdition = me?.edition === "PLAY";
-  const blockedMiniMartPath = !miniMartEnabled && MINI_MART_PATHS.some((path) => pathname.startsWith(path));
-  const blockedWalletNotePath = !walletNoteEnabled && WALLET_NOTE_PATHS.some((path) => pathname.startsWith(path));
-  const blockedModulePath = blockedMiniMartPath || blockedWalletNotePath;
+  const featureEnabled = (feature: FeatureKey) => me?.modules.features[feature] ?? false;
+  const blockedModulePath = NAV.some(
+    (item) =>
+      item.feature &&
+      pathname.startsWith(item.href) &&
+      !featureEnabled(item.feature)
+  );
 
   useEffect(() => {
     if (me && blockedModulePath) router.replace("/");
@@ -139,8 +153,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const visibleNav = NAV.filter((n) =>
     (!n.perm || hasPerm(n.perm)) &&
     (!playEdition || n.href !== "/three-d") &&
-    (!n.miniMart || miniMartEnabled) &&
-    (!n.walletNote || walletNoteEnabled)
+    (!n.feature || featureEnabled(n.feature))
   );
   const mobileNav = visibleNav.slice(0, 4);
 
@@ -178,6 +191,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         miniMartEnabled,
         walletNoteEnabled,
         moduleMode: me.modules.mode,
+        featureEnabled,
         playEdition,
         refreshAuth,
       }}

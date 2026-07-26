@@ -3,8 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Layers3, ShoppingCart, Wallet } from "lucide-react";
-import { Button, Card, Input, Modal, Select } from "@/components/ui";
+import { Wallet } from "lucide-react";
+import { Button, Card, Input, Select } from "@/components/ui";
 import { PwaInstall } from "@/components/PwaInstall";
 import { LanguageSwitch } from "@/components/LanguageProvider";
 import { api } from "@/lib/client";
@@ -17,29 +17,28 @@ export default function RegisterPage() {
     email: "",
     phone: "",
     currency: "MMK",
+    businessCategory: "",
     password: "",
     confirmPassword: "",
   });
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [showModuleChoice, setShowModuleChoice] = useState(false);
 
   function update(name: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
   }
 
-  function submit(event: React.FormEvent) {
+  async function submit(event: React.FormEvent) {
     event.preventDefault();
     setError("");
     if (form.password !== form.confirmPassword) {
       setError("Passwords do not match");
       return;
     }
-    setShowModuleChoice(true);
-  }
-
-  async function register(moduleMode: "WALLET_ONLY" | "MINI_MART_ONLY" | "BOTH") {
-    setShowModuleChoice(false);
+    if (!form.businessCategory) {
+      setError("Choose a business category");
+      return;
+    }
     setLoading(true);
     try {
       await api("/api/v1/auth/register", {
@@ -52,7 +51,7 @@ export default function RegisterPage() {
           currency: form.currency,
           timezone: "Asia/Yangon",
           password: form.password,
-          moduleMode,
+          businessCategory: form.businessCategory,
         },
       });
       router.push("/");
@@ -91,6 +90,19 @@ export default function RegisterPage() {
             onChange={(event) => update("phone", event.target.value)}
             autoComplete="tel"
           />
+          <Select
+            label="Business category"
+            value={form.businessCategory}
+            onChange={(event) => update("businessCategory", event.target.value)}
+            required
+          >
+            <option value="">Choose category...</option>
+            <option value="PERSONAL">Personal wallet & notes</option>
+            <option value="MINI_MART">Mini Mart / retail shop</option>
+            <option value="THREE_D">3D record business</option>
+            <option value="MONEY_SERVICE">Money transfer & exchange</option>
+            <option value="ALL_IN_ONE">All-in-one business</option>
+          </Select>
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
               label="Username"
@@ -142,39 +154,19 @@ export default function RegisterPage() {
           {error && <p className="text-sm text-red-600">{error}</p>}
           <Button
             type="submit"
-            disabled={loading || !form.businessName || !form.username || !form.email || !form.password}
+            disabled={
+              loading ||
+              !form.businessName ||
+              !form.businessCategory ||
+              !form.username ||
+              !form.email ||
+              !form.password
+            }
             className="w-full"
           >
             {loading ? "Creating account..." : "Create free account"}
           </Button>
         </form>
-
-        <Modal open={showModuleChoice} onClose={() => setShowModuleChoice(false)} title="Choose functions">
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="rounded-lg bg-blue-100 p-2 text-blue-700 dark:bg-blue-950 dark:text-blue-300">
-                <ShoppingCart size={20} />
-              </div>
-              <p className="text-sm text-gray-600 dark:text-gray-300">
-                Choose the functions this workspace needs. You can change this later in Settings.
-              </p>
-            </div>
-            <div className="grid gap-2">
-              <Button variant="secondary" disabled={loading} onClick={() => register("WALLET_ONLY")}>
-                <Wallet size={17} />
-                Wallet Note only
-              </Button>
-              <Button variant="secondary" disabled={loading} onClick={() => register("MINI_MART_ONLY")}>
-                <ShoppingCart size={17} />
-                Mini Mart only
-              </Button>
-              <Button disabled={loading} onClick={() => register("BOTH")}>
-                <Layers3 size={17} />
-                Wallet Note + Mini Mart
-              </Button>
-            </div>
-          </div>
-        </Modal>
 
         <p className="mt-5 text-center text-sm text-gray-500 dark:text-gray-400">
           Already have an account?{" "}
