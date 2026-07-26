@@ -1,13 +1,11 @@
 import { z } from "zod";
-import { withAuth, json, parseBody, ApiError, pagination } from "@/lib/api";
+import { withAuth, json, parseBody, pagination } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { branchScope } from "@/lib/auth";
 import { assertBranchAccess } from "@/lib/tenant";
 import { toMinor } from "@/lib/money";
-import { nextNumber } from "@/lib/sequence";
-import { audit } from "@/lib/audit";
 import { todayBusinessDate, isValidBusinessDate } from "@/lib/dates";
-import { agingBucket } from "@/services/creditService";
+import { agingBucket, createReceivable } from "@/services/creditService";
 
 export const GET = withAuth("credit.view", async ({ req, user }) => {
   const sp = req.nextUrl.searchParams;
@@ -52,37 +50,19 @@ const schema = z.object({
 export const POST = withAuth("credit.create", async ({ req, user }) => {
   const body = await parseBody(req, schema);
   await assertBranchAccess(user, body.branchId);
-  const amount = toMinor(body.amount);
-  if (amount <= 0n) throw new ApiError(422, "Amount must be greater than zero");
-
-  const rec = await prisma.$transaction(async (tx) => {
-    const customer = await tx.contact.findUnique({ where: { id: body.customerId } });
-    if (!customer || customer.businessId !== user.businessId) throw new ApiError(404, "Customer not found");
-
-    const txnNo = await nextNumber(tx, user.businessId, "CREDIT");
-    const r = await tx.receivable.create({
-      data: {
-        txnNo,
-        businessId: user.businessId,
-        branchId: body.branchId,
-        customerId: body.customerId,
-        originalAmount: amount,
-        remainingAmount: amount,
-        currency: body.currency,
-        creditDate: body.creditDate,
-        dueDate: body.dueDate,
-        reference: body.reference,
-        notes: body.notes,
-        agentId: user.id,
-        createdById: user.id,
-      },
-    });
-    await audit(tx, {
-      businessId: user.businessId, userId: user.id, branchId: body.branchId,
-      action: "CREATE", module: "credit", resourceType: "Receivable", resourceId: r.id,
-      after: { txnNo, customer: customer.name, amount },
-    });
-    return r;
-  });
+  const rec = await prisma.$transaction((tx) =>
+    createReceivable(tx, {
+      businessId: user.businessId,
+      branchId: body.branchId,
+      userId: user.id,
+      customerId: body.customerId,
+      amount: toMinor(body.amount),
+      currency: body.currency,
+      creditDate: body.creditDate,
+      dueDate: body.dueDate,
+      reference: body.reference,
+      notes: body.notes,
+    })
+  );
   return json(rec, { status: 201 });
 });

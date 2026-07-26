@@ -83,6 +83,10 @@ export function creditPayableNotice(opts: { kind: "credit" | "payable"; txnNo: s
   return `${icon} ${label} — ${opts.txnNo}\n${opts.partyName} · ${money(opts.amount, opts.currency)}\nBy: ${opts.createdByName}`;
 }
 
+export function newCreditNotice(opts: { txnNo: string; customerName: string; amount: bigint; currency: string; createdByName: string; notes?: string | null }) {
+  return `🆕 New credit — ${opts.txnNo}\n${opts.customerName} · ${money(opts.amount, opts.currency)}\nBy: ${opts.createdByName}${noteLine(opts.notes)}`;
+}
+
 /** Sent after a REVERSE action — different verb, includes the required reason. */
 export function reversalNotice(opts: { icon: string; label: string; txnNo: string; reason: string; createdByName: string }) {
   return `${opts.icon} ${opts.label} REVERSED — ${opts.txnNo}\nReason: ${opts.reason}\nBy: ${opts.createdByName}`;

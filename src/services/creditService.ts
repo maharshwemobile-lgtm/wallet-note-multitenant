@@ -1,10 +1,60 @@
 import { Tx } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
 import { postLedger } from "./walletService";
+import { nextNumber } from "@/lib/sequence";
 import { audit } from "@/lib/audit";
 
 // Shared payment logic for receivable collection and payable payment.
 // A collection debits (money in) a wallet; a payable payment credits (money out).
+
+/** Record a new credit sale — money a customer now owes the business. No wallet
+ *  movement happens here (nothing was paid yet); collection happens later via
+ *  collectReceivable. */
+export async function createReceivable(
+  tx: Tx,
+  opts: {
+    businessId: string;
+    branchId: string;
+    userId: string;
+    customerId: string;
+    amount: bigint;
+    currency: string;
+    creditDate: string;
+    dueDate?: string;
+    reference?: string;
+    notes?: string;
+  }
+) {
+  if (opts.amount <= 0n) throw new ApiError(422, "Amount must be greater than zero");
+  const customer = await tx.contact.findUnique({ where: { id: opts.customerId } });
+  if (!customer || customer.businessId !== opts.businessId || customer.deletedAt)
+    throw new ApiError(404, "Customer not found");
+
+  const txnNo = await nextNumber(tx, opts.businessId, "CREDIT");
+  const rec = await tx.receivable.create({
+    data: {
+      txnNo,
+      businessId: opts.businessId,
+      branchId: opts.branchId,
+      customerId: opts.customerId,
+      originalAmount: opts.amount,
+      remainingAmount: opts.amount,
+      currency: opts.currency,
+      creditDate: opts.creditDate,
+      dueDate: opts.dueDate,
+      reference: opts.reference,
+      notes: opts.notes,
+      agentId: opts.userId,
+      createdById: opts.userId,
+    },
+  });
+  await audit(tx, {
+    businessId: opts.businessId, userId: opts.userId, branchId: opts.branchId,
+    action: "CREATE", module: "credit", resourceType: "Receivable", resourceId: rec.id,
+    after: { txnNo, customer: customer.name, amount: opts.amount },
+  });
+  return rec;
+}
 
 export async function collectReceivable(
   tx: Tx,

@@ -8,10 +8,10 @@ import { createIncomeExpenseEntry } from "@/services/incomeExpenseService";
 import { createTransfer } from "@/services/walletService";
 import { createExchange } from "@/services/exchangeService";
 import { createThreeDBets, parseBulkLines } from "@/services/threeDService";
-import { collectReceivable, payPayable } from "@/services/creditService";
+import { collectReceivable, payPayable, createReceivable } from "@/services/creditService";
 import { ApiError } from "./api";
 import {
-  notifyAuditFeed, incomeExpenseNotice, transferNotice, exchangeNotice, threeDNotice, creditPayableNotice,
+  notifyAuditFeed, incomeExpenseNotice, transferNotice, exchangeNotice, threeDNotice, creditPayableNotice, newCreditNotice,
 } from "./telegramNotify";
 import {
   sendMessage, answerCallbackQuery,
@@ -135,6 +135,7 @@ function mainMenu(user: AuthUser, features: FeatureVisibility) {
   if (features.withdraw && can(user, "wallet.withdraw")) row2.push(btn("➖ Withdraw", "menu:withdraw"));
   if (features.exchange && can(user, "exchange.create")) row2.push(btn("💱 Exchange", "menu:exchange"));
   const row3 = [];
+  if (features.credit && can(user, "credit.create")) row3.push(btn("🆕 New credit", "menu:newcredit"));
   if (features.credit && can(user, "credit.collect")) row3.push(btn("🤝 Collect credit", "menu:credit"));
   if (features.credit && can(user, "payable.pay")) row3.push(btn("📤 Pay payable", "menu:payable"));
   const rows = [row1, row2, row3].filter((r) => r.length > 0);
@@ -675,6 +676,103 @@ async function cpConfirm(chatId: string, user: AuthUser, data: Record<string, un
 }
 
 // ---------------------------------------------------------------------------
+// New credit — record a new debt a customer now owes the business (as
+// opposed to "Collect credit" above, which settles an existing one).
+// ---------------------------------------------------------------------------
+
+async function startNewCredit(chatId: string, user: AuthUser) {
+  const branchId = await defaultBranchId(user);
+  if (!branchId) return sendMessage(chatId, "No branch is available for your account.");
+  const customers = await prisma.contact.findMany({
+    where: { businessId: user.businessId, type: "CUSTOMER", active: true, deletedAt: null },
+    orderBy: { name: "asc" },
+    take: 15,
+  });
+  const rows = customers.map((c) => [btn(c.name, `c:${c.id}`)]);
+  rows.push([btn("+ New customer", "c:__new__")]);
+  await setSession(user.id, chatId, "nc.customer", { branchId });
+  await sendMessage(chatId, "🆕 New credit\n\nWhich customer?", { replyMarkup: keyboard([...rows, CANCEL_ROW]) });
+}
+
+async function ncStepCustomerPick(chatId: string, user: AuthUser, data: Record<string, unknown>, customerId: string) {
+  if (customerId === "__new__") {
+    await setSession(user.id, chatId, "nc.customer_new", data);
+    return sendMessage(chatId, "Type the customer's name:", { replyMarkup: keyboard([CANCEL_ROW]) });
+  }
+  const customer = await prisma.contact.findUnique({ where: { id: customerId } });
+  if (!customer || customer.businessId !== user.businessId) return sendMessage(chatId, "Customer not found. /menu to start over.");
+  await setSession(user.id, chatId, "nc.amount", { ...data, customerId, customerName: customer.name, currency: customer.currency });
+  await sendMessage(chatId, `Customer: ${customer.name}\n\nHow much did they take on credit? (${customer.currency})`, {
+    replyMarkup: keyboard([CANCEL_ROW]),
+  });
+}
+
+async function ncStepCustomerNewText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  const name = text.trim();
+  if (!name) return sendMessage(chatId, "Name can't be empty. Try again:");
+  const customer = await prisma.contact.create({
+    data: { businessId: user.businessId, branchId: data.branchId as string, name, type: "CUSTOMER" },
+  });
+  await setSession(user.id, chatId, "nc.amount", { ...data, customerId: customer.id, customerName: customer.name, currency: customer.currency });
+  await sendMessage(chatId, `Customer: ${customer.name}\n\nHow much did they take on credit? (${customer.currency})`, {
+    replyMarkup: keyboard([CANCEL_ROW]),
+  });
+}
+
+async function ncStepAmountText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  const raw = text.trim().replace(/,/g, "");
+  if (!isValidDecimalString(raw) || Number(raw) <= 0) return sendMessage(chatId, "Enter a valid positive amount:");
+  await setSession(user.id, chatId, "nc.note", { ...data, amount: raw });
+  await sendMessage(chatId, "Note (or Skip):", { replyMarkup: keyboard([SKIP_ROW, CANCEL_ROW]) });
+}
+
+async function ncAskConfirm(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  const lines = [
+    "Confirm new credit",
+    `Customer: ${data.customerName}`,
+    `Amount: ${money(data.amount as string)} ${data.currency}`,
+    data.notes ? `Note: ${data.notes}` : undefined,
+  ].filter(Boolean);
+  await setSession(user.id, chatId, "nc.confirm", data);
+  await sendMessage(chatId, lines.join("\n"), { replyMarkup: keyboard([[btn("✅ Confirm", "confirm:yes"), btn("✕ Cancel", "confirm:no")]]) });
+}
+
+async function ncStepNoteText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  await ncAskConfirm(chatId, user, { ...data, notes: text.trim() });
+}
+
+async function ncStepNoteSkip(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  await ncAskConfirm(chatId, user, data);
+}
+
+async function ncConfirm(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  try {
+    const rec = await prisma.$transaction((tx) =>
+      createReceivable(tx, {
+        businessId: user.businessId,
+        branchId: data.branchId as string,
+        userId: user.id,
+        customerId: data.customerId as string,
+        amount: toMinor(data.amount as string),
+        currency: data.currency as string,
+        creditDate: todayBusinessDate(),
+        notes: data.notes as string | undefined,
+      })
+    );
+    await clearSession(user.id, chatId);
+    await sendMessage(chatId, `✅ Saved — ${rec.txnNo}`);
+    notifyAuditFeed(user.businessId, newCreditNotice({
+      txnNo: rec.txnNo, customerName: data.customerName as string,
+      amount: rec.originalAmount, currency: rec.currency, createdByName: user.name,
+      notes: data.notes as string | undefined,
+    }), chatId);
+    await showMenu(chatId, user);
+  } catch (e) {
+    await sendMessage(chatId, `❌ ${e instanceof ApiError ? e.message : "Something went wrong."}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main dispatcher
 // ---------------------------------------------------------------------------
 
@@ -687,6 +785,7 @@ const FLOW_REQUIRED_PERM: Record<string, string> = {
   "3d": "three_d.create",
   credit: "credit.collect",
   payable: "payable.pay",
+  newcredit: "credit.create",
 };
 
 const FLOW_FEATURE: Record<string, FeatureKey> = {
@@ -698,6 +797,7 @@ const FLOW_FEATURE: Record<string, FeatureKey> = {
   "3d": "threeD",
   credit: "credit",
   payable: "credit",
+  newcredit: "credit",
 };
 
 /** ownerUserId identifies whose bot this webhook belongs to — resolved from
@@ -742,6 +842,11 @@ async function handleMessage(ownerUserId: string, chatId: string, text: string) 
     if (flow === "cp") {
       if (step === "amount") return cpStepAmountText(chatId, user, session.data, trimmed);
     }
+    if (flow === "nc") {
+      if (step === "customer_new") return ncStepCustomerNewText(chatId, user, session.data, trimmed);
+      if (step === "amount") return ncStepAmountText(chatId, user, session.data, trimmed);
+      if (step === "note") return ncStepNoteText(chatId, user, session.data, trimmed);
+    }
   } catch (e) {
     await sendMessage(chatId, `❌ ${e instanceof ApiError ? e.message : "Something went wrong."}`);
     return;
@@ -782,6 +887,7 @@ async function handleCallback(ownerUserId: string, cq: { id: string; message?: {
     if (key === "3d") return startThreeD(chatId, user);
     if (key === "credit") return startCreditPayable(chatId, user, "credit");
     if (key === "payable") return startCreditPayable(chatId, user, "payable");
+    if (key === "newcredit") return startNewCredit(chatId, user);
     return;
   }
 
@@ -821,6 +927,12 @@ async function handleCallback(ownerUserId: string, cq: { id: string; message?: {
       if (step === "pick" && data.startsWith("r:")) return cpStepPick(chatId, user, session.data, data.slice(2));
       if (step === "wallet" && data.startsWith("w:")) return cpStepWallet(chatId, user, session.data, data.slice(2));
       if (step === "confirm" && data === "confirm:yes") return cpConfirm(chatId, user, session.data);
+      if (step === "confirm" && data === "confirm:no") return showMenu(chatId, user, "Cancelled.");
+    }
+    if (flow === "nc") {
+      if (step === "customer" && data.startsWith("c:")) return ncStepCustomerPick(chatId, user, session.data, data.slice(2));
+      if (step === "note" && data === "skip") return ncStepNoteSkip(chatId, user, session.data);
+      if (step === "confirm" && data === "confirm:yes") return ncConfirm(chatId, user, session.data);
       if (step === "confirm" && data === "confirm:no") return showMenu(chatId, user, "Cancelled.");
     }
   } catch (e) {
