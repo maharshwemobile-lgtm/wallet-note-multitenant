@@ -122,6 +122,7 @@ export const POST = withAuth("wallet.transfer", async ({ req, user }) => {
       destAmount: result.destAmount,
       destCurrency: dest?.currency ?? "MMK",
       createdByName: user.name,
+      notes: result.notes,
     })
   );
   return json(result, { status: 201 });

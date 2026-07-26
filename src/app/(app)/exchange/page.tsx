@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Plus } from "lucide-react";
 import { api } from "@/lib/client";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
@@ -186,6 +187,12 @@ export default function ExchangePage() {
             <option value="BUY_THB">Buy THB (pay MMK)</option>
             <option value="SELL_THB">Sell THB (receive MMK)</option>
           </Select>
+          {(sourceWallets.length === 0 || destWallets.length === 0) && (
+            <p className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+              You need a {sourceWallets.length === 0 ? fromCurrency : toCurrency} wallet before you can record this exchange.{" "}
+              <Link href="/wallets" className="font-semibold underline">Create one on the Wallets page</Link> first.
+            </p>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <Input label={`Amount (${fromCurrency})`} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} inputMode="decimal" />
             <Input label="Rate (MMK per 1 THB)" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} inputMode="decimal" />

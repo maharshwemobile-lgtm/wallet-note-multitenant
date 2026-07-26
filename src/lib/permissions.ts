@@ -6,7 +6,7 @@ export const ALL_PERMISSIONS = [
   "three_d.settle", "three_d.reopen", "three_d.view_profit",
   "exchange.view", "exchange.create", "exchange.edit", "exchange.delete",
   "exchange.approve", "exchange.reverse", "exchange.rates",
-  "wallet.view", "wallet.create", "wallet.adjust", "wallet.transfer", "wallet.withdraw", "wallet.reconcile",
+  "wallet.view", "wallet.create", "wallet.adjust", "wallet.transfer", "wallet.withdraw", "wallet.reconcile", "wallet.reverse",
   "credit.view", "credit.create", "credit.collect",
   "payable.view", "payable.create", "payable.pay",
   "income_expense.view", "income_expense.create",

@@ -94,6 +94,7 @@ export const POST = withAuth(null, async ({ req, user }) => {
       amount: item.amount,
       currency: item.currency,
       createdByName: user.name,
+      description: item.description,
     })
   );
   return json(item, { status: 201 });

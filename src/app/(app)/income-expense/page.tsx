@@ -23,6 +23,8 @@ export default function IncomeExpensePage() {
   const [newCategory, setNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [busy, setBusy] = useState(false);
+  const [reverseId, setReverseId] = useState<string | null>(null);
+  const [reverseReason, setReverseReason] = useState("");
   const { push } = useToast();
   const { hasPerm, defaultBranchId } = useAuth();
 
@@ -74,6 +76,22 @@ export default function IncomeExpensePage() {
     }
   }
 
+  async function reverse() {
+    if (!reverseId) return;
+    setBusy(true);
+    try {
+      await api(`/api/v1/income-expense/${reverseId}/reverse`, { method: "POST", body: { reason: reverseReason } });
+      push("Entry voided");
+      setReverseId(null);
+      setReverseReason("");
+      load();
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Void failed", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!items) return <Spinner />;
   const catOptions = categories.filter((c) => c.type === form.type);
   const canSave =
@@ -98,7 +116,7 @@ export default function IncomeExpensePage() {
       {items.length === 0 ? (
         <Card><Empty message="No entries yet" /></Card>
       ) : (
-        <Table headers={["Txn", "Date", "Type", "Category", "Description", "Amount"]} rightAlign={[5]}>
+        <Table headers={["Txn", "Date", "Type", "Category", "Description", "Amount", ""]} rightAlign={[5]}>
           {items.map((it) => (
             <tr key={it.id}>
               <td className="px-3 py-2 text-xs">{it.txnNo}</td>
@@ -110,6 +128,11 @@ export default function IncomeExpensePage() {
               <td className="px-3 py-2 text-xs">{it.description ?? "—"}</td>
               <td className={`px-3 py-2 text-right font-medium tabular-nums ${it.type === "INCOME" ? "text-green-600" : "text-red-600"}`}>
                 {it.type === "INCOME" ? "+" : "-"}{fmtMoney(it.amount)} {it.currency}
+              </td>
+              <td className="px-3 py-2">
+                {it.status === "COMPLETED" && hasPerm("wallet.reverse") && (
+                  <Button size="sm" variant="ghost" onClick={() => setReverseId(it.id)}>Void</Button>
+                )}
               </td>
             </tr>
           ))}
@@ -181,6 +204,17 @@ export default function IncomeExpensePage() {
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setShowNew(false)}>Cancel</Button>
             <Button onClick={create} disabled={busy || !canSave}>Save</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={!!reverseId} onClose={() => setReverseId(null)} title="Void entry">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600 dark:text-gray-300">The wallet movement will be reversed. This action is logged.</p>
+          <Input label="Reason (required)" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setReverseId(null)}>Cancel</Button>
+            <Button variant="danger" onClick={reverse} disabled={busy || reverseReason.trim().length < 3}>Void</Button>
           </div>
         </div>
       </Modal>

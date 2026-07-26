@@ -4,7 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { api } from "@/lib/client";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
-import { Button, Card, Input, Select, Modal, Spinner, Table, Empty, useToast } from "@/components/ui";
+import { Button, Card, Input, Select, Modal, Spinner, Badge, Table, Empty, useToast } from "@/components/ui";
+import { useAuth } from "@/components/AppShell";
 
 interface Transfer {
   id: string;
@@ -16,6 +17,7 @@ interface Transfer {
   rate?: string;
   fee: string;
   notes?: string;
+  status: string;
   createdAt: string;
 }
 
@@ -41,7 +43,10 @@ export default function TransfersPage() {
   const [showNew, setShowNew] = useState(false);
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [reverseId, setReverseId] = useState<string | null>(null);
+  const [reverseReason, setReverseReason] = useState("");
   const { push } = useToast();
+  const { hasPerm } = useAuth();
 
   const load = useCallback(() => {
     api<{ transfers: Transfer[] }>("/api/v1/wallet-transfers?pageSize=100")
@@ -75,6 +80,22 @@ export default function TransfersPage() {
     }
   }
 
+  async function reverse() {
+    if (!reverseId) return;
+    setBusy(true);
+    try {
+      await api(`/api/v1/wallet-transfers/${reverseId}/reverse`, { method: "POST", body: { reason: reverseReason } });
+      push("Transfer reversed");
+      setReverseId(null);
+      setReverseReason("");
+      load();
+    } catch (error) {
+      push(error instanceof Error ? error.message : "Reverse failed", "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   if (!transfers) return <Spinner />;
 
   return (
@@ -90,7 +111,7 @@ export default function TransfersPage() {
       {transfers.length === 0 ? (
         <Card><Empty message="No transfers yet" /></Card>
       ) : (
-        <Table headers={["Txn", "Date", "From", "To", "Amount", "Fee", "Notes"]} rightAlign={[4, 5]}>
+        <Table headers={["Txn", "Date", "From", "To", "Amount", "Fee", "Notes", "Status", ""]} rightAlign={[4, 5]}>
           {transfers.map((transfer) => (
             <tr key={transfer.id}>
               <td className="px-3 py-2 text-xs">{transfer.txnNo}</td>
@@ -102,6 +123,12 @@ export default function TransfersPage() {
               </td>
               <td className="px-3 py-2 text-right tabular-nums text-gray-500">{fmtMoney(transfer.fee)}</td>
               <td className="px-3 py-2 text-xs text-gray-500">{transfer.notes ?? "-"}</td>
+              <td className="px-3 py-2"><Badge status={transfer.status} /></td>
+              <td className="px-3 py-2">
+                {transfer.status === "COMPLETED" && hasPerm("wallet.reverse") && (
+                  <Button size="sm" variant="ghost" onClick={() => setReverseId(transfer.id)}>Reverse</Button>
+                )}
+              </td>
             </tr>
           ))}
         </Table>
@@ -176,6 +203,17 @@ export default function TransfersPage() {
             >
               {busy ? "Transferring..." : "Confirm transfer"}
             </Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={!!reverseId} onClose={() => setReverseId(null)} title="Reverse transfer">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600 dark:text-gray-300">Both wallet movements will be reversed. This action is logged.</p>
+          <Input label="Reason (required)" value={reverseReason} onChange={(e) => setReverseReason(e.target.value)} />
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setReverseId(null)}>Cancel</Button>
+            <Button variant="danger" onClick={reverse} disabled={busy || reverseReason.trim().length < 3}>Reverse</Button>
           </div>
         </div>
       </Modal>

@@ -1,7 +1,7 @@
 import { Tx } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
 import { nextNumber } from "@/lib/sequence";
-import { postLedger } from "./walletService";
+import { postLedger, reverseLedgerEntries } from "./walletService";
 import { assertDateOpen } from "./closeGuard";
 import { audit } from "@/lib/audit";
 
@@ -77,4 +77,27 @@ export async function createIncomeExpenseEntry(
     after: { txnNo, type: opts.type, category: categoryName, amount: opts.amount },
   });
   return it;
+}
+
+/** Void an income/expense/withdraw entry: reverses the single wallet movement it posted. */
+export async function reverseIncomeExpense(
+  tx: Tx,
+  opts: { id: string; reason: string; userId: string; businessId: string }
+) {
+  const it = await tx.incomeExpense.findUnique({ where: { id: opts.id } });
+  if (!it || it.businessId !== opts.businessId || it.deletedAt) throw new ApiError(404, "Record not found");
+  if (it.status === "REVERSED") throw new ApiError(422, "Already reversed");
+  if (!opts.reason.trim()) throw new ApiError(422, "A reason is required");
+
+  await reverseLedgerEntries(tx, opts.businessId, it.type, it.id, opts.userId, opts.reason);
+
+  await tx.incomeExpense.update({ where: { id: it.id }, data: { status: "REVERSED" } });
+
+  await audit(tx, {
+    businessId: opts.businessId, userId: opts.userId, branchId: it.branchId,
+    action: "REVERSE", module: it.type === "WITHDRAW" ? "wallet" : "income_expense",
+    resourceType: "IncomeExpense", resourceId: it.id,
+    reason: opts.reason,
+    before: { status: it.status, type: it.type, amount: it.amount },
+  });
 }

@@ -148,6 +148,7 @@ export const POST = withAuth("three_d.create", async ({ req, user }) => {
       total: created.reduce((sum, transaction) => sum + transaction.betAmount, 0n),
       sessionName: session.name,
       createdByName: user.name,
+      notes: body.notes,
     })
   );
   return json({ created: created.length, transactions: created }, { status: 201 });

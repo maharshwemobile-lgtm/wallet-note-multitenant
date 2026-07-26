@@ -174,3 +174,31 @@ export async function createTransfer(
   });
   return transfer;
 }
+
+/** Void a transfer: reverses both wallet movements exactly as posted (fee already baked into destAmount). */
+export async function reverseTransfer(
+  tx: Tx,
+  opts: { transferId: string; reason: string; userId: string; businessId: string }
+) {
+  const transfer = await tx.walletTransfer.findUnique({ where: { id: opts.transferId } });
+  if (!transfer || transfer.businessId !== opts.businessId) throw new ApiError(404, "Transfer not found");
+  if (transfer.status === "REVERSED") throw new ApiError(422, "Transfer has already been reversed");
+  if (!opts.reason.trim()) throw new ApiError(422, "A reason is required to reverse a transfer");
+
+  await reverseLedgerEntries(tx, opts.businessId, "TRANSFER_OUT", transfer.id, opts.userId, opts.reason);
+  await reverseLedgerEntries(tx, opts.businessId, "TRANSFER_IN", transfer.id, opts.userId, opts.reason);
+
+  await tx.walletTransfer.update({ where: { id: transfer.id }, data: { status: "REVERSED" } });
+
+  await audit(tx, {
+    businessId: opts.businessId,
+    userId: opts.userId,
+    branchId: transfer.branchId,
+    action: "REVERSE",
+    module: "wallet",
+    resourceType: "WalletTransfer",
+    resourceId: transfer.id,
+    reason: opts.reason,
+    before: { status: transfer.status },
+  });
+}

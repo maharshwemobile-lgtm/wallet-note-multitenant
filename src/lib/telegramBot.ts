@@ -8,9 +8,10 @@ import { createIncomeExpenseEntry } from "@/services/incomeExpenseService";
 import { createTransfer } from "@/services/walletService";
 import { createExchange } from "@/services/exchangeService";
 import { createThreeDBets, parseBulkLines } from "@/services/threeDService";
+import { collectReceivable, payPayable } from "@/services/creditService";
 import { ApiError } from "./api";
 import {
-  notifyAuditFeed, incomeExpenseNotice, transferNotice, exchangeNotice, threeDNotice,
+  notifyAuditFeed, incomeExpenseNotice, transferNotice, exchangeNotice, threeDNotice, creditPayableNotice,
 } from "./telegramNotify";
 import {
   sendMessage, answerCallbackQuery,
@@ -133,7 +134,10 @@ function mainMenu(user: AuthUser, features: FeatureVisibility) {
   if (features.transfers && can(user, "wallet.transfer")) row2.push(btn("🔁 Transfer", "menu:transfer"));
   if (features.withdraw && can(user, "wallet.withdraw")) row2.push(btn("➖ Withdraw", "menu:withdraw"));
   if (features.exchange && can(user, "exchange.create")) row2.push(btn("💱 Exchange", "menu:exchange"));
-  const rows = [row1, row2].filter((r) => r.length > 0);
+  const row3 = [];
+  if (features.credit && can(user, "credit.collect")) row3.push(btn("🤝 Collect credit", "menu:credit"));
+  if (features.credit && can(user, "payable.pay")) row3.push(btn("📤 Pay payable", "menu:payable"));
+  const rows = [row1, row2, row3].filter((r) => r.length > 0);
   return keyboard(rows);
 }
 
@@ -155,15 +159,17 @@ function money(n: string): string {
 // Shared: wallet picker
 // ---------------------------------------------------------------------------
 
-async function walletButtons(businessId: string, branchId: string, currency?: string) {
-  const wallets = await prisma.wallet.findMany({
-    where: {
-      businessId, active: true, deletedAt: null,
-      OR: [{ branchId }, { branchId: null }],
-      ...(currency ? { currency } : {}),
-    },
-    orderBy: { name: "asc" },
-  });
+async function walletButtons(businessId: string, branchId: string, currency?: string, walletType?: string) {
+  const base = {
+    businessId, active: true, deletedAt: null,
+    OR: [{ branchId }, { branchId: null }],
+    ...(currency ? { currency } : {}),
+  };
+  let wallets = await prisma.wallet.findMany({ where: { ...base, ...(walletType ? { type: walletType } : {}) }, orderBy: { name: "asc" } });
+  if (walletType && wallets.length === 0) {
+    // Fall back to any wallet if the business has no wallet of the preferred type yet.
+    wallets = await prisma.wallet.findMany({ where: base, orderBy: { name: "asc" } });
+  }
   return { wallets, rows: wallets.map((w) => [btn(`${w.name} (${fmtMoney(w.currentBalance)} ${w.currency})`, `w:${w.id}`)]) };
 }
 
@@ -175,7 +181,7 @@ async function walletButtons(businessId: string, branchId: string, currency?: st
 async function startIncomeExpense(chatId: string, user: AuthUser, type: "INCOME" | "EXPENSE" | "WITHDRAW") {
   const branchId = await defaultBranchId(user);
   if (!branchId) return sendMessage(chatId, "No branch is available for your account. Contact your admin.");
-  const { rows } = await walletButtons(user.businessId, branchId);
+  const { rows } = await walletButtons(user.businessId, branchId, undefined, type === "WITHDRAW" ? "CASH" : undefined);
   if (rows.length === 0) return sendMessage(chatId, "No wallets found. Create one in Wallet Note first.");
   await setSession(user.id, chatId, `ie.wallet`, { type, branchId });
   const label = type === "INCOME" ? "💰 Income" : type === "EXPENSE" ? "💸 Expense" : "➖ Withdraw";
@@ -278,6 +284,7 @@ async function ieConfirm(chatId: string, user: AuthUser, data: Record<string, un
     notifyAuditFeed(user.businessId, incomeExpenseNotice({
       txnNo: item.txnNo, type: item.type, categoryName: item.categoryName ?? "—",
       amount: item.amount, currency: item.currency, createdByName: user.name,
+      description: item.description,
     }), chatId);
     await showMenu(chatId, user);
   } catch (e) {
@@ -558,6 +565,116 @@ async function tdConfirm(chatId: string, user: AuthUser, data: Record<string, un
 }
 
 // ---------------------------------------------------------------------------
+// Credit / Payable flow — collect a payment against an existing receivable,
+// or pay down an existing payable. Shares one implementation; "credit" and
+// "payable" only differ in which model/party/service function they touch.
+// ---------------------------------------------------------------------------
+
+async function startCreditPayable(chatId: string, user: AuthUser, kind: "credit" | "payable") {
+  const branchId = await defaultBranchId(user);
+  if (!branchId) return sendMessage(chatId, "No branch is available for your account.");
+
+  const outstanding =
+    kind === "credit"
+      ? await prisma.receivable.findMany({
+          where: { businessId: user.businessId, deletedAt: null, status: { in: ["UNPAID", "PARTIAL", "OVERDUE"] } },
+          include: { customer: { select: { name: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 15,
+        })
+      : await prisma.payable.findMany({
+          where: { businessId: user.businessId, deletedAt: null, status: { in: ["UNPAID", "PARTIAL", "OVERDUE"] } },
+          include: { supplier: { select: { name: true } } },
+          orderBy: { createdAt: "desc" },
+          take: 15,
+        });
+  if (outstanding.length === 0) {
+    return sendMessage(chatId, kind === "credit" ? "No outstanding credit to collect." : "No outstanding payables to pay.");
+  }
+
+  const rows = outstanding.map((r) => {
+    const partyName = kind === "credit"
+      ? (r as typeof outstanding[number] & { customer: { name: string } }).customer.name
+      : (r as typeof outstanding[number] & { supplier: { name: string } }).supplier.name;
+    return [btn(`${partyName} — ${money(r.remainingAmount.toString())} ${r.currency} left`, `r:${r.id}`)];
+  });
+  await setSession(user.id, chatId, `cp.pick`, { kind, branchId });
+  const label = kind === "credit" ? "🤝 Collect credit" : "📤 Pay payable";
+  await sendMessage(chatId, `${label}\n\nWhich one?`, { replyMarkup: keyboard([...rows, CANCEL_ROW]) });
+}
+
+async function cpStepPick(chatId: string, user: AuthUser, data: Record<string, unknown>, recordId: string) {
+  const kind = data.kind as "credit" | "payable";
+  const record = kind === "credit"
+    ? await prisma.receivable.findUnique({ where: { id: recordId }, include: { customer: { select: { name: true } } } })
+    : await prisma.payable.findUnique({ where: { id: recordId }, include: { supplier: { select: { name: true } } } });
+  if (!record || record.businessId !== user.businessId) return sendMessage(chatId, "Record not found. /menu to start over.");
+  const partyName = kind === "credit"
+    ? (record as typeof record & { customer: { name: string } }).customer.name
+    : (record as typeof record & { supplier: { name: string } }).supplier.name;
+
+  await setSession(user.id, chatId, "cp.amount", {
+    ...data, recordId, partyName, currency: record.currency, remaining: record.remainingAmount.toString(), txnNo: record.txnNo,
+  });
+  await sendMessage(
+    chatId,
+    `${partyName} — ${money(record.remainingAmount.toString())} ${record.currency} remaining\n\nHow much ${kind === "credit" ? "was collected" : "are you paying"}?`,
+    { replyMarkup: keyboard([CANCEL_ROW]) }
+  );
+}
+
+async function cpStepAmountText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  const raw = text.trim().replace(/,/g, "");
+  if (!isValidDecimalString(raw) || Number(raw) <= 0) return sendMessage(chatId, "Enter a valid positive amount:");
+  if (toMinor(raw) > BigInt(data.remaining as string)) return sendMessage(chatId, `That's more than the ${money(data.remaining as string)} ${data.currency} remaining. Enter a smaller amount:`);
+  const { rows } = await walletButtons(user.businessId, data.branchId as string, data.currency as string);
+  if (rows.length === 0) return sendMessage(chatId, `No ${data.currency} wallet found.`);
+  await setSession(user.id, chatId, "cp.wallet", { ...data, amount: raw });
+  await sendMessage(chatId, "Which wallet?", { replyMarkup: keyboard([...rows, CANCEL_ROW]) });
+}
+
+async function cpStepWallet(chatId: string, user: AuthUser, data: Record<string, unknown>, walletId: string) {
+  const wallet = await prisma.wallet.findUnique({ where: { id: walletId } });
+  if (!wallet) return sendMessage(chatId, "Wallet not found.");
+  const kind = data.kind as "credit" | "payable";
+  const lines = [
+    `Confirm ${kind === "credit" ? "collection" : "payment"}`,
+    `${data.partyName} · ${data.txnNo}`,
+    `Amount: ${money(data.amount as string)} ${data.currency}`,
+    `Wallet: ${wallet.name}`,
+  ];
+  await setSession(user.id, chatId, "cp.confirm", { ...data, walletId, walletName: wallet.name });
+  await sendMessage(chatId, lines.join("\n"), { replyMarkup: keyboard([[btn("✅ Confirm", "confirm:yes"), btn("✕ Cancel", "confirm:no")]]) });
+}
+
+async function cpConfirm(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  try {
+    const kind = data.kind as "credit" | "payable";
+    const opts = {
+      amount: toMinor(data.amount as string),
+      walletId: data.walletId as string,
+      date: todayBusinessDate(),
+      userId: user.id,
+      businessId: user.businessId,
+    };
+    if (kind === "credit") {
+      await prisma.$transaction((tx) => collectReceivable(tx, { ...opts, receivableId: data.recordId as string }));
+    } else {
+      await prisma.$transaction((tx) => payPayable(tx, { ...opts, payableId: data.recordId as string }));
+    }
+    await clearSession(user.id, chatId);
+    await sendMessage(chatId, `✅ Saved — ${data.txnNo}`);
+    notifyAuditFeed(user.businessId, creditPayableNotice({
+      kind, txnNo: data.txnNo as string, partyName: data.partyName as string,
+      amount: opts.amount, currency: data.currency as string, createdByName: user.name,
+    }), chatId);
+    await showMenu(chatId, user);
+  } catch (e) {
+    await sendMessage(chatId, `❌ ${e instanceof ApiError ? e.message : "Something went wrong."}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Main dispatcher
 // ---------------------------------------------------------------------------
 
@@ -568,6 +685,8 @@ const FLOW_REQUIRED_PERM: Record<string, string> = {
   transfer: "wallet.transfer",
   exchange: "exchange.create",
   "3d": "three_d.create",
+  credit: "credit.collect",
+  payable: "payable.pay",
 };
 
 const FLOW_FEATURE: Record<string, FeatureKey> = {
@@ -577,6 +696,8 @@ const FLOW_FEATURE: Record<string, FeatureKey> = {
   transfer: "transfers",
   exchange: "exchange",
   "3d": "threeD",
+  credit: "credit",
+  payable: "credit",
 };
 
 /** ownerUserId identifies whose bot this webhook belongs to — resolved from
@@ -618,6 +739,9 @@ async function handleMessage(ownerUserId: string, chatId: string, text: string) 
     if (flow === "3d") {
       if (step === "lines") return tdStepLinesText(chatId, user, session.data, trimmed);
     }
+    if (flow === "cp") {
+      if (step === "amount") return cpStepAmountText(chatId, user, session.data, trimmed);
+    }
   } catch (e) {
     await sendMessage(chatId, `❌ ${e instanceof ApiError ? e.message : "Something went wrong."}`);
     return;
@@ -656,6 +780,8 @@ async function handleCallback(ownerUserId: string, cq: { id: string; message?: {
     if (key === "transfer") return startTransfer(chatId, user);
     if (key === "exchange") return startExchange(chatId, user);
     if (key === "3d") return startThreeD(chatId, user);
+    if (key === "credit") return startCreditPayable(chatId, user, "credit");
+    if (key === "payable") return startCreditPayable(chatId, user, "payable");
     return;
   }
 
@@ -689,6 +815,12 @@ async function handleCallback(ownerUserId: string, cq: { id: string; message?: {
     if (flow === "3d") {
       if (step === "session" && data.startsWith("s:")) return tdStepSession(chatId, user, session.data, data.slice(2));
       if (step === "confirm" && data === "confirm:yes") return tdConfirm(chatId, user, session.data);
+      if (step === "confirm" && data === "confirm:no") return showMenu(chatId, user, "Cancelled.");
+    }
+    if (flow === "cp") {
+      if (step === "pick" && data.startsWith("r:")) return cpStepPick(chatId, user, session.data, data.slice(2));
+      if (step === "wallet" && data.startsWith("w:")) return cpStepWallet(chatId, user, session.data, data.slice(2));
+      if (step === "confirm" && data === "confirm:yes") return cpConfirm(chatId, user, session.data);
       if (step === "confirm" && data === "confirm:no") return showMenu(chatId, user, "Cancelled.");
     }
   } catch (e) {

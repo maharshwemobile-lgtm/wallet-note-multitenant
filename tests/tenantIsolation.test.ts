@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { postLedger, reverseLedgerEntries } from "../src/services/walletService";
+import { postLedger, reverseLedgerEntries, reverseTransfer } from "../src/services/walletService";
 import { moveStock } from "../src/services/stockService";
 import { reverseExchange } from "../src/services/exchangeService";
+import { reverseIncomeExpense } from "../src/services/incomeExpenseService";
 import type { Tx } from "../src/lib/prisma";
 
 describe("tenant isolation", () => {
@@ -77,5 +78,44 @@ describe("tenant isolation", () => {
       userId: "user-a",
       businessId: "business-a",
     })).rejects.toThrow("Exchange transaction not found");
+  });
+
+  it("rejects reversing a transfer owned by another business", async () => {
+    const tx = {
+      walletTransfer: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "transfer-b",
+          businessId: "business-b",
+          status: "COMPLETED",
+        }),
+      },
+    } as unknown as Tx;
+
+    await expect(reverseTransfer(tx, {
+      transferId: "transfer-b",
+      reason: "test",
+      userId: "user-a",
+      businessId: "business-a",
+    })).rejects.toThrow("Transfer not found");
+  });
+
+  it("rejects reversing an income/expense entry owned by another business", async () => {
+    const tx = {
+      incomeExpense: {
+        findUnique: vi.fn().mockResolvedValue({
+          id: "ie-b",
+          businessId: "business-b",
+          status: "COMPLETED",
+          deletedAt: null,
+        }),
+      },
+    } as unknown as Tx;
+
+    await expect(reverseIncomeExpense(tx, {
+      id: "ie-b",
+      reason: "test",
+      userId: "user-a",
+      businessId: "business-a",
+    })).rejects.toThrow("Record not found");
   });
 });

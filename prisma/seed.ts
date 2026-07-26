@@ -17,7 +17,7 @@ const ALL = [
   "dashboard.view",
   "three_d.view","three_d.create","three_d.edit","three_d.delete","three_d.settle","three_d.reopen","three_d.view_profit",
   "exchange.view","exchange.create","exchange.edit","exchange.delete","exchange.approve","exchange.reverse","exchange.rates",
-  "wallet.view","wallet.create","wallet.adjust","wallet.transfer","wallet.reconcile",
+  "wallet.view","wallet.create","wallet.adjust","wallet.transfer","wallet.withdraw","wallet.reconcile","wallet.reverse",
   "credit.view","credit.create","credit.collect",
   "payable.view","payable.create","payable.pay",
   "income_expense.view","income_expense.create",
@@ -33,8 +33,8 @@ const PERM_SETS: Record<string, string[]> = {
   ALL,
   ADMIN: ALL.filter((p) => p !== "settings.manage"),
   AGENT: ["dashboard.view","three_d.view","three_d.create","exchange.view","exchange.create","wallet.view","credit.view","credit.create","credit.collect","customer.view"],
-  CASHIER: ["dashboard.view","wallet.view","wallet.transfer","income_expense.view","income_expense.create","credit.view","credit.collect","payable.view","payable.pay","customer.view"],
-  ACCOUNTANT: ["dashboard.view","three_d.view","three_d.view_profit","exchange.view","wallet.view","wallet.reconcile","credit.view","credit.create","credit.collect","payable.view","payable.create","payable.pay","income_expense.view","income_expense.create","customer.view","customer.manage","report.view","report.export","daily_close.view","daily_close.create","daily_close.approve","audit.view"],
+  CASHIER: ["dashboard.view","wallet.view","wallet.transfer","wallet.withdraw","income_expense.view","income_expense.create","credit.view","credit.collect","payable.view","payable.pay","customer.view"],
+  ACCOUNTANT: ["dashboard.view","three_d.view","three_d.view_profit","exchange.view","wallet.view","wallet.reconcile","wallet.withdraw","credit.view","credit.create","credit.collect","payable.view","payable.create","payable.pay","income_expense.view","income_expense.create","customer.view","customer.manage","report.view","report.export","daily_close.view","daily_close.create","daily_close.approve","audit.view"],
   VIEWER: ["dashboard.view","three_d.view","exchange.view","wallet.view","credit.view","payable.view","income_expense.view","customer.view","report.view","daily_close.view"],
 };
 

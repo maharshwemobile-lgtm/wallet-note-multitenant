@@ -47,28 +47,43 @@ function money(minor: bigint | string, currency = "MMK") {
   return `${neg ? "-" : ""}${s} ${currency}`;
 }
 
-export function saleNotice(opts: { txnNo: string; total: bigint; profit: bigint; createdByName: string }) {
-  return `🧾 Sale ${opts.txnNo}\nBy: ${opts.createdByName} · Total: ${money(opts.total)} · Profit: ${money(opts.profit)}`;
+function noteLine(note?: string | null) {
+  return note?.trim() ? `\nNote: ${note.trim()}` : "";
 }
 
-export function threeDNotice(opts: { count: number; total: bigint; sessionName: string; createdByName: string }) {
-  return `🔢 3D — ${opts.count} record(s), ${money(opts.total)}\nSession: ${opts.sessionName} · By: ${opts.createdByName}`;
+export function saleNotice(opts: { txnNo: string; total: bigint; profit: bigint; createdByName: string; notes?: string | null }) {
+  return `🧾 Sale ${opts.txnNo}\nBy: ${opts.createdByName} · Total: ${money(opts.total)} · Profit: ${money(opts.profit)}${noteLine(opts.notes)}`;
 }
 
-export function transferNotice(opts: { txnNo: string; sourceName: string; destName: string; sourceAmount: bigint; sourceCurrency: string; destAmount: bigint; destCurrency: string; createdByName: string }) {
+export function threeDNotice(opts: { count: number; total: bigint; sessionName: string; createdByName: string; notes?: string | null }) {
+  return `🔢 3D — ${opts.count} record(s), ${money(opts.total)}\nSession: ${opts.sessionName} · By: ${opts.createdByName}${noteLine(opts.notes)}`;
+}
+
+export function transferNotice(opts: { txnNo: string; sourceName: string; destName: string; sourceAmount: bigint; sourceCurrency: string; destAmount: bigint; destCurrency: string; createdByName: string; notes?: string | null }) {
   const amount = opts.sourceCurrency === opts.destCurrency
     ? money(opts.sourceAmount, opts.sourceCurrency)
     : `${money(opts.sourceAmount, opts.sourceCurrency)} → ${money(opts.destAmount, opts.destCurrency)}`;
-  return `🔁 Transfer ${opts.txnNo}\n${opts.sourceName} → ${opts.destName} · ${amount}\nBy: ${opts.createdByName}`;
+  return `🔁 Transfer ${opts.txnNo}\n${opts.sourceName} → ${opts.destName} · ${amount}\nBy: ${opts.createdByName}${noteLine(opts.notes)}`;
 }
 
-export function incomeExpenseNotice(opts: { txnNo: string; type: string; categoryName: string; amount: bigint; currency: string; createdByName: string }) {
+export function incomeExpenseNotice(opts: { txnNo: string; type: string; categoryName: string; amount: bigint; currency: string; createdByName: string; description?: string | null }) {
   const icon = opts.type === "INCOME" ? "💰" : opts.type === "WITHDRAW" ? "➖" : "💸";
   const label = opts.type === "INCOME" ? "Income" : opts.type === "WITHDRAW" ? "Withdraw" : "Expense";
-  return `${icon} ${label} ${opts.txnNo}\n${opts.categoryName} · ${money(opts.amount, opts.currency)}\nBy: ${opts.createdByName}`;
+  return `${icon} ${label} ${opts.txnNo}\n${opts.categoryName} · ${money(opts.amount, opts.currency)}\nBy: ${opts.createdByName}${noteLine(opts.description)}`;
 }
 
-export function exchangeNotice(opts: { txnNo: string; type: string; fromAmount: bigint; fromCurrency: string; toAmount: bigint; toCurrency: string; createdByName: string }) {
+export function exchangeNotice(opts: { txnNo: string; type: string; fromAmount: bigint; fromCurrency: string; toAmount: bigint; toCurrency: string; createdByName: string; notes?: string | null }) {
   const label = opts.type === "BUY_THB" ? "Buy THB" : opts.type === "SELL_THB" ? "Sell THB" : "Convert";
-  return `💱 Exchange ${opts.txnNo} — ${label}\n${money(opts.fromAmount, opts.fromCurrency)} → ${money(opts.toAmount, opts.toCurrency)}\nBy: ${opts.createdByName}`;
+  return `💱 Exchange ${opts.txnNo} — ${label}\n${money(opts.fromAmount, opts.fromCurrency)} → ${money(opts.toAmount, opts.toCurrency)}\nBy: ${opts.createdByName}${noteLine(opts.notes)}`;
+}
+
+export function creditPayableNotice(opts: { kind: "credit" | "payable"; txnNo: string; partyName: string; amount: bigint; currency: string; createdByName: string }) {
+  const icon = opts.kind === "credit" ? "🤝" : "📤";
+  const label = opts.kind === "credit" ? "Credit collected" : "Payable paid";
+  return `${icon} ${label} — ${opts.txnNo}\n${opts.partyName} · ${money(opts.amount, opts.currency)}\nBy: ${opts.createdByName}`;
+}
+
+/** Sent after a REVERSE action — different verb, includes the required reason. */
+export function reversalNotice(opts: { icon: string; label: string; txnNo: string; reason: string; createdByName: string }) {
+  return `${opts.icon} ${opts.label} REVERSED — ${opts.txnNo}\nReason: ${opts.reason}\nBy: ${opts.createdByName}`;
 }

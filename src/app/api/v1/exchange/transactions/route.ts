@@ -93,6 +93,7 @@ export const POST = withAuth("exchange.create", async ({ req, user }) => {
       toAmount: exchange.toAmount,
       toCurrency: exchange.toCurrency,
       createdByName: user.name,
+      notes: exchange.notes,
     })
   );
   return json(exchange, { status: 201 });

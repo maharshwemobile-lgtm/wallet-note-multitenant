@@ -86,7 +86,7 @@ export const POST = withAuth("sale.create", async ({ req, user }) => {
   );
   notifyAuditFeed(
     user.businessId,
-    saleNotice({ txnNo: sale.txnNo, total: sale.total, profit: sale.profit, createdByName: user.name })
+    saleNotice({ txnNo: sale.txnNo, total: sale.total, profit: sale.profit, createdByName: user.name, notes: sale.notes })
   );
   return json(sale, { status: 201 });
 });
