@@ -18,5 +18,19 @@ export const GET = withAuth("wallet.view", async ({ req, user, params }) => {
     }),
     prisma.walletLedgerEntry.count({ where: { walletId: wallet.id } }),
   ]);
-  return json({ wallet, entries, total, page, pageSize });
+
+  // A REVERSAL entry points back at the original entry's own id (see
+  // reverseLedgerEntries) — use that to tell the client which rows already
+  // have a reversal so it doesn't offer to void them again.
+  const reversedIds = new Set(
+    (
+      await prisma.walletLedgerEntry.findMany({
+        where: { walletId: wallet.id, refType: "REVERSAL", refId: { in: entries.map((e) => e.id) } },
+        select: { refId: true },
+      })
+    ).map((r) => r.refId)
+  );
+  const withReversed = entries.map((e) => ({ ...e, reversed: reversedIds.has(e.id) }));
+
+  return json({ wallet, entries: withReversed, total, page, pageSize });
 });
