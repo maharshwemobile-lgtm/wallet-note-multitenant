@@ -1,9 +1,22 @@
-import { NextResponse } from "next/server";
+import { timingSafeEqual } from "crypto";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+function isAuthorized(req: NextRequest): boolean {
+  const expected = process.env.ADMIN_SECRET;
+  if (!expected) return false; // fail closed if the secret was never configured
+  const provided = req.headers.get("x-admin-secret") ?? "";
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+export async function GET(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401, headers: { "Cache-Control": "no-store, max-age=0" } });
+  }
   try {
     const now = new Date();
     const today = new Date(now);

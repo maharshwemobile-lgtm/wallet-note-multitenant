@@ -2,8 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Building2, RefreshCw, Search, ShieldCheck, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
-import { Button, Card, Select } from "@/components/ui";
+import { Button, Card, Input, Select } from "@/components/ui";
 import { fmtDateTime } from "@/lib/format";
+
+const SECRET_STORAGE_KEY = "wn_admin_secret";
 
 interface AdminStats {
   registeredAccounts: number;
@@ -47,6 +49,11 @@ const stats = [
 ] as const;
 
 export default function AdminPage() {
+  const [secret, setSecret] = useState<string | null>(() =>
+    typeof window === "undefined" ? null : window.sessionStorage.getItem(SECRET_STORAGE_KEY)
+  );
+  const [secretInput, setSecretInput] = useState("");
+  const [authError, setAuthError] = useState("");
   const [data, setData] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -57,11 +64,17 @@ export default function AdminPage() {
   const userAuditRef = useRef<HTMLElement>(null);
   const activityAuditRef = useRef<HTMLElement>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (key: string) => {
     setLoading(true);
     try {
-      const response = await fetch("/api/admin/stats", { cache: "no-store" });
+      const response = await fetch("/api/admin/stats", { cache: "no-store", headers: { "x-admin-secret": key } });
       const body = await response.json();
+      if (response.status === 401) {
+        window.sessionStorage.removeItem(SECRET_STORAGE_KEY);
+        setSecret(null);
+        setAuthError("Wrong passcode.");
+        return;
+      }
       if (!response.ok || !body.ok) throw new Error(body.error || "Unable to load statistics");
       setData(body.data);
       setError("");
@@ -73,13 +86,21 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    const firstLoad = window.setTimeout(load, 0);
-    const timer = window.setInterval(load, 30_000);
+    if (!secret) return;
+    const firstLoad = window.setTimeout(() => load(secret), 0);
+    const timer = window.setInterval(() => load(secret), 30_000);
     return () => {
       window.clearTimeout(firstLoad);
       window.clearInterval(timer);
     };
-  }, [load]);
+  }, [load, secret]);
+
+  function unlock() {
+    if (!secretInput.trim()) return;
+    setAuthError("");
+    window.sessionStorage.setItem(SECRET_STORAGE_KEY, secretInput.trim());
+    setSecret(secretInput.trim());
+  }
 
   const openUserAudit = (scope: "all" | "today") => {
     setUserScope(scope);
@@ -114,6 +135,29 @@ export default function AdminPage() {
       log.resourceType?.toLowerCase().includes(activityNeedle))
   );
 
+  if (!secret) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-950">
+        <Card className="w-full max-w-sm space-y-3">
+          <div className="flex items-center gap-2">
+            <div className="rounded-lg bg-blue-600 p-2 text-white"><Wallet size={18} /></div>
+            <h1 className="text-lg font-bold">Wallet Note Admin</h1>
+          </div>
+          <Input
+            label="Admin passcode"
+            type="password"
+            value={secretInput}
+            onChange={(e) => setSecretInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && unlock()}
+            autoFocus
+          />
+          {authError && <p className="text-sm text-red-600">{authError}</p>}
+          <Button onClick={unlock} disabled={!secretInput.trim()}>Unlock</Button>
+        </Card>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-gray-50 px-3 py-4 dark:bg-gray-950 sm:px-6 sm:py-6">
       <div className="mx-auto max-w-[1600px] space-y-4">
@@ -127,7 +171,7 @@ export default function AdminPage() {
               <p className="text-xs text-gray-500">Registration and user activity</p>
             </div>
           </div>
-          <Button variant="secondary" size="sm" onClick={load} disabled={loading}>
+          <Button variant="secondary" size="sm" onClick={() => load(secret)} disabled={loading}>
             <RefreshCw size={15} className={`mr-1.5 inline ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
