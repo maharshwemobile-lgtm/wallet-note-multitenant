@@ -7,18 +7,38 @@ import { postLedger } from "@/services/walletService";
 import { nextNumber } from "@/lib/sequence";
 import { audit } from "@/lib/audit";
 import { notifyAuditFeed, transferNotice } from "@/lib/telegramNotify";
+import { todayBusinessDate, dateRangeUtc } from "@/lib/dates";
 
 export const GET = withAuth("wallet.view", async ({ req, user }) => {
   const { skip, take, page, pageSize } = pagination(req);
-  const [transfers, total] = await Promise.all([
+  const [transfers, total, todayTransfers] = await Promise.all([
     prisma.walletTransfer.findMany({
       where: { businessId: user.businessId },
       orderBy: { createdAt: "desc" },
       skip, take,
     }),
     prisma.walletTransfer.count({ where: { businessId: user.businessId } }),
+    prisma.walletTransfer.findMany({
+      where: { businessId: user.businessId, status: "COMPLETED", createdAt: dateRangeUtc(todayBusinessDate()) },
+      select: { sourceWalletId: true, sourceAmount: true },
+    }),
   ]);
-  return json({ transfers, total, page, pageSize });
+
+  const sourceWallets = await prisma.wallet.findMany({
+    where: { id: { in: [...new Set(todayTransfers.map((t) => t.sourceWalletId))] } },
+    select: { id: true, currency: true },
+  });
+  const currencyById = new Map(sourceWallets.map((w) => [w.id, w.currency]));
+  const todayByCurrency = new Map<string, bigint>();
+  for (const t of todayTransfers) {
+    const currency = currencyById.get(t.sourceWalletId) ?? "MMK";
+    todayByCurrency.set(currency, (todayByCurrency.get(currency) ?? 0n) + t.sourceAmount);
+  }
+
+  return json({
+    transfers, total, page, pageSize,
+    todayTotal: [...todayByCurrency.entries()].map(([currency, amount]) => ({ currency, amount })),
+  });
 });
 
 const schema = z.object({
@@ -42,18 +62,21 @@ export const POST = withAuth("wallet.transfer", async ({ req, user }) => {
     if (!source || !dest || source.businessId !== user.businessId || dest.businessId !== user.businessId)
       throw new ApiError(404, "Wallet not found");
 
-    const sourceAmount = toMinor(body.amount);
+    // The fee is added on top of the transfer amount: the source pays
+    // amount + fee, and the destination receives the full amount unreduced.
+    const enteredAmount = toMinor(body.amount);
     const fee = toMinor(body.fee);
-    let destAmount = sourceAmount - fee;
+    const sourceAmount = enteredAmount + fee;
+    let destAmount = enteredAmount;
     let rate: string | undefined;
 
     if (source.currency !== dest.currency) {
       if (!body.rate || !isValidDecimalString(body.rate) || new Decimal(body.rate).lte(0))
         throw new ApiError(422, "A valid exchange rate is required for cross-currency transfers");
       rate = body.rate;
-      destAmount = mulMinor(sourceAmount - fee, rate);
+      destAmount = mulMinor(enteredAmount, rate);
     }
-    if (destAmount <= 0n) throw new ApiError(422, "Transfer amount must exceed the fee");
+    if (destAmount <= 0n) throw new ApiError(422, "Transfer amount must be greater than zero");
 
     const txnNo = await nextNumber(tx, user.businessId, "TRANSFER");
     const transfer = await tx.walletTransfer.create({

@@ -112,17 +112,20 @@ export async function createTransfer(
   });
   if (!source || !dest) throw new ApiError(404, "Wallet not found");
 
-  const sourceAmount = toMinor(opts.amount);
+  // The fee is added on top of the transfer amount: the source pays
+  // amount + fee, and the destination receives the full amount unreduced.
+  const enteredAmount = toMinor(opts.amount);
   const fee = toMinor(opts.fee);
-  let destAmount = sourceAmount - fee;
+  const sourceAmount = enteredAmount + fee;
+  let destAmount = enteredAmount;
   let rate: string | undefined;
   if (source.currency !== dest.currency) {
     if (!opts.rate || !isValidDecimalString(opts.rate) || new Decimal(opts.rate).lte(0))
       throw new ApiError(422, "A valid exchange rate is required for cross-currency transfers");
     rate = opts.rate;
-    destAmount = mulMinor(sourceAmount - fee, rate);
+    destAmount = mulMinor(enteredAmount, rate);
   }
-  if (destAmount <= 0n) throw new ApiError(422, "Transfer amount must exceed the fee");
+  if (destAmount <= 0n) throw new ApiError(422, "Transfer amount must be greater than zero");
 
   const txnNo = await nextNumber(tx, opts.businessId, "TRANSFER");
   const transfer = await tx.walletTransfer.create({

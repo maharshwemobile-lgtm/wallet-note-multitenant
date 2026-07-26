@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Send } from "lucide-react";
 import { api } from "@/lib/client";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
-import { Button, Card, Input, Select, Modal, Spinner, Badge, Table, Empty, useToast } from "@/components/ui";
+import { Button, Card, Input, Select, Modal, Spinner, Badge, StatCard, Table, Empty, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
 
 interface Transfer {
@@ -39,6 +39,7 @@ const EMPTY_FORM = {
 
 export default function TransfersPage() {
   const [transfers, setTransfers] = useState<Transfer[] | null>(null);
+  const [todayTotal, setTodayTotal] = useState<{ currency: string; amount: string }[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [showNew, setShowNew] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -49,8 +50,8 @@ export default function TransfersPage() {
   const { hasPerm } = useAuth();
 
   const load = useCallback(() => {
-    api<{ transfers: Transfer[] }>("/api/v1/wallet-transfers?pageSize=100")
-      .then((data) => setTransfers(data.transfers))
+    api<{ transfers: Transfer[]; todayTotal: { currency: string; amount: string }[] }>("/api/v1/wallet-transfers?pageSize=100")
+      .then((data) => { setTransfers(data.transfers); setTodayTotal(data.todayTotal); })
       .catch((error) => push(error.message, "error"));
     api<Wallet[]>("/api/v1/wallets").then(setWallets).catch(() => {});
   }, [push]);
@@ -107,6 +108,14 @@ export default function TransfersPage() {
           New transfer
         </Button>
       </div>
+
+      {todayTotal.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {todayTotal.map((t) => (
+            <StatCard key={t.currency} label={`Today's transfers (${t.currency})`} value={`${fmtMoney(t.amount)} ${t.currency}`} />
+          ))}
+        </div>
+      )}
 
       {transfers.length === 0 ? (
         <Card><Empty message="No transfers yet" /></Card>
@@ -170,7 +179,7 @@ export default function TransfersPage() {
               inputMode="decimal"
             />
             <Input
-              label="Fee"
+              label={`Fee${source ? ` (${source.currency}, added to what you send)` : ""}`}
               value={form.fee}
               onChange={(event) => setForm({ ...form, fee: event.target.value })}
               inputMode="decimal"
