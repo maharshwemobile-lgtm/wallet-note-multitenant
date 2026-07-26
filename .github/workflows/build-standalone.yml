@@ -1,0 +1,31 @@
+name: Build standalone release
+
+# Manual only — produces a downloadable Linux-built standalone artifact for
+# deployment to the VPS. Building on Linux (matching the production runtime)
+# avoids a cross-platform Prisma/Turbopack external-module bundling mismatch
+# seen when building on Windows and running on Linux. No deployment step,
+# no secrets used — just build and upload as an artifact.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx prisma generate
+      - run: npx next build
+      - name: Assemble standalone package
+        run: |
+          cp -r .next/static .next/standalone/.next/static
+          cp -r public .next/standalone/public
+          tar -czf wallet-note-standalone.tar.gz -C .next standalone
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wallet-note-standalone
+          path: wallet-note-standalone.tar.gz
+          retention-days: 3
