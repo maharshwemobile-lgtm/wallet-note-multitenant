@@ -8,6 +8,7 @@ import { computeThreeD, parseBulkLines } from "@/services/threeDService";
 import { nextNumber } from "@/lib/sequence";
 import { audit } from "@/lib/audit";
 import { assertDateOpen } from "@/services/closeGuard";
+import { notifyAuditFeed, threeDNotice } from "@/lib/telegramNotify";
 
 export const GET = withAuth("three_d.view", async ({ req, user }) => {
   const sp = req.nextUrl.searchParams;
@@ -140,5 +141,14 @@ export const POST = withAuth("three_d.create", async ({ req, user }) => {
     });
     return out;
   });
+  notifyAuditFeed(
+    user.businessId,
+    threeDNotice({
+      count: created.length,
+      total: created.reduce((sum, transaction) => sum + transaction.betAmount, 0n),
+      sessionName: session.name,
+      createdByName: user.name,
+    })
+  );
   return json({ created: created.length, transactions: created }, { status: 201 });
 });

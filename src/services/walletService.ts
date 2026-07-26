@@ -1,5 +1,9 @@
 import { Tx } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
+import Decimal from "decimal.js";
+import { isValidDecimalString, mulMinor, toMinor } from "@/lib/money";
+import { nextNumber } from "@/lib/sequence";
+import { audit } from "@/lib/audit";
 
 // The single choke point for wallet balance changes. A wallet balance is never
 // mutated except through postLedger, inside a database transaction, so the
@@ -81,4 +85,92 @@ export async function reverseLedgerEntries(
     });
   }
   return entries.length;
+}
+
+export async function createTransfer(
+  tx: Tx,
+  opts: {
+    businessId: string;
+    userId: string;
+    sourceWalletId: string;
+    destWalletId: string;
+    amount: string;
+    rate?: string;
+    fee: string;
+    reference?: string;
+    notes?: string;
+  }
+) {
+  if (opts.sourceWalletId === opts.destWalletId)
+    throw new ApiError(422, "Source and destination wallets must differ");
+
+  const source = await tx.wallet.findFirst({
+    where: { id: opts.sourceWalletId, businessId: opts.businessId, deletedAt: null, active: true },
+  });
+  const dest = await tx.wallet.findFirst({
+    where: { id: opts.destWalletId, businessId: opts.businessId, deletedAt: null, active: true },
+  });
+  if (!source || !dest) throw new ApiError(404, "Wallet not found");
+
+  const sourceAmount = toMinor(opts.amount);
+  const fee = toMinor(opts.fee);
+  let destAmount = sourceAmount - fee;
+  let rate: string | undefined;
+  if (source.currency !== dest.currency) {
+    if (!opts.rate || !isValidDecimalString(opts.rate) || new Decimal(opts.rate).lte(0))
+      throw new ApiError(422, "A valid exchange rate is required for cross-currency transfers");
+    rate = opts.rate;
+    destAmount = mulMinor(sourceAmount - fee, rate);
+  }
+  if (destAmount <= 0n) throw new ApiError(422, "Transfer amount must exceed the fee");
+
+  const txnNo = await nextNumber(tx, opts.businessId, "TRANSFER");
+  const transfer = await tx.walletTransfer.create({
+    data: {
+      txnNo,
+      businessId: opts.businessId,
+      branchId: source.branchId,
+      sourceWalletId: source.id,
+      destWalletId: dest.id,
+      sourceAmount,
+      destAmount,
+      rate,
+      fee,
+      reference: opts.reference,
+      notes: opts.notes,
+      createdById: opts.userId,
+    },
+  });
+
+  await postLedger(tx, {
+    businessId: opts.businessId,
+    walletId: source.id,
+    direction: "CREDIT",
+    amount: sourceAmount,
+    refType: "TRANSFER_OUT",
+    refId: transfer.id,
+    description: `${txnNo} -> ${dest.name}`,
+    createdById: opts.userId,
+  });
+  await postLedger(tx, {
+    businessId: opts.businessId,
+    walletId: dest.id,
+    direction: "DEBIT",
+    amount: destAmount,
+    refType: "TRANSFER_IN",
+    refId: transfer.id,
+    description: `${txnNo} <- ${source.name}`,
+    createdById: opts.userId,
+  });
+  await audit(tx, {
+    businessId: opts.businessId,
+    userId: opts.userId,
+    branchId: source.branchId,
+    action: "CREATE",
+    module: "wallet",
+    resourceType: "WalletTransfer",
+    resourceId: transfer.id,
+    after: { txnNo, sourceAmount, destAmount, rate, fee },
+  });
+  return transfer;
 }

@@ -85,10 +85,25 @@ model User {
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
 
+  telegramBotToken       String? @unique
+  telegramBotUsername    String?
+  telegramWebhookSecret  String? @unique
+  telegramChatId         String?
+
   branches     UserBranch[]
   sessions     AuthSession[]
   auditLogs    AuditLog[]
   notifications Notification[]
+}
+
+model TelegramSession {
+  ownerUserId String
+  chatId      String
+  step        String
+  data        String   @default("{}")
+  updatedAt   DateTime @updatedAt
+
+  @@id([ownerUserId, chatId])
 }
 
 model UserBranch {

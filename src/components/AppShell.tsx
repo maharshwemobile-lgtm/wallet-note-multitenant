@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard, Hash, ArrowLeftRight, Wallet, HandCoins, FileBarChart,
   Users, UserCog, Settings, ScrollText, Info, Menu, X, LogOut,
-  Moon, Sun, Receipt, Plus, ShoppingCart, Package, Boxes, Truck, Building2,
+  Moon, Sun, Receipt, Plus, ShoppingCart, Package, Boxes, Truck, Building2, MessageCircle,
 } from "lucide-react";
 import { api } from "@/lib/client";
 import { ToastProvider, cn } from "./ui";
@@ -67,6 +67,7 @@ const NAV = [
   { href: "/users", label: "Users & Roles", icon: UserCog, perm: "users.manage" },
   { href: "/settings", label: "Settings", icon: Settings, perm: "settings.manage" },
   { href: "/audit", label: "Audit Logs", icon: ScrollText, perm: "audit.view" },
+  { href: "/telegram", label: "Telegram", icon: MessageCircle, perm: null },
   { href: "/about", label: "About Us", icon: Info, perm: null },
 ];
 

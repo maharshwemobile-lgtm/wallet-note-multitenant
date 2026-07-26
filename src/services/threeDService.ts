@@ -1,8 +1,10 @@
 import { Tx } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
-import { mulMinor, percentOf, isThreeDigit } from "@/lib/money";
+import { mulMinor, percentOf, isThreeDigit, toMinor } from "@/lib/money";
 import { postLedger, reverseLedgerEntries } from "./walletService";
 import { audit } from "@/lib/audit";
+import { nextNumber } from "@/lib/sequence";
+import { assertDateOpen } from "./closeGuard";
 
 // 3D record calculations and settlement. All money in BigInt minor units.
 
@@ -36,6 +38,87 @@ export function parseBulkLines(text: string): {
     rows.push({ number: m[1], amount: m[2].replace(/,/g, "") });
   });
   return { rows, errors };
+}
+
+export async function createThreeDBets(
+  tx: Tx,
+  opts: {
+    businessId: string;
+    branchId: string;
+    userId: string;
+    sessionId: string;
+    rows: { number: string; amount: string }[];
+    commissionRate: string;
+    customerId?: string;
+    customerName?: string;
+    customerPhone?: string;
+    odds?: string;
+    notes?: string;
+  }
+) {
+  if (opts.rows.length === 0) throw new ApiError(422, "No records to save");
+  for (const row of opts.rows) {
+    if (!isThreeDigit(row.number))
+      throw new ApiError(422, `Invalid 3D number: "${row.number}" (must be 000-999)`);
+  }
+
+  const session = await tx.threeDSession.findFirst({
+    where: { id: opts.sessionId, businessId: opts.businessId },
+  });
+  if (!session) throw new ApiError(404, "Session not found");
+  if (session.status !== "OPEN")
+    throw new ApiError(422, `Session is ${session.status.toLowerCase()} - records can only be added to open sessions`);
+  if (session.branchId && session.branchId !== opts.branchId)
+    throw new ApiError(422, "Session belongs to a different branch");
+
+  if (opts.customerId) {
+    const customer = await tx.contact.findFirst({
+      where: { id: opts.customerId, businessId: opts.businessId, deletedAt: null },
+      select: { id: true },
+    });
+    if (!customer) throw new ApiError(404, "Customer not found");
+  }
+
+  await assertDateOpen(tx, opts.branchId, session.drawDate);
+  const odds = opts.odds ?? session.defaultOdds;
+  const created = [];
+  for (const row of opts.rows) {
+    const betAmount = toMinor(row.amount);
+    if (betAmount <= 0n) throw new ApiError(422, "Bet amount must be greater than zero");
+    const calculation = computeThreeD(betAmount, odds, opts.commissionRate);
+    const txnNo = await nextNumber(tx, opts.businessId, "THREE_D");
+    created.push(await tx.threeDTransaction.create({
+      data: {
+        txnNo,
+        businessId: opts.businessId,
+        branchId: opts.branchId,
+        sessionId: session.id,
+        agentId: opts.userId,
+        customerId: opts.customerId,
+        customerName: opts.customerName,
+        customerPhone: opts.customerPhone,
+        number: row.number,
+        betAmount,
+        odds,
+        potentialPayout: calculation.potentialPayout,
+        commissionRate: opts.commissionRate,
+        commissionAmount: calculation.commissionAmount,
+        netAmount: calculation.netAmount,
+        notes: opts.notes,
+        createdById: opts.userId,
+      },
+    }));
+  }
+  await audit(tx, {
+    businessId: opts.businessId,
+    userId: opts.userId,
+    branchId: opts.branchId,
+    action: "CREATE",
+    module: "three_d",
+    resourceType: "ThreeDTransaction",
+    after: { count: created.length, sessionId: session.id },
+  });
+  return created;
 }
 
 export interface SettlementPreview {

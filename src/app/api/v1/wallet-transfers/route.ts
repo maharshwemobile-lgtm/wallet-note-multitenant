@@ -6,6 +6,7 @@ import { toMinor, mulMinor, isValidDecimalString } from "@/lib/money";
 import { postLedger } from "@/services/walletService";
 import { nextNumber } from "@/lib/sequence";
 import { audit } from "@/lib/audit";
+import { notifyAuditFeed, transferNotice } from "@/lib/telegramNotify";
 
 export const GET = withAuth("wallet.view", async ({ req, user }) => {
   const { skip, take, page, pageSize } = pagination(req);
@@ -100,5 +101,28 @@ export const POST = withAuth("wallet.transfer", async ({ req, user }) => {
     });
     return transfer;
   });
+  const [source, dest] = await Promise.all([
+    prisma.wallet.findFirst({
+      where: { id: result.sourceWalletId, businessId: user.businessId },
+      select: { name: true, currency: true },
+    }),
+    prisma.wallet.findFirst({
+      where: { id: result.destWalletId, businessId: user.businessId },
+      select: { name: true, currency: true },
+    }),
+  ]);
+  notifyAuditFeed(
+    user.businessId,
+    transferNotice({
+      txnNo: result.txnNo,
+      sourceName: source?.name ?? "Source wallet",
+      destName: dest?.name ?? "Destination wallet",
+      sourceAmount: result.sourceAmount,
+      sourceCurrency: source?.currency ?? "MMK",
+      destAmount: result.destAmount,
+      destCurrency: dest?.currency ?? "MMK",
+      createdByName: user.name,
+    })
+  );
   return json(result, { status: 201 });
 });

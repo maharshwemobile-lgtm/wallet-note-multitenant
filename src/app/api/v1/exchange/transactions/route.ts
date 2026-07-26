@@ -7,6 +7,7 @@ import { toMinor } from "@/lib/money";
 import { createExchange } from "@/services/exchangeService";
 import { assertDateOpen } from "@/services/closeGuard";
 import { todayBusinessDate } from "@/lib/dates";
+import { notifyAuditFeed, exchangeNotice } from "@/lib/telegramNotify";
 
 export const GET = withAuth("exchange.view", async ({ req, user }) => {
   const sp = req.nextUrl.searchParams;
@@ -82,5 +83,17 @@ export const POST = withAuth("exchange.create", async ({ req, user }) => {
       notes: body.notes,
     });
   });
+  notifyAuditFeed(
+    user.businessId,
+    exchangeNotice({
+      txnNo: exchange.txnNo,
+      type: exchange.type,
+      fromAmount: exchange.fromAmount,
+      fromCurrency: exchange.fromCurrency,
+      toAmount: exchange.toAmount,
+      toCurrency: exchange.toCurrency,
+      createdByName: user.name,
+    })
+  );
   return json(exchange, { status: 201 });
 });

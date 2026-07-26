@@ -9,6 +9,7 @@ import { postLedger } from "@/services/walletService";
 import { assertDateOpen } from "@/services/closeGuard";
 import { audit } from "@/lib/audit";
 import { todayBusinessDate, isValidBusinessDate } from "@/lib/dates";
+import { notifyAuditFeed, incomeExpenseNotice } from "@/lib/telegramNotify";
 
 export const GET = withAuth("income_expense.view", async ({ req, user }) => {
   const sp = req.nextUrl.searchParams;
@@ -91,5 +92,16 @@ export const POST = withAuth("income_expense.create", async ({ req, user }) => {
     });
     return it;
   });
+  notifyAuditFeed(
+    user.businessId,
+    incomeExpenseNotice({
+      txnNo: item.txnNo,
+      type: item.type,
+      categoryName: item.categoryName ?? "Other",
+      amount: item.amount,
+      currency: item.currency,
+      createdByName: user.name,
+    })
+  );
   return json(item, { status: 201 });
 });
