@@ -20,6 +20,8 @@ export default function IncomeExpensePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [showNew, setShowNew] = useState(false);
+  const [newCategory, setNewCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
   const [busy, setBusy] = useState(false);
   const { push } = useToast();
   const { hasPerm, defaultBranchId } = useAuth();
@@ -38,12 +40,20 @@ export default function IncomeExpensePage() {
   async function create() {
     setBusy(true);
     try {
+      let categoryName = form.categoryName;
+      if (newCategory) {
+        const category = await api<Category>("/api/v1/categories", {
+          method: "POST",
+          body: { type: form.type, name: newCategoryName.trim() },
+        });
+        categoryName = category.name;
+      }
       await api("/api/v1/income-expense", {
         method: "POST",
         body: {
           branchId: defaultBranchId,
           type: form.type,
-          categoryName: form.categoryName,
+          categoryName,
           amount: form.amount,
           walletId: form.walletId,
           date: form.date || undefined,
@@ -53,6 +63,8 @@ export default function IncomeExpensePage() {
       });
       push(`${form.type === "INCOME" ? "Income" : "Expense"} recorded`);
       setShowNew(false);
+      setNewCategory(false);
+      setNewCategoryName("");
       setForm({ ...form, amount: "", description: "", reference: "" });
       load();
     } catch (e) {
@@ -64,6 +76,10 @@ export default function IncomeExpensePage() {
 
   if (!items) return <Spinner />;
   const catOptions = categories.filter((c) => c.type === form.type);
+  const canSave =
+    !!form.amount &&
+    !!form.walletId &&
+    (newCategory ? newCategoryName.trim().length > 0 : !!form.categoryName);
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
@@ -102,18 +118,58 @@ export default function IncomeExpensePage() {
 
       <Modal open={showNew} onClose={() => setShowNew(false)} title="New income / expense">
         <div className="space-y-3">
-          <Select label="Type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value, categoryName: "" })}>
+          <Select
+            label="Type"
+            value={form.type}
+            onChange={(e) => {
+              setForm({ ...form, type: e.target.value, categoryName: "" });
+              setNewCategory(false);
+              setNewCategoryName("");
+            }}
+          >
             <option value="INCOME">Income</option>
             <option value="EXPENSE">Expense</option>
           </Select>
           <div className="grid gap-3 sm:grid-cols-2">
-            <Select label="Category" value={form.categoryName} onChange={(e) => setForm({ ...form, categoryName: e.target.value })}>
+            {newCategory ? (
+              <Input
+                label="New category name"
+                value={newCategoryName}
+                onChange={(e) => setNewCategoryName(e.target.value)}
+                autoFocus
+              />
+            ) : (
+            <Select
+              label="Category"
+              value={form.categoryName}
+              onChange={(e) => {
+                if (e.target.value === "__new__") {
+                  setNewCategory(true);
+                  setForm({ ...form, categoryName: "" });
+                } else {
+                  setForm({ ...form, categoryName: e.target.value });
+                }
+              }}
+            >
               <option value="">Select…</option>
               {catOptions.map((c) => <option key={c.id} value={c.name}>{c.name}</option>)}
-              <option value="Other">Other</option>
+              <option value="__new__">+ Add new category</option>
             </Select>
+            )}
             <Input label="Date" type="date" value={form.date} onChange={(e) => setForm({ ...form, date: e.target.value })} />
           </div>
+          {newCategory && (
+            <button
+              type="button"
+              className="text-left text-sm font-medium text-blue-600 hover:underline dark:text-blue-400"
+              onClick={() => {
+                setNewCategory(false);
+                setNewCategoryName("");
+              }}
+            >
+              Choose an existing category
+            </button>
+          )}
           <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Amount" value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} inputMode="decimal" />
             <Select label="Wallet" value={form.walletId} onChange={(e) => setForm({ ...form, walletId: e.target.value })}>
@@ -124,7 +180,7 @@ export default function IncomeExpensePage() {
           <Input label="Description" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setShowNew(false)}>Cancel</Button>
-            <Button onClick={create} disabled={busy || !form.amount || !form.walletId || !form.categoryName}>Save</Button>
+            <Button onClick={create} disabled={busy || !canSave}>Save</Button>
           </div>
         </div>
       </Modal>

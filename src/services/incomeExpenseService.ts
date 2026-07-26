@@ -30,7 +30,15 @@ export async function createIncomeExpenseEntry(
 
   await assertDateOpen(tx, opts.branchId, opts.date);
   const wallet = await tx.wallet.findUnique({ where: { id: opts.walletId } });
-  if (!wallet || wallet.businessId !== opts.businessId) throw new ApiError(404, "Wallet not found");
+  if (
+    !wallet ||
+    wallet.businessId !== opts.businessId ||
+    wallet.branchId !== opts.branchId ||
+    wallet.deletedAt
+  ) {
+    throw new ApiError(404, "Wallet not found");
+  }
+  if (!wallet.active) throw new ApiError(422, `Wallet ${wallet.name} is inactive`);
 
   const categoryName = opts.categoryName?.trim() || "Withdrawal";
   const txnNo = await nextNumber(tx, opts.businessId, opts.type);

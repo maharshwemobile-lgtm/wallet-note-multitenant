@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { withAuth, json, parseBody } from "@/lib/api";
+import { withAuth, json, parseBody, ApiError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { can } from "@/lib/auth";
 
 export const GET = withAuth("income_expense.view", async ({ req, user }) => {
   const type = req.nextUrl.searchParams.get("type") ?? undefined;
@@ -13,10 +14,13 @@ export const GET = withAuth("income_expense.view", async ({ req, user }) => {
 
 const schema = z.object({
   type: z.enum(["INCOME", "EXPENSE"]),
-  name: z.string().min(1),
+  name: z.string().trim().min(1).max(80),
 });
 
-export const POST = withAuth("settings.manage", async ({ req, user }) => {
+export const POST = withAuth(null, async ({ req, user }) => {
+  if (!can(user, "income_expense.create") && !can(user, "settings.manage")) {
+    throw new ApiError(403, "You do not have permission to add categories");
+  }
   const body = await parseBody(req, schema);
   const category = await prisma.category.upsert({
     where: { businessId_type_name: { businessId: user.businessId, type: body.type, name: body.name } },

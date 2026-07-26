@@ -7,6 +7,7 @@ import {
   LayoutDashboard, Hash, ArrowLeftRight, Wallet, HandCoins, FileBarChart,
   Users, UserCog, Settings, ScrollText, Info, Menu, X, LogOut,
   Moon, Sun, Receipt, Plus, ShoppingCart, Package, Boxes, Truck, Building2, MessageCircle,
+  Send, MinusCircle,
 } from "lucide-react";
 import { api } from "@/lib/client";
 import { ToastProvider, cn } from "./ui";
@@ -59,6 +60,8 @@ const NAV = [
   { href: "/three-d", label: "3D Records", icon: Hash, perm: "three_d.view" },
   { href: "/exchange", label: "Exchange", icon: ArrowLeftRight, perm: "exchange.view", walletNote: true },
   { href: "/wallets", label: "Wallets", icon: Wallet, perm: "wallet.view", walletNote: true },
+  { href: "/transfers", label: "Transfer", icon: Send, perm: "wallet.transfer", walletNote: true },
+  { href: "/withdraw", label: "Withdraw", icon: MinusCircle, perm: "wallet.withdraw", walletNote: true },
   { href: "/credit", label: "Credit & Payable", icon: HandCoins, perm: "credit.view", walletNote: true },
   { href: "/income-expense", label: "Income & Expense", icon: Receipt, perm: "income_expense.view", walletNote: true },
   { href: "/reports", label: "Reports", icon: FileBarChart, perm: "report.view" },
@@ -72,7 +75,7 @@ const NAV = [
 ];
 
 const MINI_MART_PATHS = ["/pos", "/sales", "/purchases", "/items", "/stock", "/suppliers"];
-const WALLET_NOTE_PATHS = ["/exchange", "/wallets", "/credit", "/income-expense"];
+const WALLET_NOTE_PATHS = ["/exchange", "/wallets", "/transfers", "/withdraw", "/credit", "/income-expense"];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [me, setMe] = useState<Me | null>(null);

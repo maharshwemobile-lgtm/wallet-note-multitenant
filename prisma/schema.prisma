@@ -466,7 +466,7 @@ model IncomeExpense {
   txnNo       String
   businessId  String
   branchId    String
-  type        String    // INCOME | EXPENSE
+  type        String    // INCOME | EXPENSE | WITHDRAW
   categoryId  String?
   categoryName String?
   amount      BigInt
