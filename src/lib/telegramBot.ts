@@ -1,0 +1,670 @@
+import { prisma } from "./prisma";
+import { branchScope } from "./auth";
+import type { AuthUser } from "./auth";
+import { toMinor, isValidDecimalString, isThreeDigit } from "./money";
+import { fmtMoney } from "./format";
+import { todayBusinessDate } from "./dates";
+import { createIncomeExpenseEntry } from "@/services/incomeExpenseService";
+import { createTransfer } from "@/services/walletService";
+import { createExchange } from "@/services/exchangeService";
+import { createThreeDBets, parseBulkLines } from "@/services/threeDService";
+import { ApiError } from "./api";
+import {
+  notifyAuditFeed, incomeExpenseNotice, transferNotice, exchangeNotice, threeDNotice,
+} from "./telegramNotify";
+import {
+  sendMessage, answerCallbackQuery,
+  keyboard, btn, TgUpdate,
+} from "./telegram";
+
+// ---------------------------------------------------------------------------
+// Session state: one row per (owner user, chat), tracking the guided-entry
+// flow currently in progress (if any). "step" encodes "<flow>.<stage>".
+// Keyed by owner user too: a Telegram private chat's id is the account's own
+// id, so in principle the same person could message two different users'
+// bots — each gets its own session.
+// ---------------------------------------------------------------------------
+
+async function getSession(ownerUserId: string, chatId: string) {
+  const row = await prisma.telegramSession.findUnique({ where: { ownerUserId_chatId: { ownerUserId, chatId } } });
+  if (!row) return null;
+  return { step: row.step, data: JSON.parse(row.data) as Record<string, unknown> };
+}
+
+async function setSession(ownerUserId: string, chatId: string, step: string, data: Record<string, unknown>) {
+  await prisma.telegramSession.upsert({
+    where: { ownerUserId_chatId: { ownerUserId, chatId } },
+    create: { ownerUserId, chatId, step, data: JSON.stringify(data) },
+    update: { step, data: JSON.stringify(data) },
+  });
+}
+
+async function clearSession(ownerUserId: string, chatId: string) {
+  await prisma.telegramSession.deleteMany({ where: { ownerUserId, chatId } });
+}
+
+// ---------------------------------------------------------------------------
+// Account resolution: each webhook URL belongs to exactly one Wallet Note
+// user (their own bot). The first chat to ever message that bot auto-binds
+// as telegramChatId; anyone else gets turned away.
+// ---------------------------------------------------------------------------
+
+type ResolveResult =
+  | { kind: "ok"; user: AuthUser; justLinked: boolean }
+  | { kind: "not_found" }
+  | { kind: "chat_mismatch" };
+
+async function resolveOwner(ownerUserId: string, chatId: string): Promise<ResolveResult> {
+  const row = await prisma.user.findUnique({
+    where: { id: ownerUserId },
+    include: { role: true, branches: true },
+  });
+  if (!row || !row.active || row.deletedAt) return { kind: "not_found" };
+
+  let justLinked = false;
+  if (!row.telegramChatId) {
+    await prisma.user.update({ where: { id: ownerUserId }, data: { telegramChatId: chatId } });
+    justLinked = true;
+  } else if (row.telegramChatId !== chatId) {
+    return { kind: "chat_mismatch" };
+  }
+
+  let permissions: string[];
+  try {
+    permissions = JSON.parse(row.role.permissions) as string[];
+  } catch (e) {
+    console.error(`[telegram] bad permissions JSON for role ${row.roleId}:`, e);
+    return { kind: "not_found" };
+  }
+
+  return {
+    kind: "ok",
+    justLinked,
+    user: {
+      id: row.id,
+      businessId: row.businessId,
+      name: row.name,
+      username: row.username,
+      roleName: row.role.name,
+      permissions,
+      allBranches: row.allBranches,
+      branchIds: row.branches.map((b) => b.branchId),
+      commissionRate: row.commissionRate,
+    },
+  };
+}
+
+async function defaultBranchId(user: AuthUser): Promise<string | null> {
+  const branch = await prisma.branch.findFirst({
+    where: { businessId: user.businessId, active: true, ...branchScope(user) },
+    orderBy: { createdAt: "asc" },
+  });
+  return branch?.id ?? null;
+}
+
+function can(user: AuthUser, perm: string): boolean {
+  return user.permissions.includes(perm);
+}
+
+// ---------------------------------------------------------------------------
+// Menu
+// ---------------------------------------------------------------------------
+
+function mainMenu(user: AuthUser) {
+  const row1 = [];
+  if (can(user, "three_d.create")) row1.push(btn("🔢 3D", "menu:3d"));
+  if (can(user, "income_expense.create")) row1.push(btn("💰 Income", "menu:income"));
+  if (can(user, "income_expense.create")) row1.push(btn("💸 Expense", "menu:expense"));
+  const row2 = [];
+  if (can(user, "wallet.transfer")) row2.push(btn("🔁 Transfer", "menu:transfer"));
+  if (can(user, "wallet.withdraw")) row2.push(btn("➖ Withdraw", "menu:withdraw"));
+  if (can(user, "exchange.create")) row2.push(btn("💱 Exchange", "menu:exchange"));
+  const rows = [row1, row2].filter((r) => r.length > 0);
+  return keyboard(rows);
+}
+
+async function showMenu(chatId: string, user: AuthUser, greeting?: string) {
+  await clearSession(user.id, chatId);
+  const text = greeting ?? `Quick start — ${user.name} (${user.roleName})\nPick what you want to record:`;
+  await sendMessage(chatId, text, { replyMarkup: mainMenu(user) });
+}
+
+const CANCEL_ROW = [btn("✕ Cancel", "cancel")];
+const SKIP_ROW = [btn("Skip →", "skip")];
+
+function money(n: string): string {
+  return fmtMoney(toMinor(n).toString());
+}
+
+// ---------------------------------------------------------------------------
+// Shared: wallet picker
+// ---------------------------------------------------------------------------
+
+async function walletButtons(businessId: string, branchId: string, currency?: string) {
+  const wallets = await prisma.wallet.findMany({
+    where: {
+      businessId, active: true, deletedAt: null,
+      OR: [{ branchId }, { branchId: null }],
+      ...(currency ? { currency } : {}),
+    },
+    orderBy: { name: "asc" },
+  });
+  return { wallets, rows: wallets.map((w) => [btn(`${w.name} (${fmtMoney(w.currentBalance)} ${w.currency})`, `w:${w.id}`)]) };
+}
+
+// ---------------------------------------------------------------------------
+// Income / Expense / Withdraw flow — shares one implementation; WITHDRAW
+// skips the category step.
+// ---------------------------------------------------------------------------
+
+async function startIncomeExpense(chatId: string, user: AuthUser, type: "INCOME" | "EXPENSE" | "WITHDRAW") {
+  const branchId = await defaultBranchId(user);
+  if (!branchId) return sendMessage(chatId, "No branch is available for your account. Contact your admin.");
+  const { rows } = await walletButtons(user.businessId, branchId);
+  if (rows.length === 0) return sendMessage(chatId, "No wallets found. Create one in Wallet Note first.");
+  await setSession(user.id, chatId, `ie.wallet`, { type, branchId });
+  const label = type === "INCOME" ? "💰 Income" : type === "EXPENSE" ? "💸 Expense" : "➖ Withdraw";
+  await sendMessage(chatId, `${label}\n\nWhich wallet?`, { replyMarkup: keyboard([...rows, CANCEL_ROW]) });
+}
+
+async function ieStepWallet(chatId: string, user: AuthUser, data: Record<string, unknown>, walletId: string) {
+  const wallet = await prisma.wallet.findUnique({ where: { id: walletId } });
+  if (!wallet) return sendMessage(chatId, "Wallet not found. /menu to start over.");
+  const type = data.type as string;
+  if (type === "WITHDRAW") {
+    await setSession(user.id, chatId, "ie.amount", { ...data, walletId, walletName: wallet.name, currency: wallet.currency });
+    return sendMessage(chatId, `Wallet: ${wallet.name}\n\nEnter the amount to withdraw (${wallet.currency}):`, {
+      replyMarkup: keyboard([CANCEL_ROW]),
+    });
+  }
+  const categories = await prisma.category.findMany({
+    where: { businessId: user.businessId, active: true, type },
+    orderBy: { name: "asc" },
+  });
+  const rows = categories.map((c) => [btn(c.name, `cat:${c.name}`)]);
+  rows.push([btn("+ New category", "cat:__new__")]);
+  await setSession(user.id, chatId, "ie.category", { ...data, walletId, walletName: wallet.name, currency: wallet.currency });
+  await sendMessage(chatId, `Wallet: ${wallet.name}\n\nChoose a category:`, { replyMarkup: keyboard([...rows, CANCEL_ROW]) });
+}
+
+async function ieStepCategoryPick(chatId: string, user: AuthUser, data: Record<string, unknown>, catData: string) {
+  if (catData === "__new__") {
+    await setSession(user.id, chatId, "ie.category_new", data);
+    return sendMessage(chatId, "Type the new category name:", { replyMarkup: keyboard([CANCEL_ROW]) });
+  }
+  await setSession(user.id, chatId, "ie.amount", { ...data, categoryName: catData });
+  return sendMessage(chatId, `Category: ${catData}\n\nEnter the amount (${data.currency}):`, { replyMarkup: keyboard([CANCEL_ROW]) });
+}
+
+async function ieStepCategoryNewText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  const name = text.trim();
+  if (!name) return sendMessage(chatId, "Category name can't be empty. Try again:");
+  await prisma.category.upsert({
+    where: { businessId_type_name: { businessId: user.businessId, type: data.type as string, name } },
+    create: { businessId: user.businessId, type: data.type as string, name },
+    update: { active: true },
+  });
+  await setSession(user.id, chatId, "ie.amount", { ...data, categoryName: name });
+  return sendMessage(chatId, `Category: ${name}\n\nEnter the amount (${data.currency}):`, { replyMarkup: keyboard([CANCEL_ROW]) });
+}
+
+async function ieStepAmountText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  const raw = text.trim().replace(/,/g, "");
+  if (!isValidDecimalString(raw) || Number(raw) <= 0) return sendMessage(chatId, "Enter a valid positive amount, e.g. 5000");
+  const type = data.type as string;
+  const nextData = { ...data, amount: raw };
+  if (type === "WITHDRAW") {
+    await setSession(user.id, chatId, "ie.description", nextData);
+    return sendMessage(chatId, "Reason (or Skip):", { replyMarkup: keyboard([SKIP_ROW, CANCEL_ROW]) });
+  }
+  await setSession(user.id, chatId, "ie.description", nextData);
+  return sendMessage(chatId, "Description (or Skip):", { replyMarkup: keyboard([SKIP_ROW, CANCEL_ROW]) });
+}
+
+async function ieAskConfirm(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  const type = data.type as string;
+  const label = type === "INCOME" ? "Income" : type === "EXPENSE" ? "Expense" : "Withdrawal";
+  const lines = [
+    `Confirm ${label}`,
+    `Wallet: ${data.walletName}`,
+    data.categoryName ? `Category: ${data.categoryName}` : undefined,
+    `Amount: ${money(data.amount as string)} ${data.currency}`,
+    data.description ? `Note: ${data.description}` : undefined,
+  ].filter(Boolean);
+  await setSession(user.id, chatId, "ie.confirm", data);
+  await sendMessage(chatId, lines.join("\n"), { replyMarkup: keyboard([[btn("✅ Confirm", "confirm:yes"), btn("✕ Cancel", "confirm:no")]]) });
+}
+
+async function ieStepDescriptionText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  await ieAskConfirm(chatId, user, { ...data, description: text.trim() });
+}
+
+async function ieStepDescriptionSkip(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  await ieAskConfirm(chatId, user, data);
+}
+
+async function ieConfirm(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  try {
+    const item = await prisma.$transaction((tx) =>
+      createIncomeExpenseEntry(tx, {
+        businessId: user.businessId,
+        branchId: data.branchId as string,
+        userId: user.id,
+        type: data.type as "INCOME" | "EXPENSE" | "WITHDRAW",
+        categoryName: data.categoryName as string | undefined,
+        amount: toMinor(data.amount as string),
+        walletId: data.walletId as string,
+        date: todayBusinessDate(),
+        description: data.description as string | undefined,
+      })
+    );
+    await clearSession(user.id, chatId);
+    await sendMessage(chatId, `✅ Saved — ${item.txnNo}`);
+    notifyAuditFeed(user.businessId, incomeExpenseNotice({
+      txnNo: item.txnNo, type: item.type, categoryName: item.categoryName ?? "—",
+      amount: item.amount, currency: item.currency, createdByName: user.name,
+    }), chatId);
+    await showMenu(chatId, user);
+  } catch (e) {
+    await sendMessage(chatId, `❌ ${e instanceof ApiError ? e.message : "Something went wrong."}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Transfer flow
+// ---------------------------------------------------------------------------
+
+async function startTransfer(chatId: string, user: AuthUser) {
+  const branchId = await defaultBranchId(user);
+  if (!branchId) return sendMessage(chatId, "No branch is available for your account.");
+  const { rows } = await walletButtons(user.businessId, branchId);
+  if (rows.length < 2) return sendMessage(chatId, "You need at least two wallets to transfer between.");
+  await setSession(user.id, chatId, "tr.source", { branchId });
+  await sendMessage(chatId, "🔁 Transfer\n\nFrom which wallet?", { replyMarkup: keyboard([...rows, CANCEL_ROW]) });
+}
+
+async function trStepSource(chatId: string, user: AuthUser, data: Record<string, unknown>, walletId: string) {
+  const wallet = await prisma.wallet.findUnique({ where: { id: walletId } });
+  if (!wallet) return sendMessage(chatId, "Wallet not found.");
+  const { rows } = await walletButtons(user.businessId, data.branchId as string);
+  const filtered = rows.filter((r) => !r[0].callback_data.endsWith(walletId));
+  await setSession(user.id, chatId, "tr.dest", { ...data, sourceWalletId: walletId, sourceName: wallet.name, sourceCurrency: wallet.currency });
+  await sendMessage(chatId, `From: ${wallet.name}\n\nTo which wallet?`, { replyMarkup: keyboard([...filtered, CANCEL_ROW]) });
+}
+
+async function trStepDest(chatId: string, user: AuthUser, data: Record<string, unknown>, walletId: string) {
+  const wallet = await prisma.wallet.findUnique({ where: { id: walletId } });
+  if (!wallet) return sendMessage(chatId, "Wallet not found.");
+  await setSession(user.id, chatId, "tr.amount", { ...data, destWalletId: walletId, destName: wallet.name, destCurrency: wallet.currency });
+  await sendMessage(chatId, `To: ${wallet.name}\n\nEnter the amount (${data.sourceCurrency}):`, { replyMarkup: keyboard([CANCEL_ROW]) });
+}
+
+async function trStepAmountText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  const raw = text.trim().replace(/,/g, "");
+  if (!isValidDecimalString(raw) || Number(raw) <= 0) return sendMessage(chatId, "Enter a valid positive amount:");
+  const nextData = { ...data, amount: raw };
+  if (data.sourceCurrency !== data.destCurrency) {
+    await setSession(user.id, chatId, "tr.rate", nextData);
+    return sendMessage(chatId, `Exchange rate (${data.destCurrency} per 1 ${data.sourceCurrency}):`, { replyMarkup: keyboard([CANCEL_ROW]) });
+  }
+  await setSession(user.id, chatId, "tr.fee", nextData);
+  return sendMessage(chatId, "Fee, if any (or Skip):", { replyMarkup: keyboard([SKIP_ROW, CANCEL_ROW]) });
+}
+
+async function trStepRateText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  const raw = text.trim().replace(/,/g, "");
+  if (!isValidDecimalString(raw) || Number(raw) <= 0) return sendMessage(chatId, "Enter a valid rate:");
+  await setSession(user.id, chatId, "tr.fee", { ...data, rate: raw });
+  return sendMessage(chatId, "Fee, if any (or Skip):", { replyMarkup: keyboard([SKIP_ROW, CANCEL_ROW]) });
+}
+
+async function trAskConfirm(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  const lines = [
+    "Confirm transfer",
+    `${data.sourceName} → ${data.destName}`,
+    `Amount: ${money(data.amount as string)} ${data.sourceCurrency}`,
+    data.rate ? `Rate: ${data.rate}` : undefined,
+    `Fee: ${money((data.fee as string) ?? "0")}`,
+  ].filter(Boolean);
+  await setSession(user.id, chatId, "tr.confirm", data);
+  await sendMessage(chatId, lines.join("\n"), { replyMarkup: keyboard([[btn("✅ Confirm", "confirm:yes"), btn("✕ Cancel", "confirm:no")]]) });
+}
+
+async function trStepFeeText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  const raw = text.trim().replace(/,/g, "");
+  if (!isValidDecimalString(raw)) return sendMessage(chatId, "Enter a valid fee amount, or Skip:");
+  await trAskConfirm(chatId, user, { ...data, fee: raw });
+}
+
+async function trStepFeeSkip(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  await trAskConfirm(chatId, user, { ...data, fee: "0" });
+}
+
+async function trConfirm(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  try {
+    const transfer = await prisma.$transaction((tx) =>
+      createTransfer(tx, {
+        businessId: user.businessId,
+        userId: user.id,
+        sourceWalletId: data.sourceWalletId as string,
+        destWalletId: data.destWalletId as string,
+        amount: data.amount as string,
+        rate: data.rate as string | undefined,
+        fee: (data.fee as string) ?? "0",
+      })
+    );
+    await clearSession(user.id, chatId);
+    await sendMessage(chatId, `✅ Transferred — ${transfer.txnNo}`);
+    notifyAuditFeed(user.businessId, transferNotice({
+      txnNo: transfer.txnNo,
+      sourceName: data.sourceName as string, destName: data.destName as string,
+      sourceAmount: transfer.sourceAmount, sourceCurrency: data.sourceCurrency as string,
+      destAmount: transfer.destAmount, destCurrency: data.destCurrency as string,
+      createdByName: user.name,
+    }), chatId);
+    await showMenu(chatId, user);
+  } catch (e) {
+    await sendMessage(chatId, `❌ ${e instanceof ApiError ? e.message : "Something went wrong."}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Exchange flow (Buy/Sell THB against MMK)
+// ---------------------------------------------------------------------------
+
+async function startExchange(chatId: string, user: AuthUser) {
+  const branchId = await defaultBranchId(user);
+  if (!branchId) return sendMessage(chatId, "No branch is available for your account.");
+  await setSession(user.id, chatId, "ex.type", { branchId });
+  await sendMessage(chatId, "💱 Exchange\n\nWhich direction?", {
+    replyMarkup: keyboard([[btn("Buy THB (pay MMK)", "type:BUY_THB"), btn("Sell THB (get MMK)", "type:SELL_THB")], CANCEL_ROW]),
+  });
+}
+
+async function exStepType(chatId: string, user: AuthUser, data: Record<string, unknown>, type: string) {
+  const fromCurrency = type === "BUY_THB" ? "MMK" : "THB";
+  const toCurrency = type === "BUY_THB" ? "THB" : "MMK";
+  const { rows } = await walletButtons(user.businessId, data.branchId as string, fromCurrency);
+  if (rows.length === 0) return sendMessage(chatId, `No ${fromCurrency} wallet found.`);
+  await setSession(user.id, chatId, "ex.source", { ...data, type, fromCurrency, toCurrency });
+  await sendMessage(chatId, `Pay from which ${fromCurrency} wallet?`, { replyMarkup: keyboard([...rows, CANCEL_ROW]) });
+}
+
+async function exStepSource(chatId: string, user: AuthUser, data: Record<string, unknown>, walletId: string) {
+  const wallet = await prisma.wallet.findUnique({ where: { id: walletId } });
+  if (!wallet) return sendMessage(chatId, "Wallet not found.");
+  const { rows } = await walletButtons(user.businessId, data.branchId as string, data.toCurrency as string);
+  if (rows.length === 0) return sendMessage(chatId, `No ${data.toCurrency} wallet found.`);
+  await setSession(user.id, chatId, "ex.dest", { ...data, sourceWalletId: walletId, sourceName: wallet.name });
+  await sendMessage(chatId, `Receive into which ${data.toCurrency} wallet?`, { replyMarkup: keyboard([...rows, CANCEL_ROW]) });
+}
+
+async function exStepDest(chatId: string, user: AuthUser, data: Record<string, unknown>, walletId: string) {
+  const wallet = await prisma.wallet.findUnique({ where: { id: walletId } });
+  if (!wallet) return sendMessage(chatId, "Wallet not found.");
+  await setSession(user.id, chatId, "ex.amount", { ...data, destWalletId: walletId, destName: wallet.name });
+  await sendMessage(chatId, `Amount to pay (${data.fromCurrency}):`, { replyMarkup: keyboard([CANCEL_ROW]) });
+}
+
+async function exStepAmountText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  const raw = text.trim().replace(/,/g, "");
+  if (!isValidDecimalString(raw) || Number(raw) <= 0) return sendMessage(chatId, "Enter a valid positive amount:");
+  const board = await prisma.exchangeRate.findFirst({
+    where: { businessId: user.businessId, pair: "THB/MMK", active: true },
+    orderBy: { effectiveAt: "desc" },
+  });
+  const suggested = board ? (data.type === "BUY_THB" ? board.buyRate : board.sellRate) : undefined;
+  await setSession(user.id, chatId, "ex.rate", { ...data, amount: raw });
+  const rows = suggested ? [[btn(`Use board rate: ${suggested}`, `rate:${suggested}`)], CANCEL_ROW] : [CANCEL_ROW];
+  await sendMessage(chatId, `Rate (${data.toCurrency} per 1 ${data.fromCurrency})?`, { replyMarkup: keyboard(rows) });
+}
+
+async function exAskConfirm(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  const lines = [
+    "Confirm exchange",
+    data.type === "BUY_THB" ? "Buy THB" : "Sell THB",
+    `${data.sourceName} → ${data.destName}`,
+    `Amount: ${money(data.amount as string)} ${data.fromCurrency}`,
+    `Rate: ${data.rate}`,
+  ];
+  await setSession(user.id, chatId, "ex.confirm", data);
+  await sendMessage(chatId, lines.join("\n"), { replyMarkup: keyboard([[btn("✅ Confirm", "confirm:yes"), btn("✕ Cancel", "confirm:no")]]) });
+}
+
+async function exStepRateText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  const raw = text.trim().replace(/,/g, "");
+  if (!isValidDecimalString(raw) || Number(raw) <= 0) return sendMessage(chatId, "Enter a valid rate:");
+  await exAskConfirm(chatId, user, { ...data, rate: raw });
+}
+
+async function exConfirm(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  try {
+    const ex = await prisma.$transaction((tx) =>
+      createExchange(tx, {
+        businessId: user.businessId,
+        branchId: data.branchId as string,
+        userId: user.id,
+        type: data.type as string,
+        fromCurrency: data.fromCurrency as string,
+        toCurrency: data.toCurrency as string,
+        fromAmount: toMinor(data.amount as string),
+        rate: data.rate as string,
+        serviceFee: 0n,
+        additionalCost: 0n,
+        sourceWalletId: data.sourceWalletId as string,
+        destWalletId: data.destWalletId as string,
+      })
+    );
+    await clearSession(user.id, chatId);
+    await sendMessage(chatId, `✅ Exchange completed — ${ex.txnNo}`);
+    notifyAuditFeed(user.businessId, exchangeNotice({
+      txnNo: ex.txnNo, type: ex.type,
+      fromAmount: ex.fromAmount, fromCurrency: ex.fromCurrency,
+      toAmount: ex.toAmount, toCurrency: ex.toCurrency,
+      createdByName: user.name,
+    }), chatId);
+    await showMenu(chatId, user);
+  } catch (e) {
+    await sendMessage(chatId, `❌ ${e instanceof ApiError ? e.message : "Something went wrong."}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 3D flow
+// ---------------------------------------------------------------------------
+
+async function startThreeD(chatId: string, user: AuthUser) {
+  const branchId = await defaultBranchId(user);
+  if (!branchId) return sendMessage(chatId, "No branch is available for your account.");
+  const sessions = await prisma.threeDSession.findMany({
+    where: { businessId: user.businessId, status: "OPEN" },
+    orderBy: { drawDate: "desc" },
+    take: 10,
+  });
+  if (sessions.length === 0) return sendMessage(chatId, "No open 3D session. Open one in Wallet Note first.");
+  const rows = sessions.map((s) => [btn(`${s.name} (${s.drawDate})`, `s:${s.id}`)]);
+  await setSession(user.id, chatId, "3d.session", { branchId });
+  await sendMessage(chatId, "🔢 3D\n\nWhich session?", { replyMarkup: keyboard([...rows, CANCEL_ROW]) });
+}
+
+async function tdStepSession(chatId: string, user: AuthUser, data: Record<string, unknown>, sessionId: string) {
+  const session = await prisma.threeDSession.findUnique({ where: { id: sessionId } });
+  if (!session) return sendMessage(chatId, "Session not found.");
+  await setSession(user.id, chatId, "3d.lines", { ...data, sessionId, sessionName: session.name });
+  await sendMessage(
+    chatId,
+    `Session: ${session.name}\n\nSend the numbers, one per line:\n123=5000\n456=3000`,
+    { replyMarkup: keyboard([CANCEL_ROW]) }
+  );
+}
+
+async function tdStepLinesText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  const parsed = parseBulkLines(text);
+  if (parsed.errors.length) {
+    return sendMessage(chatId, `Invalid lines:\n${parsed.errors.map((e) => `Line ${e.line}: "${e.text}" — ${e.message}`).join("\n")}`);
+  }
+  if (parsed.rows.length === 0) return sendMessage(chatId, "No valid lines found. Try again, e.g. 123=5000");
+  for (const r of parsed.rows) {
+    if (!isThreeDigit(r.number)) return sendMessage(chatId, `"${r.number}" must be exactly three digits.`);
+  }
+  const total = parsed.rows.reduce((sum, r) => sum + Number(r.amount.replace(/,/g, "")), 0);
+  const lines = [
+    `Session: ${data.sessionName}`,
+    `${parsed.rows.length} number(s), total ${total.toLocaleString()}`,
+    ...parsed.rows.map((r) => `${r.number} = ${r.amount}`),
+  ];
+  await setSession(user.id, chatId, "3d.confirm", { ...data, rows: parsed.rows });
+  await sendMessage(chatId, lines.join("\n"), { replyMarkup: keyboard([[btn("✅ Confirm", "confirm:yes"), btn("✕ Cancel", "confirm:no")]]) });
+}
+
+async function tdConfirm(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  try {
+    const rows = data.rows as { number: string; amount: string }[];
+    const created = await prisma.$transaction((tx) =>
+      createThreeDBets(tx, {
+        businessId: user.businessId,
+        branchId: data.branchId as string,
+        userId: user.id,
+        sessionId: data.sessionId as string,
+        rows,
+        commissionRate: user.commissionRate ?? "0",
+      })
+    );
+    await clearSession(user.id, chatId);
+    await sendMessage(chatId, `✅ Saved ${created.length} record(s)`);
+    const total = created.reduce((sum, t) => sum + t.betAmount, 0n);
+    notifyAuditFeed(user.businessId, threeDNotice({
+      count: created.length, total, sessionName: data.sessionName as string, createdByName: user.name,
+    }), chatId);
+    await showMenu(chatId, user);
+  } catch (e) {
+    await sendMessage(chatId, `❌ ${e instanceof ApiError ? e.message : "Something went wrong."}`);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Main dispatcher
+// ---------------------------------------------------------------------------
+
+const FLOW_REQUIRED_PERM: Record<string, string> = {
+  income: "income_expense.create",
+  expense: "income_expense.create",
+  withdraw: "wallet.withdraw",
+  transfer: "wallet.transfer",
+  exchange: "exchange.create",
+  "3d": "three_d.create",
+};
+
+/** ownerUserId identifies whose bot this webhook belongs to — resolved from
+ *  the webhook URL by the caller (one bot = one Wallet Note user). */
+export async function handleUpdate(update: TgUpdate, ownerUserId: string) {
+  if (update.message) return handleMessage(ownerUserId, update.message.chat.id.toString(), update.message.text ?? "");
+  if (update.callback_query) return handleCallback(ownerUserId, update.callback_query);
+}
+
+async function handleMessage(ownerUserId: string, chatId: string, text: string) {
+  const resolved = await resolveOwner(ownerUserId, chatId);
+  if (resolved.kind === "not_found") return sendMessage(chatId, "This bot isn't set up correctly. Contact the Wallet Note admin.");
+  if (resolved.kind === "chat_mismatch") return sendMessage(chatId, "This bot is already linked to a different Telegram account. Unlink it in Wallet Note first if this is you.");
+  const { user, justLinked } = resolved;
+  if (justLinked) return showMenu(chatId, user, `✅ Linked as ${user.name} (${user.roleName}).\n\nQuick start:`);
+
+  const trimmed = text.trim();
+  if (trimmed === "/start" || trimmed === "/menu" || trimmed === "/cancel") return showMenu(chatId, user);
+
+  const session = await getSession(ownerUserId, chatId);
+  if (!session) return sendMessage(chatId, "Tap /menu to start.");
+
+  const [flow, step] = session.step.split(".");
+  try {
+    if (flow === "ie") {
+      if (step === "category_new") return ieStepCategoryNewText(chatId, user, session.data, trimmed);
+      if (step === "amount") return ieStepAmountText(chatId, user, session.data, trimmed);
+      if (step === "description") return ieStepDescriptionText(chatId, user, session.data, trimmed);
+    }
+    if (flow === "tr") {
+      if (step === "amount") return trStepAmountText(chatId, user, session.data, trimmed);
+      if (step === "rate") return trStepRateText(chatId, user, session.data, trimmed);
+      if (step === "fee") return trStepFeeText(chatId, user, session.data, trimmed);
+    }
+    if (flow === "ex") {
+      if (step === "amount") return exStepAmountText(chatId, user, session.data, trimmed);
+      if (step === "rate") return exStepRateText(chatId, user, session.data, trimmed);
+    }
+    if (flow === "3d") {
+      if (step === "lines") return tdStepLinesText(chatId, user, session.data, trimmed);
+    }
+  } catch (e) {
+    await sendMessage(chatId, `❌ ${e instanceof ApiError ? e.message : "Something went wrong."}`);
+    return;
+  }
+  return sendMessage(chatId, "Please use the buttons above, or /cancel to start over.");
+}
+
+async function handleCallback(ownerUserId: string, cq: { id: string; message?: { chat: { id: number } }; data?: string }) {
+  const chatId = cq.message?.chat.id.toString();
+  const data = cq.data ?? "";
+  if (!chatId) return answerCallbackQuery(cq.id);
+  await answerCallbackQuery(cq.id);
+
+  const resolved = await resolveOwner(ownerUserId, chatId);
+  if (resolved.kind === "not_found") return sendMessage(chatId, "This bot isn't set up correctly. Contact the Wallet Note admin.");
+  if (resolved.kind === "chat_mismatch") return sendMessage(chatId, "This bot is already linked to a different Telegram account. Unlink it in Wallet Note first if this is you.");
+  const { user, justLinked } = resolved;
+  if (justLinked) return showMenu(chatId, user, `✅ Linked as ${user.name} (${user.roleName}).\n\nQuick start:`);
+
+  if (data === "cancel") {
+    await clearSession(ownerUserId, chatId);
+    return showMenu(chatId, user, "Cancelled.");
+  }
+
+  if (data.startsWith("menu:")) {
+    const key = data.slice(5);
+    const perm = FLOW_REQUIRED_PERM[key];
+    if (perm && !can(user, perm)) return sendMessage(chatId, "You don't have permission for that.");
+    if (key === "income") return startIncomeExpense(chatId, user, "INCOME");
+    if (key === "expense") return startIncomeExpense(chatId, user, "EXPENSE");
+    if (key === "withdraw") return startIncomeExpense(chatId, user, "WITHDRAW");
+    if (key === "transfer") return startTransfer(chatId, user);
+    if (key === "exchange") return startExchange(chatId, user);
+    if (key === "3d") return startThreeD(chatId, user);
+    return;
+  }
+
+  const session = await getSession(ownerUserId, chatId);
+  if (!session) return sendMessage(chatId, "Tap /menu to start.");
+  const [flow, step] = session.step.split(".");
+
+  try {
+    if (flow === "ie") {
+      if (step === "wallet" && data.startsWith("w:")) return ieStepWallet(chatId, user, session.data, data.slice(2));
+      if (step === "category" && data.startsWith("cat:")) return ieStepCategoryPick(chatId, user, session.data, data.slice(4));
+      if (step === "description" && data === "skip") return ieStepDescriptionSkip(chatId, user, session.data);
+      if (step === "confirm" && data === "confirm:yes") return ieConfirm(chatId, user, session.data);
+      if (step === "confirm" && data === "confirm:no") return showMenu(chatId, user, "Cancelled.");
+    }
+    if (flow === "tr") {
+      if (step === "source" && data.startsWith("w:")) return trStepSource(chatId, user, session.data, data.slice(2));
+      if (step === "dest" && data.startsWith("w:")) return trStepDest(chatId, user, session.data, data.slice(2));
+      if (step === "fee" && data === "skip") return trStepFeeSkip(chatId, user, session.data);
+      if (step === "confirm" && data === "confirm:yes") return trConfirm(chatId, user, session.data);
+      if (step === "confirm" && data === "confirm:no") return showMenu(chatId, user, "Cancelled.");
+    }
+    if (flow === "ex") {
+      if (step === "type" && data.startsWith("type:")) return exStepType(chatId, user, session.data, data.slice(5));
+      if (step === "source" && data.startsWith("w:")) return exStepSource(chatId, user, session.data, data.slice(2));
+      if (step === "dest" && data.startsWith("w:")) return exStepDest(chatId, user, session.data, data.slice(2));
+      if (step === "rate" && data.startsWith("rate:")) return exAskConfirm(chatId, user, { ...session.data, rate: data.slice(5) });
+      if (step === "confirm" && data === "confirm:yes") return exConfirm(chatId, user, session.data);
+      if (step === "confirm" && data === "confirm:no") return showMenu(chatId, user, "Cancelled.");
+    }
+    if (flow === "3d") {
+      if (step === "session" && data.startsWith("s:")) return tdStepSession(chatId, user, session.data, data.slice(2));
+      if (step === "confirm" && data === "confirm:yes") return tdConfirm(chatId, user, session.data);
+      if (step === "confirm" && data === "confirm:no") return showMenu(chatId, user, "Cancelled.");
+    }
+  } catch (e) {
+    await sendMessage(chatId, `❌ ${e instanceof ApiError ? e.message : "Something went wrong."}`);
+    return;
+  }
+}

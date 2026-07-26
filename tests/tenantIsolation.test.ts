@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
-import { postLedger, reverseLedgerEntries } from "../src/services/walletService";
+import { postLedger, reverseLedgerEntries, createTransfer } from "../src/services/walletService";
 import { moveStock } from "../src/services/stockService";
 import { reverseExchange } from "../src/services/exchangeService";
+import { createIncomeExpenseEntry } from "../src/services/incomeExpenseService";
 import type { Tx } from "../src/lib/prisma";
 
 describe("tenant isolation", () => {
@@ -77,5 +78,43 @@ describe("tenant isolation", () => {
       userId: "user-a",
       businessId: "business-a",
     })).rejects.toThrow("Exchange transaction not found");
+  });
+
+  it("rejects a transfer where either wallet belongs to another business", async () => {
+    const tx = {
+      wallet: {
+        findUnique: vi.fn()
+          .mockResolvedValueOnce({ id: "wallet-a", businessId: "business-a", currency: "MMK" })
+          .mockResolvedValueOnce({ id: "wallet-b", businessId: "business-b", currency: "MMK" }),
+      },
+    } as unknown as Tx;
+
+    await expect(createTransfer(tx, {
+      businessId: "business-a",
+      userId: "user-a",
+      sourceWalletId: "wallet-a",
+      destWalletId: "wallet-b",
+      amount: "100",
+      fee: "0",
+    })).rejects.toThrow("Wallet not found");
+  });
+
+  it("rejects an income/expense entry against a wallet from another business", async () => {
+    const tx = {
+      dailyClose: { findUnique: vi.fn().mockResolvedValue(null) },
+      wallet: {
+        findUnique: vi.fn().mockResolvedValue({ id: "wallet-b", businessId: "business-b", currency: "MMK" }),
+      },
+    } as unknown as Tx;
+
+    await expect(createIncomeExpenseEntry(tx, {
+      businessId: "business-a",
+      branchId: "branch-a",
+      userId: "user-a",
+      type: "WITHDRAW",
+      amount: 100n,
+      walletId: "wallet-b",
+      date: "2026-01-01",
+    })).rejects.toThrow("Wallet not found");
   });
 });

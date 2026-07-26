@@ -85,10 +85,33 @@ model User {
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
 
+  // Telegram bot: each user brings their own bot (their own token from
+  // @BotFather). telegramChatId auto-binds to whoever first messages that
+  // bot; telegramWebhookSecret is what we ask Telegram to echo back so we
+  // know a webhook call genuinely came from this user's bot.
+  telegramBotToken      String?   @unique
+  telegramBotUsername   String?
+  telegramWebhookSecret String?   @unique
+  telegramChatId        String?
+
   branches     UserBranch[]
   sessions     AuthSession[]
   auditLogs    AuditLog[]
   notifications Notification[]
+}
+
+// Per-chat conversation state for the Telegram bot's guided entry flows
+// (e.g. "waiting for amount" while creating an Income entry). Scoped by
+// owner user too: a private chat's id is the Telegram account's own id, so
+// the same person could in principle message two different users' bots.
+model TelegramSession {
+  ownerUserId String
+  chatId      String
+  step        String
+  data        String   @default("{}") // JSON blob of collected answers
+  updatedAt   DateTime @updatedAt
+
+  @@id([ownerUserId, chatId])
 }
 
 model UserBranch {

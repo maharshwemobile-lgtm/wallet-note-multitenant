@@ -7,6 +7,7 @@ import {
   LayoutDashboard, Hash, ArrowLeftRight, Wallet, HandCoins, FileBarChart,
   Users, UserCog, Settings, ScrollText, Info, Menu, X, LogOut,
   Moon, Sun, Receipt, Plus, ShoppingCart, Package, Boxes, Truck, Building2,
+  Send, MinusCircle, MessageCircle,
 } from "lucide-react";
 import { api } from "@/lib/client";
 import { ToastProvider, cn } from "./ui";
@@ -59,6 +60,8 @@ const NAV = [
   { href: "/three-d", label: "3D Records", icon: Hash, perm: "three_d.view" },
   { href: "/exchange", label: "Exchange", icon: ArrowLeftRight, perm: "exchange.view", walletNote: true },
   { href: "/wallets", label: "Wallets", icon: Wallet, perm: "wallet.view", walletNote: true },
+  { href: "/transfers", label: "Transfer", icon: Send, perm: "wallet.transfer", walletNote: true },
+  { href: "/withdraw", label: "Withdraw", icon: MinusCircle, perm: "wallet.withdraw", walletNote: true },
   { href: "/credit", label: "Credit & Payable", icon: HandCoins, perm: "credit.view", walletNote: true },
   { href: "/income-expense", label: "Income & Expense", icon: Receipt, perm: "income_expense.view", walletNote: true },
   { href: "/reports", label: "Reports", icon: FileBarChart, perm: "report.view" },
@@ -67,6 +70,7 @@ const NAV = [
   { href: "/users", label: "Users & Roles", icon: UserCog, perm: "users.manage" },
   { href: "/settings", label: "Settings", icon: Settings, perm: "settings.manage" },
   { href: "/audit", label: "Audit Logs", icon: ScrollText, perm: "audit.view" },
+  { href: "/telegram", label: "Telegram", icon: MessageCircle, perm: null },
   { href: "/about", label: "About Us", icon: Info, perm: null },
 ];
 

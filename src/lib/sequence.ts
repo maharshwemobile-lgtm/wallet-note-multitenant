@@ -8,6 +8,7 @@ const DEFAULT_PREFIXES: Record<string, string> = {
   PAYABLE: "PAY",
   INCOME: "INC",
   EXPENSE: "EXP",
+  WITHDRAW: "WTH",
   CLOSE: "CLS",
   PURCHASE: "PUR",
   SALE: "SAL",

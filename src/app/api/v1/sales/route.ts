@@ -6,6 +6,7 @@ import { assertBranchAccess } from "@/lib/tenant";
 import { toMinor } from "@/lib/money";
 import { createSale } from "@/services/posService";
 import { todayBusinessDate, isValidBusinessDate } from "@/lib/dates";
+import { notifyAuditFeed, saleNotice } from "@/lib/telegramNotify";
 
 export const GET = withAuth("sale.view", async ({ req, user }) => {
   const sp = req.nextUrl.searchParams;
@@ -83,5 +84,6 @@ export const POST = withAuth("sale.create", async ({ req, user }) => {
       notes: body.notes,
     })
   );
+  notifyAuditFeed(user.businessId, saleNotice({ txnNo: sale.txnNo, total: sale.total, profit: sale.profit, createdByName: user.name }));
   return json(sale, { status: 201 });
 });

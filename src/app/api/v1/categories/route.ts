@@ -1,6 +1,7 @@
 import { z } from "zod";
-import { withAuth, json, parseBody } from "@/lib/api";
+import { withAuth, json, parseBody, ApiError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
+import { can } from "@/lib/auth";
 
 export const GET = withAuth("income_expense.view", async ({ req, user }) => {
   const type = req.nextUrl.searchParams.get("type") ?? undefined;
@@ -16,7 +17,11 @@ const schema = z.object({
   name: z.string().min(1),
 });
 
-export const POST = withAuth("settings.manage", async ({ req, user }) => {
+// Anyone who can record income/expense entries may add a category on the fly;
+// full category management otherwise lives behind settings.manage.
+export const POST = withAuth(null, async ({ req, user }) => {
+  if (!can(user, "income_expense.create") && !can(user, "settings.manage"))
+    throw new ApiError(403, "You do not have permission to perform this action");
   const body = await parseBody(req, schema);
   const category = await prisma.category.upsert({
     where: { businessId_type_name: { businessId: user.businessId, type: body.type, name: body.name } },

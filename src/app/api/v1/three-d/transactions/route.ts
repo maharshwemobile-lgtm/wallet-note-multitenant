@@ -3,11 +3,8 @@ import { withAuth, json, parseBody, ApiError, pagination } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { branchScope } from "@/lib/auth";
 import { assertBranchAccess } from "@/lib/tenant";
-import { toMinor, isThreeDigit } from "@/lib/money";
-import { computeThreeD, parseBulkLines } from "@/services/threeDService";
-import { nextNumber } from "@/lib/sequence";
-import { audit } from "@/lib/audit";
-import { assertDateOpen } from "@/services/closeGuard";
+import { parseBulkLines, createThreeDBets } from "@/services/threeDService";
+import { notifyAuditFeed, threeDNotice } from "@/lib/telegramNotify";
 
 export const GET = withAuth("three_d.view", async ({ req, user }) => {
   const sp = req.nextUrl.searchParams;
@@ -71,13 +68,6 @@ export const POST = withAuth("three_d.create", async ({ req, user }) => {
   const body = await parseBody(req, createSchema);
   await assertBranchAccess(user, body.branchId);
 
-  const session = await prisma.threeDSession.findUnique({ where: { id: body.sessionId } });
-  if (!session || session.businessId !== user.businessId) throw new ApiError(404, "Session not found");
-  if (session.status !== "OPEN") throw new ApiError(422, `Session is ${session.status.toLowerCase()} — records can only be added to open sessions`);
-
-  if (session.branchId && session.branchId !== body.branchId)
-    throw new ApiError(422, "Session belongs to a different branch");
-
   let rows = body.rows ?? [];
   if (body.bulkText) {
     const parsed = parseBulkLines(body.bulkText);
@@ -86,59 +76,29 @@ export const POST = withAuth("three_d.create", async ({ req, user }) => {
     }
     rows = rows.concat(parsed.rows);
   }
-  if (rows.length === 0) throw new ApiError(422, "No records to save");
-  for (const r of rows) {
-    if (!isThreeDigit(r.number)) throw new ApiError(422, `Invalid 3D number: "${r.number}" (must be 000–999)`);
-  }
 
-  const odds = body.odds ?? session.defaultOdds;
   const commissionRate = body.commissionRate ?? user.commissionRate ?? "0";
 
-  const created = await prisma.$transaction(async (tx) => {
-    await assertDateOpen(tx, body.branchId, session.drawDate);
-    if (body.customerId) {
-      const customer = await tx.contact.findFirst({
-        where: { id: body.customerId, businessId: user.businessId, deletedAt: null },
-        select: { id: true },
-      });
-      if (!customer) throw new ApiError(404, "Customer not found");
-    }
-    const out = [];
-    for (const r of rows) {
-      const betAmount = toMinor(r.amount);
-      if (betAmount <= 0n) throw new ApiError(422, "Bet amount must be greater than zero");
-      const calc = computeThreeD(betAmount, odds, commissionRate);
-      const txnNo = await nextNumber(tx, user.businessId, "THREE_D");
-      out.push(
-        await tx.threeDTransaction.create({
-          data: {
-            txnNo,
-            businessId: user.businessId,
-            branchId: body.branchId,
-            sessionId: session.id,
-            agentId: user.id,
-            customerId: body.customerId,
-            customerName: body.customerName,
-            customerPhone: body.customerPhone,
-            number: r.number,
-            betAmount,
-            odds,
-            potentialPayout: calc.potentialPayout,
-            commissionRate,
-            commissionAmount: calc.commissionAmount,
-            netAmount: calc.netAmount,
-            notes: body.notes,
-            createdById: user.id,
-          },
-        })
-      );
-    }
-    await audit(tx, {
-      businessId: user.businessId, userId: user.id, branchId: body.branchId,
-      action: "CREATE", module: "three_d", resourceType: "ThreeDTransaction",
-      after: { count: out.length, sessionId: session.id },
-    });
-    return out;
-  });
+  const created = await prisma.$transaction((tx) =>
+    createThreeDBets(tx, {
+      businessId: user.businessId,
+      branchId: body.branchId,
+      userId: user.id,
+      sessionId: body.sessionId,
+      rows,
+      commissionRate,
+      customerId: body.customerId,
+      customerName: body.customerName,
+      customerPhone: body.customerPhone,
+      odds: body.odds,
+      notes: body.notes,
+    })
+  );
+  const session = await prisma.threeDSession.findUnique({ where: { id: body.sessionId }, select: { name: true } });
+  const total = created.reduce((sum, t) => sum + t.betAmount, 0n);
+  notifyAuditFeed(
+    user.businessId,
+    threeDNotice({ count: created.length, total, sessionName: session?.name ?? body.sessionId, createdByName: user.name })
+  );
   return json({ created: created.length, transactions: created }, { status: 201 });
 });
