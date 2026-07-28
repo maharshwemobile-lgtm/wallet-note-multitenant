@@ -726,11 +726,31 @@ async function ncStepAmountText(chatId: string, user: AuthUser, data: Record<str
   await sendMessage(chatId, "Note (or Skip):", { replyMarkup: keyboard([SKIP_ROW, CANCEL_ROW]) });
 }
 
+/** Ask which wallet the cash was handed out from. Handing out cash is optional —
+ *  a credit sale moves goods, not money — so "no wallet" stays a first-class choice. */
+async function ncAskWallet(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  const { rows } = await walletButtons(user.businessId, data.branchId as string, data.currency as string);
+  await setSession(user.id, chatId, "nc.wallet", data);
+  await sendMessage(
+    chatId,
+    "Which wallet did the cash come out of?\n\nPick a wallet only if you actually handed money over — it is deducted straight away. Choose \"No wallet\" for goods sold on credit.",
+    { replyMarkup: keyboard([...rows, [btn("⏭ No wallet (goods on credit)", "w:none")], CANCEL_ROW]) }
+  );
+}
+
+async function ncStepWallet(chatId: string, user: AuthUser, data: Record<string, unknown>, walletId: string) {
+  if (walletId === "none") return ncAskConfirm(chatId, user, data);
+  const wallet = await prisma.wallet.findUnique({ where: { id: walletId } });
+  if (!wallet || wallet.businessId !== user.businessId) return sendMessage(chatId, "Wallet not found.");
+  await ncAskConfirm(chatId, user, { ...data, walletId, walletName: wallet.name });
+}
+
 async function ncAskConfirm(chatId: string, user: AuthUser, data: Record<string, unknown>) {
   const lines = [
     "Confirm new credit",
     `Customer: ${data.customerName}`,
     `Amount: ${money(data.amount as string)} ${data.currency}`,
+    data.walletName ? `Paid out from: ${data.walletName}` : "Paid out from: — (goods on credit, no cash moved)",
     data.notes ? `Note: ${data.notes}` : undefined,
   ].filter(Boolean);
   await setSession(user.id, chatId, "nc.confirm", data);
@@ -738,11 +758,11 @@ async function ncAskConfirm(chatId: string, user: AuthUser, data: Record<string,
 }
 
 async function ncStepNoteText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
-  await ncAskConfirm(chatId, user, { ...data, notes: text.trim() });
+  await ncAskWallet(chatId, user, { ...data, notes: text.trim() });
 }
 
 async function ncStepNoteSkip(chatId: string, user: AuthUser, data: Record<string, unknown>) {
-  await ncAskConfirm(chatId, user, data);
+  await ncAskWallet(chatId, user, data);
 }
 
 async function ncConfirm(chatId: string, user: AuthUser, data: Record<string, unknown>) {
@@ -757,6 +777,7 @@ async function ncConfirm(chatId: string, user: AuthUser, data: Record<string, un
         currency: data.currency as string,
         creditDate: todayBusinessDate(),
         notes: data.notes as string | undefined,
+        walletId: data.walletId as string | undefined,
       })
     );
     await clearSession(user.id, chatId);
@@ -932,6 +953,7 @@ async function handleCallback(ownerUserId: string, cq: { id: string; message?: {
     if (flow === "nc") {
       if (step === "customer" && data.startsWith("c:")) return ncStepCustomerPick(chatId, user, session.data, data.slice(2));
       if (step === "note" && data === "skip") return ncStepNoteSkip(chatId, user, session.data);
+      if (step === "wallet" && data.startsWith("w:")) return ncStepWallet(chatId, user, session.data, data.slice(2));
       if (step === "confirm" && data === "confirm:yes") return ncConfirm(chatId, user, session.data);
       if (step === "confirm" && data === "confirm:no") return showMenu(chatId, user, "Cancelled.");
     }

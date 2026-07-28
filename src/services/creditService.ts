@@ -7,9 +7,14 @@ import { audit } from "@/lib/audit";
 // Shared payment logic for receivable collection and payable payment.
 // A collection debits (money in) a wallet; a payable payment credits (money out).
 
-/** Record a new credit sale — money a customer now owes the business. No wallet
- *  movement happens here (nothing was paid yet); collection happens later via
- *  collectReceivable. */
+/** Record a new credit — money a customer now owes the business.
+ *
+ *  Two shapes of credit exist:
+ *   - A credit *sale*: goods left the shop, no cash moved. Omit walletId and
+ *     nothing is posted to the ledger; collection happens later via collectReceivable.
+ *   - A cash *advance*: money really left one of our wallets. Pass walletId and the
+ *     amount is posted out of that wallet immediately, so the wallet balance and its
+ *     ledger match reality. The debt is still recorded at its full amount. */
 export async function createReceivable(
   tx: Tx,
   opts: {
@@ -23,6 +28,8 @@ export async function createReceivable(
     dueDate?: string;
     reference?: string;
     notes?: string;
+    /** Wallet the cash was handed out from. Omit for a credit sale. */
+    walletId?: string;
   }
 ) {
   if (opts.amount <= 0n) throw new ApiError(422, "Amount must be greater than zero");
@@ -48,10 +55,24 @@ export async function createReceivable(
       createdById: opts.userId,
     },
   });
+  // Cash advance: the money physically left a wallet, so record the outflow now.
+  if (opts.walletId) {
+    await postLedger(tx, {
+      businessId: opts.businessId,
+      walletId: opts.walletId,
+      direction: "CREDIT",
+      amount: opts.amount,
+      refType: "CREDIT_DISBURSE",
+      refId: rec.id,
+      description: `Cash given for ${txnNo} (${customer.name})`,
+      createdById: opts.userId,
+    });
+  }
+
   await audit(tx, {
     businessId: opts.businessId, userId: opts.userId, branchId: opts.branchId,
     action: "CREATE", module: "credit", resourceType: "Receivable", resourceId: rec.id,
-    after: { txnNo, customer: customer.name, amount: opts.amount },
+    after: { txnNo, customer: customer.name, amount: opts.amount, walletId: opts.walletId ?? null },
   });
   return rec;
 }
