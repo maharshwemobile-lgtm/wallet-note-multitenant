@@ -30,7 +30,7 @@ function CreditContent() {
   const { push } = useToast();
   const { hasPerm, defaultBranchId } = useAuth();
 
-  const [form, setForm] = useState({ contactId: "", amount: "", dueDate: "", reference: "", notes: "", category: "" });
+  const [form, setForm] = useState({ contactId: "", amount: "", dueDate: "", reference: "", notes: "", category: "", walletId: "" });
   const [pay, setPay] = useState({ amount: "", walletId: "", notes: "" });
 
   const isRec = tab === "receivable";
@@ -61,12 +61,12 @@ function CreditContent() {
           dueDate: form.dueDate || undefined,
           reference: form.reference || undefined,
           notes: form.notes || undefined,
-          ...(isRec ? {} : { category: form.category || undefined }),
+          ...(isRec ? { walletId: form.walletId || undefined } : { category: form.category || undefined }),
         },
       });
       push(isRec ? "Customer debt recorded" : "Payable recorded");
       setShowNew(false);
-      setForm({ contactId: "", amount: "", dueDate: "", reference: "", notes: "", category: "" });
+      setForm({ contactId: "", amount: "", dueDate: "", reference: "", notes: "", category: "", walletId: "" });
       load();
     } catch (e) {
       push(e instanceof Error ? e.message : "Failed", "error");
@@ -198,6 +198,21 @@ function CreditContent() {
             <Input label="Due date" type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} />
           </div>
           {!isRec && <Input label="Expense category" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Rent" />}
+          {isRec && (
+            <>
+              <Select label="ငွေထုတ်ပေးမည့် Wallet (optional)" value={form.walletId} onChange={(e) => setForm({ ...form, walletId: e.target.value })}>
+                <option value="">— Wallet မရွေး (ငွေမပေးရသေး) —</option>
+                {wallets.map((w) => (
+                  <option key={w.id} value={w.id}>{w.name} ({fmtMoney(w.currentBalance)} {w.currency})</option>
+                ))}
+              </Select>
+              {form.walletId ? (
+                <p className="text-xs text-amber-600 dark:text-amber-400">
+                  ရွေးထားသော Wallet ထဲမှ ချက်ချင်းနုတ်မည် — အကြွေး UNPAID အဖြစ် မှတ်သားမည်
+                </p>
+              ) : null}
+            </>
+          )}
           <Input label="Reference" value={form.reference} onChange={(e) => setForm({ ...form, reference: e.target.value })} />
           <Input label="Notes" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           <div className="flex justify-end gap-2">
