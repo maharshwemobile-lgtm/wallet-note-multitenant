@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Building2, RefreshCw, Search, ShieldCheck, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
-import { Button, Card, Input, Select } from "@/components/ui";
+import { Button, Card, Input, Select, Spinner } from "@/components/ui";
 import { fmtDateTime } from "@/lib/format";
 
 const SECRET_STORAGE_KEY = "wn_admin_secret";
@@ -54,6 +54,8 @@ export default function AdminPage() {
   );
   const [secretInput, setSecretInput] = useState("");
   const [authError, setAuthError] = useState("");
+  // null = not yet probed, true = session is enough, false = session refused
+  const [sessionAllowed, setSessionAllowed] = useState<boolean | null>(null);
   const [data, setData] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -64,19 +66,26 @@ export default function AdminPage() {
   const userAuditRef = useRef<HTMLElement>(null);
   const activityAuditRef = useRef<HTMLElement>(null);
 
+  // An Owner who is already signed in is authorised by their session, so the passcode
+  // prompt only appears when there is no session to rely on. `key` is empty in that case.
   const load = useCallback(async (key: string) => {
     setLoading(true);
     try {
-      const response = await fetch("/api/admin/stats", { cache: "no-store", headers: { "x-admin-secret": key } });
+      const response = await fetch("/api/admin/stats", {
+        cache: "no-store",
+        headers: key ? { "x-admin-secret": key } : undefined,
+      });
       const body = await response.json();
       if (response.status === 401) {
         window.sessionStorage.removeItem(SECRET_STORAGE_KEY);
         setSecret(null);
-        setAuthError("Wrong passcode.");
+        setSessionAllowed(false);
+        setAuthError(key ? "Wrong passcode." : "");
         return;
       }
       if (!response.ok || !body.ok) throw new Error(body.error || "Unable to load statistics");
       setData(body.data);
+      setSessionAllowed(true);
       setError("");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load statistics");
@@ -85,15 +94,24 @@ export default function AdminPage() {
     }
   }, []);
 
+  // Try the signed-in session once on mount; fall back to the passcode if it is refused.
+  // Deferred like the poll below so the fetch does not set state during the effect body.
   useEffect(() => {
-    if (!secret) return;
-    const firstLoad = window.setTimeout(() => load(secret), 0);
-    const timer = window.setInterval(() => load(secret), 30_000);
+    if (secret || sessionAllowed !== null) return undefined;
+    const probe = window.setTimeout(() => load(""), 0);
+    return () => window.clearTimeout(probe);
+  }, [load, secret, sessionAllowed]);
+
+  useEffect(() => {
+    if (!secret && !sessionAllowed) return;
+    const key = secret ?? "";
+    const firstLoad = window.setTimeout(() => load(key), 0);
+    const timer = window.setInterval(() => load(key), 30_000);
     return () => {
       window.clearTimeout(firstLoad);
       window.clearInterval(timer);
     };
-  }, [load, secret]);
+  }, [load, secret, sessionAllowed]);
 
   function unlock() {
     if (!secretInput.trim()) return;
@@ -135,7 +153,16 @@ export default function AdminPage() {
       log.resourceType?.toLowerCase().includes(activityNeedle))
   );
 
-  if (!secret) {
+  // Still probing the session — don't flash the passcode form at an Owner who will not need it.
+  if (!secret && sessionAllowed === null) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-950">
+        <Spinner />
+      </main>
+    );
+  }
+
+  if (!secret && !sessionAllowed) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-950">
         <Card className="w-full max-w-sm space-y-3">
@@ -171,7 +198,7 @@ export default function AdminPage() {
               <p className="text-xs text-gray-500">Registration and user activity</p>
             </div>
           </div>
-          <Button variant="secondary" size="sm" onClick={() => load(secret)} disabled={loading}>
+          <Button variant="secondary" size="sm" onClick={() => load(secret ?? "")} disabled={loading}>
             <RefreshCw size={15} className={`mr-1.5 inline ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
