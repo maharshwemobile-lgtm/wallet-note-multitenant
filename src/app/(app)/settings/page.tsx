@@ -28,8 +28,23 @@ export default function SettingsPage() {
     defaultFeaturesForMode("WALLET_ONLY")
   );
   const [busy, setBusy] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleting, setDeleting] = useState(false);
   const { push } = useToast();
-  const { refreshAuth, playEdition } = useAuth();
+  const { refreshAuth, playEdition, me } = useAuth();
+
+  async function deleteBusiness() {
+    setDeleting(true);
+    try {
+      await api("/api/v1/account/delete", { method: "POST", body: { confirmName: deleteConfirm.trim() } });
+      // The account no longer exists, so there is nothing to return to — leave the app
+      // entirely rather than routing to a page that would fail to load.
+      window.location.href = "/login";
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Delete failed", "error");
+      setDeleting(false);
+    }
+  }
 
   const load = useCallback(() => {
     api<SettingsData>("/api/v1/settings").then((d) => {
@@ -203,6 +218,37 @@ export default function SettingsPage() {
           <Link className="font-medium text-red-600 hover:text-red-700" href="/account-deletion">Request account deletion</Link>
         </div>
       </Card>
+
+      {me?.user.roleName === "Owner" && (
+        <Card className="border-red-300 dark:border-red-900">
+          <h3 className="text-sm font-semibold text-red-700 dark:text-red-400">Delete this business</h3>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+            Erases this business and everything in it — wallets and their history, credits,
+            sales, purchases, stock, records, users and audit logs. It happens immediately
+            and cannot be undone, and there is no copy afterwards.
+          </p>
+          <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+            Type <b>{data.business.name}</b> to confirm.
+          </p>
+          <div className="mt-3 flex flex-wrap items-end gap-3">
+            <div className="min-w-56 flex-1">
+              <Input
+                label="Business name"
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                placeholder={data.business.name}
+              />
+            </div>
+            <Button
+              variant="danger"
+              disabled={deleting || deleteConfirm.trim().toLowerCase() !== data.business.name.trim().toLowerCase()}
+              onClick={deleteBusiness}
+            >
+              {deleting ? "Deleting…" : "Delete permanently"}
+            </Button>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
