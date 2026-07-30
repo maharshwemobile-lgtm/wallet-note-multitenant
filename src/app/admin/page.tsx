@@ -7,6 +7,13 @@ import { fmtDateTime } from "@/lib/format";
 
 const SECRET_STORAGE_KEY = "wn_admin_secret";
 
+/** fetch() rejects header values outside Latin-1, so anything typed in Burmese has to be
+ *  caught before it reaches a request. */
+function isHeaderSafe(value: string): boolean {
+  for (const ch of value) if (ch.codePointAt(0)! > 255) return false;
+  return true;
+}
+
 interface AdminStats {
   registeredAccounts: number;
   registeredUsers: number;
@@ -49,9 +56,17 @@ const stats = [
 ] as const;
 
 export default function AdminPage() {
-  const [secret, setSecret] = useState<string | null>(() =>
-    typeof window === "undefined" ? null : window.sessionStorage.getItem(SECRET_STORAGE_KEY)
-  );
+  const [secret, setSecret] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    const stored = window.sessionStorage.getItem(SECRET_STORAGE_KEY);
+    // A value stored before the check below existed could still be unsendable; drop it
+    // rather than let it crash the first request.
+    if (stored && !isHeaderSafe(stored)) {
+      window.sessionStorage.removeItem(SECRET_STORAGE_KEY);
+      return null;
+    }
+    return stored;
+  });
   const [secretInput, setSecretInput] = useState("");
   const [authError, setAuthError] = useState("");
   // null = not yet probed, true = session is enough, false = session refused
@@ -73,7 +88,8 @@ export default function AdminPage() {
     try {
       const response = await fetch("/api/admin/stats", {
         cache: "no-store",
-        headers: key ? { "x-admin-secret": key } : undefined,
+        // Only send the header when the value can legally be one.
+        headers: key && isHeaderSafe(key) ? { "x-admin-secret": key } : undefined,
       });
       const body = await response.json();
       if (response.status === 401) {
@@ -114,10 +130,18 @@ export default function AdminPage() {
   }, [load, secret, sessionAllowed]);
 
   function unlock() {
-    if (!secretInput.trim()) return;
+    const entered = secretInput.trim();
+    if (!entered) return;
+    // HTTP header values are Latin-1 only. Typing Burmese here used to reach fetch() and
+    // fail with "String contains non ISO-8859-1 code point", which reads like a broken
+    // page rather than a rejected passcode.
+    if (!isHeaderSafe(entered)) {
+      setAuthError("Passcode must use Latin letters, digits or symbols only.");
+      return;
+    }
     setAuthError("");
-    window.sessionStorage.setItem(SECRET_STORAGE_KEY, secretInput.trim());
-    setSecret(secretInput.trim());
+    window.sessionStorage.setItem(SECRET_STORAGE_KEY, entered);
+    setSecret(entered);
   }
 
   const openUserAudit = (scope: "all" | "today") => {
