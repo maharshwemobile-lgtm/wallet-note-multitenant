@@ -246,6 +246,23 @@ model ThreeDOfficialResult {
   @@index([drawDate])
 }
 
+model TwoDOfficialResult {
+  id           String   @id @default(uuid())
+  drawDate     String
+  sessionName  String // MORNING (12:01) | EVENING (16:30)
+  drawTime     String?
+  resultNumber String // "00".."99", leading zero preserved
+  setValue     String?
+  value        String?
+  source       String   @default("MYANMAR_2D_RAPIDAPI")
+  sourceKey    String   @unique
+  rawPayload   String?
+  fetchedAt    DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([drawDate])
+}
+
 model ExchangeRate {
   id          String   @id @default(uuid())
   businessId  String

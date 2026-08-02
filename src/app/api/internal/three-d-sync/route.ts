@@ -4,6 +4,7 @@ import {
   closeExpiredThreeDSessions,
   syncThaiThreeDHistory,
 } from "@/services/thaiLottoService";
+import { syncTwoDResults } from "@/services/twoDResultService";
 
 export async function POST(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -27,7 +28,17 @@ export async function POST(req: NextRequest) {
     history = { received: 0, warning: error instanceof Error ? error.message : "Sync failed" };
   }
 
+  // 2D rides the same schedule. It is fetched only on the ?sync=1 runs, never on the
+  // every-minute one: the RapidAPI plan has a per-minute rate limit that a minutely call
+  // would exhaust, taking 3D down with it.
+  let twoD;
+  try {
+    twoD = await syncTwoDResults();
+  } catch (error) {
+    twoD = { received: 0, stored: 0, warnings: [error instanceof Error ? error.message : "2D sync failed"] };
+  }
+
   // Always after the fetch, so a number that just arrived settles on the same run.
   const settle = await autoSettleClosedSessions();
-  return NextResponse.json({ ok: true, closed, history, settle });
+  return NextResponse.json({ ok: true, closed, history, twoD, settle });
 }
