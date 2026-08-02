@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { settleSession } from "./threeDService";
 
 const HOST = "thai-lotto-new-api.p.rapidapi.com";
 const RESULTS_URL = `https://${HOST}/api/v1/results`;
@@ -141,6 +142,72 @@ export async function closeExpiredThreeDSessions(now = new Date()) {
     }
   }
   return closed;
+}
+
+/** Settle closed sessions once the official number for their draw date is known.
+ *
+ *  Closing a session only stopped new bets; someone still had to open each one and type
+ *  the winning number in, so sessions sat closed and unsettled for weeks.
+ *
+ *  No wallet is passed, so this records the settlement — winners, payouts, net profit —
+ *  without moving any money. Which wallet the profit or loss belongs to is a decision for
+ *  the shop, and posting to one automatically would move money nobody chose.
+ *
+ *  Settlement is attributed to the business Owner, since settledById is required and
+ *  there is no signed-in user behind a scheduled run.
+ */
+export async function autoSettleClosedSessions() {
+  const sessions = await prisma.threeDSession.findMany({
+    where: { status: "CLOSED" },
+    select: { id: true, businessId: true, drawDate: true },
+  });
+  if (!sessions.length) return { settled: 0, skipped: 0, warnings: [] as string[] };
+
+  const results = await prisma.threeDOfficialResult.findMany({
+    where: { drawDate: { in: [...new Set(sessions.map((s) => s.drawDate))] } },
+    select: { drawDate: true, resultNumber: true },
+  });
+  const byDate = new Map(results.map((r) => [r.drawDate, r.resultNumber]));
+
+  const owners = new Map<string, string>();
+  let settled = 0;
+  let skipped = 0;
+  const warnings: string[] = [];
+
+  for (const session of sessions) {
+    const resultNumber = byDate.get(session.drawDate);
+    // No official number yet — leave it closed and try again on the next run.
+    if (!resultNumber) { skipped += 1; continue; }
+
+    let ownerId = owners.get(session.businessId);
+    if (!ownerId) {
+      const owner = await prisma.user.findFirst({
+        where: { businessId: session.businessId, deletedAt: null, role: { name: "Owner" } },
+        select: { id: true },
+      });
+      if (!owner) { skipped += 1; warnings.push(`No Owner for business ${session.businessId}`); continue; }
+      ownerId = owner.id;
+      owners.set(session.businessId, ownerId);
+    }
+
+    try {
+      await prisma.$transaction((tx) =>
+        settleSession(tx, {
+          sessionId: session.id,
+          resultNumber,
+          userId: ownerId!,
+          businessId: session.businessId,
+        })
+      );
+      settled += 1;
+    } catch (error) {
+      // One bad session must not stop the rest of the batch.
+      skipped += 1;
+      warnings.push(`${session.drawDate}: ${error instanceof Error ? error.message : "settle failed"}`);
+    }
+  }
+
+  return { settled, skipped, warnings };
 }
 
 export async function syncThaiThreeDHistory() {
