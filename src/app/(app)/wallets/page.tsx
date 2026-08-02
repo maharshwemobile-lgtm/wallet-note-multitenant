@@ -2,15 +2,22 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, ArrowLeftRight, SlidersHorizontal, Scale } from "lucide-react";
+import { Plus, ArrowLeftRight, SlidersHorizontal, Scale, Pencil, Trash2 } from "lucide-react";
 import { api } from "@/lib/client";
 import { fmtMoney } from "@/lib/format";
+import { minorToDecimalString } from "@/lib/money";
 import { Button, Card, Input, Select, Modal, Spinner, Table, Empty, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
 
 interface Wallet {
   id: string; name: string; code: string; type: string; currency: string;
   currentBalance: string; minBalance: string; active: boolean; branchId?: string;
+  description?: string | null;
+}
+
+/** Minor units back into something editable in a text field. */
+function fmtInput(minor: string | number | bigint) {
+  return minorToDecimalString(BigInt(minor));
 }
 
 const emptyWalletForm = (branchId: string) => ({
@@ -33,6 +40,8 @@ export default function WalletsPage() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [showAdjust, setShowAdjust] = useState<Wallet | null>(null);
   const [showReconcile, setShowReconcile] = useState<Wallet | null>(null);
+  const [showEdit, setShowEdit] = useState<Wallet | null>(null);
+  const [showDelete, setShowDelete] = useState<Wallet | null>(null);
   const [busy, setBusy] = useState(false);
   const { push } = useToast();
   const { hasPerm, branches, defaultBranchId } = useAuth();
@@ -42,6 +51,7 @@ export default function WalletsPage() {
   const [transfer, setTransfer] = useState({ sourceWalletId: "", destWalletId: "", amount: "", rate: "", fee: "0", notes: "" });
   const [adjust, setAdjust] = useState({ direction: "DEBIT", amount: "", reason: "" });
   const [reconcile, setReconcile] = useState({ countedBalance: "", notes: "" });
+  const [edit, setEdit] = useState({ name: "", code: "", type: "CASH", minBalance: "0", description: "", active: true });
 
   const load = useCallback(() => {
     api<Wallet[]>("/api/v1/wallets").then(setWallets).catch((e) => push(e.message, "error"));
@@ -109,6 +119,16 @@ export default function WalletsPage() {
                   {hasPerm("wallet.reconcile") && (
                     <Button size="sm" variant="ghost" onClick={() => { setReconcile({ countedBalance: "", notes: "" }); setShowReconcile(w); }}>
                       <Scale size={14} className="mr-1 inline" />Reconcile
+                    </Button>
+                  )}
+                  {hasPerm("wallet.create") && (
+                    <Button size="sm" variant="ghost" onClick={() => { setEdit({ name: w.name, code: w.code, type: w.type, minBalance: fmtInput(w.minBalance), description: w.description ?? "", active: w.active }); setShowEdit(w); }}>
+                      <Pencil size={14} className="mr-1 inline" />Edit
+                    </Button>
+                  )}
+                  {hasPerm("wallet.create") && (
+                    <Button size="sm" variant="ghost" onClick={() => setShowDelete(w)}>
+                      <Trash2 size={14} className="mr-1 inline text-red-600" />Delete
                     </Button>
                   )}
                 </div>
@@ -243,6 +263,70 @@ export default function WalletsPage() {
                 "Reconciliation saved"
               )}
             >Save reconciliation</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Edit */}
+      <Modal open={!!showEdit} onClose={() => setShowEdit(null)} title={`Edit ${showEdit?.name}`}>
+        <div className="space-y-3">
+          <Input label="Name" value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} />
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Input label="Code" value={edit.code} onChange={(e) => setEdit({ ...edit, code: e.target.value.toUpperCase() })} />
+            <Select label="Type" value={edit.type} onChange={(e) => setEdit({ ...edit, type: e.target.value })}>
+              {["CASH", "BANK", "MOBILE", "AGENT", "CUSTOMER", "EXPENSE", "CLEARING", "CUSTOM"].map((t) => (
+                <option key={t} value={t}>{t}</option>
+              ))}
+            </Select>
+          </div>
+          <Input label="Minimum balance" value={edit.minBalance} onChange={(e) => setEdit({ ...edit, minBalance: e.target.value })} inputMode="decimal" />
+          <Input label="Description" value={edit.description} onChange={(e) => setEdit({ ...edit, description: e.target.value })} />
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" checked={edit.active} onChange={(e) => setEdit({ ...edit, active: e.target.checked })} />
+            Active
+          </label>
+          <p className="text-xs text-gray-500">
+            Balance and currency are not editable here — the balance comes from the ledger, so use
+            Adjust to change it and keep the history in step.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setShowEdit(null)}>Cancel</Button>
+            <Button
+              disabled={busy || !edit.name.trim() || !edit.code.trim()}
+              onClick={() => run(
+                () => api(`/api/v1/wallets/${showEdit!.id}`, { method: "PATCH", body: edit }),
+                () => setShowEdit(null),
+                "Wallet updated"
+              )}
+            >Save changes</Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Delete */}
+      <Modal open={!!showDelete} onClose={() => setShowDelete(null)} title={`Delete ${showDelete?.name}`}>
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            This wallet is removed from the app. Its past entries stay in the ledger and in any
+            record that used it, so your history keeps adding up.
+          </p>
+          {showDelete && BigInt(showDelete.currentBalance) !== 0n ? (
+            <p className="text-sm font-medium text-red-600 dark:text-red-400">
+              This wallet still holds {fmtMoney(showDelete.currentBalance)} {showDelete.currency}.
+              Transfer or adjust it to zero first, so the money is not simply hidden.
+            </p>
+          ) : null}
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setShowDelete(null)}>Cancel</Button>
+            <Button
+              variant="danger"
+              disabled={busy || !showDelete || BigInt(showDelete.currentBalance) !== 0n}
+              onClick={() => run(
+                () => api(`/api/v1/wallets/${showDelete!.id}`, { method: "DELETE" }),
+                () => setShowDelete(null),
+                "Wallet deleted"
+              )}
+            >Delete wallet</Button>
           </div>
         </div>
       </Modal>

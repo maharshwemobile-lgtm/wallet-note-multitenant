@@ -11,7 +11,8 @@ function fakeTx(order: string[]) {
   });
   return {
     business: {
-      findUnique: vi.fn(async () => ({ id: "biz-1", name: "Test Shop" })),
+      // Typed as nullable so a test can make the business missing.
+      findUnique: vi.fn(async (): Promise<{ id: string; name: string } | null> => ({ id: "biz-1", name: "Test Shop" })),
       delete: vi.fn(async () => { order.push("business"); return { id: "biz-1" }; }),
     },
     user: del("user"),
