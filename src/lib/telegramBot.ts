@@ -6,6 +6,7 @@ import {
   customerConfirm,
   customerGetStep,
   customerNumbers,
+  customerAbout,
   customerOrders,
   customerSessionPicked,
   customerSlip,
@@ -922,6 +923,7 @@ async function handleCustomerUpdate(
     if (data === "c:cancel") return customerCancel(customer);
     if (data === "c:bet") return customerChooseSession(customer);
     if (data === "c:orders") return customerOrders(customer);
+    if (data === "c:about") return customerAbout(customer);
     if (data.startsWith("c:s:")) return customerSessionPicked(customer, data.slice(4));
     if (data === "c:ok") {
       const { step, data: stepData } = await customerGetStep(ownerUserId, chatId);

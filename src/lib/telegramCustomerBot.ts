@@ -135,7 +135,13 @@ export async function customerStart(customer: CustomerRow) {
   await sendMessage(
     customer.chatId,
     "မင်္ဂလာပါ 🙏\n\nထီထိုးရန် အောက်က ခလုတ်ကို နှိပ်ပါ။",
-    { replyMarkup: keyboard([[btn("🎯 ထီထိုးမည်", "c:bet")], [btn("🧾 ကျွန်ုပ်၏ မှတ်တမ်း", "c:orders")]]) }
+    {
+      replyMarkup: keyboard([
+        [btn("🎯 ထီထိုးမည်", "c:bet")],
+        [btn("🧾 ကျွန်ုပ်၏ မှတ်တမ်း", "c:orders")],
+        [btn("ℹ️ လျော်ကြေး နှင့် ဆက်သွယ်ရန်", "c:about")],
+      ]),
+    }
   );
 }
 
@@ -631,4 +637,57 @@ export async function notifySettlementToCustomers(sessionId: string) {
   }
 
   return { notified };
+}
+
+/** What the shop pays and how to reach it.
+ *
+ *  The rate is the thing a customer most needs before betting and most often has to ask
+ *  for, so it is read from the sessions actually running rather than from a constant —
+ *  a shop that changed its odds would otherwise have the bot quoting the old number.
+ */
+export async function customerAbout(customer: CustomerRow) {
+  const business = await prisma.business.findUnique({
+    where: { id: customer.businessId },
+    select: { name: true, phone: true, telegram: true, address: true },
+  });
+
+  // Newest session per game, since that is the rate on offer now.
+  const oddsLines: string[] = [];
+  for (const gameType of ["TWO_D", "THREE_D"] as const) {
+    const latest = await prisma.threeDSession.findFirst({
+      where: { businessId: customer.businessId, gameType },
+      orderBy: { createdAt: "desc" },
+      select: { defaultOdds: true },
+    });
+    const rules = gameRules(gameType);
+    const odds = latest?.defaultOdds ?? rules.defaultOdds;
+    oddsLines.push(`${rules.label} — ၁ ကျပ်လျှင် ${odds} ကျပ်`);
+  }
+
+  const contact: string[] = [];
+  if (business?.phone) contact.push(`📞 ${business.phone}`);
+  if (business?.telegram) contact.push(`✈️ ${business.telegram}`);
+  if (business?.address) contact.push(`📍 ${business.address}`);
+
+  const methods = await shopPaymentMethods(customer.businessId);
+
+  const parts = [
+    `ℹ️ ${business?.name ?? "ဆိုင်"}`,
+    ``,
+    `💰 လျော်ကြေး အဆ`,
+    oddsLines.join("\n"),
+  ];
+  if (methods.length > 0) {
+    parts.push(``, `💳 ငွေပေးချေရန်`, paymentInstructionsMy(methods));
+  }
+  parts.push(
+    ``,
+    contact.length > 0
+      ? `☎️ ဆက်သွယ်ရန်\n${contact.join("\n")}`
+      : `☎️ ဆက်သွယ်ရန် — ဆိုင်သို့ တိုက်ရိုက် စာပို့ပါ။`
+  );
+
+  await sendMessage(customer.chatId, parts.join("\n"), {
+    replyMarkup: keyboard([[btn("🎯 ထီထိုးမည်", "c:bet")]]),
+  });
 }
