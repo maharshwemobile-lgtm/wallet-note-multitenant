@@ -10,7 +10,9 @@
  */
 
 import { prisma } from "./prisma";
-import { btn, keyboard, sendMessage, sendPhoto, withBotToken, type TgMessage } from "./telegram";
+import {
+  btn, keyboard, persistentKeyboard, sendMessage, sendPhoto, withBotToken, type TgMessage,
+} from "./telegram";
 import { gameRules, numberRangeLabel } from "./lotteryGame";
 import { parseBulkLines, createThreeDBets } from "@/services/threeDService";
 import { activePaymentMethods, paymentInstructionsMy, type PaymentMethod } from "./payments";
@@ -20,6 +22,19 @@ import { toMinor } from "./money";
 import { fmtMoneyMy } from "./telegramCustomerText";
 
 const CANCEL = [[btn("✕ ပယ်ဖျက်", "c:cancel")]];
+
+/** The three things a customer ever needs, pinned under the text box so they stay
+ *  reachable however far the chat has scrolled — inline buttons go with the message they
+ *  came with. Tapping one sends its label as an ordinary message, which is why these are
+ *  matched exactly where messages are handled. */
+export const MENU_BET = "🎯 ထီထိုးမည်";
+export const MENU_HISTORY = "🧾 ကျွန်ုပ်၏ မှတ်တမ်း";
+export const MENU_ABOUT = "ℹ️ လျော်ကြေး နှင့် ဆက်သွယ်ရန်";
+
+export const CUSTOMER_MENU = persistentKeyboard([
+  [MENU_BET],
+  [MENU_HISTORY, MENU_ABOUT],
+]);
 
 interface CustomerRow {
   id: string;
@@ -134,14 +149,8 @@ export async function customerStart(customer: CustomerRow) {
   await clearStep(customer.ownerUserId, customer.chatId);
   await sendMessage(
     customer.chatId,
-    "မင်္ဂလာပါ 🙏\n\nထီထိုးရန် အောက်က ခလုတ်ကို နှိပ်ပါ။",
-    {
-      replyMarkup: keyboard([
-        [btn("🎯 ထီထိုးမည်", "c:bet")],
-        [btn("🧾 ကျွန်ုပ်၏ မှတ်တမ်း", "c:orders")],
-        [btn("ℹ️ လျော်ကြေး နှင့် ဆက်သွယ်ရန်", "c:about")],
-      ]),
-    }
+    "မင်္ဂလာပါ 🙏\n\nအောက်က ခလုတ်များကို အသုံးပြုပါ။",
+    { replyMarkup: CUSTOMER_MENU }
   );
 }
 
@@ -687,7 +696,6 @@ export async function customerAbout(customer: CustomerRow) {
       : `☎️ ဆက်သွယ်ရန် — ဆိုင်သို့ တိုက်ရိုက် စာပို့ပါ။`
   );
 
-  await sendMessage(customer.chatId, parts.join("\n"), {
-    replyMarkup: keyboard([[btn("🎯 ထီထိုးမည်", "c:bet")]]),
-  });
+  // No button of its own: the menu under the text box already has one.
+  await sendMessage(customer.chatId, parts.join("\n"));
 }

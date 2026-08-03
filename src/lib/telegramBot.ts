@@ -7,6 +7,9 @@ import {
   customerGetStep,
   customerNumbers,
   customerAbout,
+  MENU_ABOUT,
+  MENU_BET,
+  MENU_HISTORY,
   customerOrders,
   customerSessionPicked,
   customerSlip,
@@ -938,6 +941,13 @@ async function handleCustomerUpdate(
 
   const text = (message.text ?? "").trim();
   if (text === "/start" || text === "/menu") return customerStart(customer);
+
+  // The menu sits under the text box, so its buttons arrive as ordinary messages. They
+  // are handled before the conversation step: someone half-way through typing numbers who
+  // taps "my history" means to look at their history, not to bet "🧾".
+  if (text === MENU_BET) return customerChooseSession(customer);
+  if (text === MENU_HISTORY) return customerOrders(customer);
+  if (text === MENU_ABOUT) return customerAbout(customer);
 
   const { step, data: stepData } = await customerGetStep(ownerUserId, chatId);
   if (message.photo?.length || message.document) {

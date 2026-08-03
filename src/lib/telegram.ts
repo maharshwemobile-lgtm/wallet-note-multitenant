@@ -68,10 +68,32 @@ export function btn(text: string, data: string): InlineButton {
   return { text, callback_data: data };
 }
 
+/** A keyboard that stays under the message it came with, and disappears with it. */
+export type ReplyMarkup =
+  | { inline_keyboard: InlineButton[][] }
+  | ReplyKeyboard;
+
+/** A keyboard that replaces the user's own keyboard and stays there between messages —
+ *  the buttons remain reachable however far the conversation has scrolled. Private chats
+ *  only, which is where customers are. */
+export interface ReplyKeyboard {
+  keyboard: { text: string }[][];
+  resize_keyboard: true;
+  is_persistent: true;
+}
+
+export function persistentKeyboard(rows: string[][]): ReplyKeyboard {
+  return {
+    keyboard: rows.map((row) => row.map((text) => ({ text }))),
+    resize_keyboard: true,
+    is_persistent: true,
+  };
+}
+
 export async function sendMessage(
   chatId: string,
   text: string,
-  opts?: { replyMarkup?: { inline_keyboard: InlineButton[][] }; parseMode?: "Markdown" | "HTML" }
+  opts?: { replyMarkup?: ReplyMarkup; parseMode?: "Markdown" | "HTML" }
 ) {
   return callBestEffort("sendMessage", {
     chat_id: chatId,
