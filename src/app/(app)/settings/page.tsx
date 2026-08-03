@@ -13,6 +13,12 @@ import {
   type FeatureVisibility,
 } from "@/lib/modules";
 import { DEFAULT_ABOUT, mergeAbout, type AboutContent } from "@/lib/about";
+import {
+  parsePaymentMethods,
+  PAYMENT_TYPES,
+  PAYMENT_TYPE_LABEL_MY,
+  type PaymentMethod,
+} from "@/lib/payments";
 
 interface SettingsData {
   business: { id: string; name: string; phone?: string; address?: string; telegram?: string; website?: string; currency: string; timezone: string };
@@ -27,6 +33,8 @@ export default function SettingsPage() {
   const [features, setFeatures] = useState<FeatureVisibility>(
     defaultFeaturesForMode("WALLET_ONLY")
   );
+  const [payMethods, setPayMethods] = useState<PaymentMethod[]>([]);
+  const [customerBetting, setCustomerBetting] = useState(false);
   const [busy, setBusy] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -58,6 +66,9 @@ export default function SettingsPage() {
       const a = d.settings.about as Partial<AboutContent> | undefined;
       setAbout(mergeAbout(a));
       setFeatures(parseModuleAccess(d.settings.modules ?? { miniMartEnabled: true }).features);
+      const pay = d.settings.payments;
+      setPayMethods(parsePaymentMethods(pay));
+      setCustomerBetting(pay?.customerBetting === true);
     }).catch((e) => push(e.message, "error"));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [push]);
@@ -165,6 +176,102 @@ export default function SettingsPage() {
         <Button className="mt-3" disabled={busy} onClick={() => save(() => api("/api/v1/settings", { method: "PUT", body: { key: "three_d", value: threeD } }))}>
           Save 3D settings
         </Button>
+      </Card>}
+
+      {!playEdition && <Card>
+        <h3 className="text-sm font-semibold">Telegram orders &amp; payment methods</h3>
+        <p className="mb-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
+          Lets customers place bets through your Telegram bot. They send a payment slip, and
+          nothing is recorded until you approve it in Telegram. Customers only ever see Myanmar.
+        </p>
+
+        <label className="mb-4 flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={customerBetting}
+            onChange={(e) => setCustomerBetting(e.target.checked)}
+            className="mt-1 h-4 w-4"
+          />
+          <span>
+            Accept bets from customers on Telegram
+            <span className="block text-xs text-gray-500 dark:text-gray-400">
+              Off by default. Needs at least one payment method below.
+            </span>
+          </span>
+        </label>
+
+        <div className="space-y-3">
+          {payMethods.length === 0 && (
+            <p className="text-sm text-gray-500 dark:text-gray-400">No payment methods yet.</p>
+          )}
+          {payMethods.map((method, index) => (
+            <div key={method.id} className="rounded-lg border border-gray-200 p-3 dark:border-gray-800">
+              <div className="grid gap-3 sm:grid-cols-2">
+                <label className="block">
+                  <span className="mb-1 block text-sm font-medium">Type</span>
+                  <select
+                    value={method.type}
+                    onChange={(e) => setPayMethods(payMethods.map((m, i) => i === index ? { ...m, type: e.target.value as PaymentMethod["type"] } : m))}
+                    className="min-h-11 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800"
+                  >
+                    {PAYMENT_TYPES.map((type) => (
+                      <option key={type} value={type}>{PAYMENT_TYPE_LABEL_MY[type]}</option>
+                    ))}
+                  </select>
+                </label>
+                <Input
+                  label="Account number"
+                  value={method.accountNumber}
+                  onChange={(e) => setPayMethods(payMethods.map((m, i) => i === index ? { ...m, accountNumber: e.target.value } : m))}
+                />
+                <Input
+                  label="Account name"
+                  value={method.accountName}
+                  onChange={(e) => setPayMethods(payMethods.map((m, i) => i === index ? { ...m, accountName: e.target.value } : m))}
+                />
+                <Input
+                  label="Note (optional)"
+                  value={method.note ?? ""}
+                  onChange={(e) => setPayMethods(payMethods.map((m, i) => i === index ? { ...m, note: e.target.value } : m))}
+                />
+              </div>
+              <div className="mt-2 flex items-center justify-between">
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={method.active}
+                    onChange={(e) => setPayMethods(payMethods.map((m, i) => i === index ? { ...m, active: e.target.checked } : m))}
+                    className="h-4 w-4"
+                  />
+                  Show to customers
+                </label>
+                <Button variant="secondary" onClick={() => setPayMethods(payMethods.filter((_, i) => i !== index))}>
+                  Remove
+                </Button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button
+            variant="secondary"
+            onClick={() => setPayMethods([...payMethods, {
+              id: `pm-${Date.now()}`, type: "KPAY", accountName: "", accountNumber: "", active: true,
+            }])}
+          >
+            Add payment method
+          </Button>
+          <Button
+            disabled={busy}
+            onClick={() => save(() => api("/api/v1/settings", {
+              method: "PUT",
+              body: { key: "payments", value: { customerBetting, methods: payMethods } },
+            }))}
+          >
+            Save payment settings
+          </Button>
+        </div>
       </Card>}
 
       <Card>

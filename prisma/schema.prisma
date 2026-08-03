@@ -106,6 +106,55 @@ model TelegramSession {
   @@id([ownerUserId, chatId])
 }
 
+/** A Telegram chat that places bets with a shop's bot but has no Wallet Note account.
+ *  Scoped to the bot it talks to (ownerUserId), which is what decides the business —
+ *  each staff user runs their own bot, so a customer chat can never reach another shop. */
+model TelegramCustomer {
+  id          String   @id @default(uuid())
+  businessId  String
+  ownerUserId String
+  chatId      String
+  name        String?
+  phone       String?
+  blocked     Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  orders LotteryOrder[]
+
+  @@unique([ownerUserId, chatId])
+  @@index([businessId])
+}
+
+/** A bet a customer asked for over Telegram, held until a staff member checks the payment
+ *  slip. Nothing is booked and no money moves until it is approved — the records are
+ *  created at that point, which is why the numbers are kept here rather than as pending
+ *  transactions. */
+model LotteryOrder {
+  id            String    @id @default(uuid())
+  orderNo       String
+  businessId    String
+  ownerUserId   String
+  customerId    String
+  customer      TelegramCustomer @relation(fields: [customerId], references: [id])
+  sessionId     String
+  rows          String // JSON [{ number, amount }]
+  totalAmount   BigInt
+  status        String    @default("AWAITING_SLIP") // AWAITING_SLIP REVIEW APPROVED REJECTED EXPIRED
+  paymentMethod String?
+  slipFileId    String? // Telegram file_id; the image stays on Telegram, not on our disk
+  reviewedById  String?
+  reviewedAt    DateTime?
+  rejectReason  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([businessId, orderNo])
+  @@index([businessId, status])
+  @@index([ownerUserId, status])
+  @@index([sessionId])
+}
+
 model UserBranch {
   userId   String
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)

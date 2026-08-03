@@ -39,6 +39,9 @@ export async function purgeBusiness(tx: Tx, businessId: string) {
   await run("stockLevel", () => tx.stockLevel.deleteMany({ where: { itemId: { in: itemIds } } }));
 
   // 2. Session and membership rows hanging off users.
+  // Orders reference the customer row, so they go first.
+  await run("lotteryOrder", () => tx.lotteryOrder.deleteMany({ where: { businessId } }));
+  await run("telegramCustomer", () => tx.telegramCustomer.deleteMany({ where: { businessId } }));
   await run("telegramSession", () => tx.telegramSession.deleteMany({ where: { ownerUserId: { in: userIds } } }));
   await run("authSession", () => tx.authSession.deleteMany({ where: { userId: { in: userIds } } }));
   await run("userBranch", () => tx.userBranch.deleteMany({ where: { userId: { in: userIds } } }));

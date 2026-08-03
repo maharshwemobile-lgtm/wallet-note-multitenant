@@ -29,6 +29,8 @@ function fakeTx(order: string[]) {
     payablePayment: del("payablePayment"),
     threeDSettlement: del("threeDSettlement"),
     stockLevel: del("stockLevel"),
+    lotteryOrder: del("lotteryOrder"),
+    telegramCustomer: del("telegramCustomer"),
     telegramSession: del("telegramSession"),
     authSession: del("authSession"),
     userBranch: del("userBranch"),
@@ -79,6 +81,8 @@ describe("purgeBusiness", () => {
     before("payablePayment", "payable");
     before("threeDSettlement", "threeDSession");
     before("stockLevel", "item");
+    // A Telegram order has a foreign key to the customer that placed it.
+    before("lotteryOrder", "telegramCustomer");
 
     // Documents reference receivables/payables/wallets, so they go first.
     before("sale", "receivable");

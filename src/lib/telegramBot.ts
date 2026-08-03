@@ -1,4 +1,18 @@
 import { prisma } from "./prisma";
+import {
+  approveOrder,
+  customerCancel,
+  customerChooseSession,
+  customerConfirm,
+  customerGetStep,
+  customerNumbers,
+  customerOrders,
+  customerSessionPicked,
+  customerSlip,
+  customerStart,
+  rejectOrder,
+  resolveCustomer,
+} from "./telegramCustomerBot";
 import { branchScope } from "./auth";
 import type { AuthUser } from "./auth";
 import { toMinor, isValidDecimalString } from "./money";
@@ -831,8 +845,94 @@ const FLOW_FEATURE: Record<string, FeatureKey> = {
 /** ownerUserId identifies whose bot this webhook belongs to — resolved from
  *  the webhook URL by the caller (one bot = one Wallet Note user). */
 export async function handleUpdate(update: TgUpdate, ownerUserId: string) {
-  if (update.message) return handleMessage(ownerUserId, update.message.chat.id.toString(), update.message.text ?? "");
+  const chatId =
+    update.message?.chat.id.toString() ?? update.callback_query?.message?.chat.id.toString();
+  if (!chatId) return;
+
+  // A shop's bot answers its own staff member in one chat. Any other chat is a customer,
+  // and only ever reaches the customer flow — never a staff menu. The check is on the
+  // already-linked chat, so the first-chat-links-the-owner behaviour is untouched: until
+  // a staff member has linked, there is no customer side at all.
+  const owner = await prisma.user.findUnique({
+    where: { id: ownerUserId },
+    select: { telegramChatId: true, businessId: true },
+  });
+  if (owner?.telegramChatId && owner.telegramChatId !== chatId) {
+    return handleCustomerUpdate(update, ownerUserId, owner.businessId, chatId);
+  }
+
+  if (update.message) return handleMessage(ownerUserId, chatId, update.message.text ?? "");
   if (update.callback_query) return handleCallback(ownerUserId, update.callback_query);
+}
+
+/** Is this shop letting customers place bets over Telegram? Off unless switched on, so no
+ *  existing shop starts taking orders from strangers because of an upgrade. */
+async function customerBettingOn(businessId: string): Promise<boolean> {
+  const setting = await prisma.systemSetting.findUnique({
+    where: { businessId_key: { businessId, key: "payments" } },
+    select: { value: true },
+  });
+  if (!setting) return false;
+  try {
+    const parsed = JSON.parse(setting.value) as { customerBetting?: unknown };
+    return parsed.customerBetting === true;
+  } catch {
+    return false;
+  }
+}
+
+async function handleCustomerUpdate(
+  update: TgUpdate,
+  ownerUserId: string,
+  businessId: string,
+  chatId: string
+) {
+  if (!(await customerBettingOn(businessId))) {
+    // Unchanged message for the case this used to be: someone else's chat.
+    return sendMessage(chatId, "This bot is already linked to a different Telegram account. Unlink it in Wallet Note first if this is you.");
+  }
+
+  const customer = await resolveCustomer(
+    ownerUserId,
+    businessId,
+    chatId,
+    update.message?.from?.first_name ?? update.callback_query?.from.first_name
+  );
+  if (customer.blocked) return;
+
+  if (update.callback_query) {
+    await answerCallbackQuery(update.callback_query.id);
+    const data = update.callback_query.data ?? "";
+    if (data === "c:cancel") return customerCancel(customer);
+    if (data === "c:bet") return customerChooseSession(customer);
+    if (data === "c:orders") return customerOrders(customer);
+    if (data.startsWith("c:s:")) return customerSessionPicked(customer, data.slice(4));
+    if (data === "c:ok") {
+      const { step, data: stepData } = await customerGetStep(ownerUserId, chatId);
+      if (step !== "c.confirm") return customerStart(customer);
+      return customerConfirm(customer, stepData);
+    }
+    return customerStart(customer);
+  }
+
+  const message = update.message;
+  if (!message) return;
+
+  const text = (message.text ?? "").trim();
+  if (text === "/start" || text === "/menu") return customerStart(customer);
+
+  const { step, data: stepData } = await customerGetStep(ownerUserId, chatId);
+  if (message.photo?.length || message.document) {
+    if (step !== "c.slip") {
+      return sendMessage(chatId, "ပြေစာ ပို့ရန် အချိန် မဟုတ်သေးပါ။ /start နှိပ်၍ စတင်ပါ။");
+    }
+    return customerSlip(customer, stepData, message);
+  }
+  if (step === "c.numbers") return customerNumbers(customer, stepData, text);
+  if (step === "c.slip") {
+    return sendMessage(chatId, "ငွေလွှဲပြေစာ ဓာတ်ပုံကို ပို့ပေးပါ။");
+  }
+  return customerStart(customer);
 }
 
 async function handleMessage(ownerUserId: string, chatId: string, text: string) {
@@ -870,6 +970,14 @@ async function handleMessage(ownerUserId: string, chatId: string, text: string) 
     if (flow === "cp") {
       if (step === "amount") return cpStepAmountText(chatId, user, session.data, trimmed);
     }
+    if (flow === "ord") {
+      if (step === "reject") {
+        const orderId = String(session.data.orderId ?? "");
+        await clearSession(ownerUserId, chatId);
+        const result = await rejectOrder(orderId, user.id, trimmed);
+        return sendMessage(chatId, result.ok ? `✅ ${result.message}` : `❌ ${result.message}`);
+      }
+    }
     if (flow === "nc") {
       if (step === "customer_new") return ncStepCustomerNewText(chatId, user, session.data, trimmed);
       if (step === "amount") return ncStepAmountText(chatId, user, session.data, trimmed);
@@ -897,6 +1005,22 @@ async function handleCallback(ownerUserId: string, cq: { id: string; message?: {
   if (data === "cancel") {
     await clearSession(ownerUserId, chatId);
     return showMenu(chatId, user, "Cancelled.");
+  }
+
+  // Customer orders waiting on a slip check.
+  if (data.startsWith("o:ok:") || data.startsWith("o:no:")) {
+    if (!can(user, "three_d.create")) return sendMessage(chatId, "You don't have permission for that.");
+    const orderId = data.slice(5);
+    if (data.startsWith("o:no:")) {
+      await setSession(ownerUserId, chatId, "ord.reject", { orderId });
+      return sendMessage(chatId, "Why is it rejected? Send a short reason, or /cancel.", {
+        replyMarkup: keyboard([CANCEL_ROW]),
+      });
+    }
+    const branchId = await defaultBranchId(user);
+    if (!branchId) return sendMessage(chatId, "No branch is available for your account.");
+    const result = await approveOrder(orderId, user.id, branchId);
+    return sendMessage(chatId, result.ok ? `✅ ${result.message}` : `❌ ${result.message}`);
   }
 
   if (data.startsWith("menu:")) {

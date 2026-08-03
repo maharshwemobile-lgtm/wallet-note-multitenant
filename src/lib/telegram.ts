@@ -81,6 +81,34 @@ export async function sendMessage(
   });
 }
 
+/** Forward an image by file_id. The slip stays on Telegram's servers — we store the id,
+ *  never the bytes, so no customer payment slip lands on our disk. */
+export async function sendPhoto(
+  chatId: string,
+  fileId: string,
+  opts?: { caption?: string; replyMarkup?: { inline_keyboard: InlineButton[][] } }
+) {
+  return callBestEffort("sendPhoto", {
+    chat_id: chatId,
+    photo: fileId,
+    caption: opts?.caption,
+    reply_markup: opts?.replyMarkup,
+  });
+}
+
+export async function sendDocument(
+  chatId: string,
+  fileId: string,
+  opts?: { caption?: string; replyMarkup?: { inline_keyboard: InlineButton[][] } }
+) {
+  return callBestEffort("sendDocument", {
+    chat_id: chatId,
+    document: fileId,
+    caption: opts?.caption,
+    reply_markup: opts?.replyMarkup,
+  });
+}
+
 export async function editMessageText(
   chatId: string,
   messageId: number,
@@ -120,11 +148,23 @@ export interface TgUser {
   first_name: string;
   username?: string;
 }
+export interface TgPhotoSize {
+  file_id: string;
+  file_unique_id: string;
+  width: number;
+  height: number;
+  file_size?: number;
+}
 export interface TgMessage {
   message_id: number;
   chat: { id: number };
   from?: TgUser;
   text?: string;
+  caption?: string;
+  /** Telegram sends every size it made, smallest first. */
+  photo?: TgPhotoSize[];
+  /** A slip sent as a file rather than a photo. */
+  document?: { file_id: string; mime_type?: string; file_name?: string };
 }
 export interface TgCallbackQuery {
   id: string;

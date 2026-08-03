@@ -3,6 +3,7 @@ import { Tx } from "./prisma";
 const DEFAULT_PREFIXES: Record<string, string> = {
   THREE_D: "3D",
   TWO_D: "2D",
+  LOTTERY_ORDER: "ORD",
   EXCHANGE: "EXC",
   TRANSFER: "WTR",
   CREDIT: "CRD",
