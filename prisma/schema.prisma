@@ -230,9 +230,10 @@ model ThreeDSession {
 
   @@index([businessId, drawDate])
   @@index([businessId, gameType, drawDate])
-  // One session per draw. Auto-open's check-then-create is not atomic, so overlapping
-  // runs could split a day's bets across two sessions for the same draw.
-  @@unique([businessId, gameType, drawDate, name], map: "ThreeDSession_business_game_draw_name_key")
+  // A unique index guards one session per 2D draw. It is partial (2D only), which Prisma
+  // cannot express, so it lives in the migration rather than here — see
+  // 20260803160000_unique_session_per_draw. 3D sessions are created by hand and a shop
+  // may legitimately have two with the same name on a date.
 }
 
 model ThreeDTransaction {
