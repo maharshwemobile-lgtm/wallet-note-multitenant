@@ -6,7 +6,6 @@ import { dateRangeUtc } from "@/lib/dates";
 export interface GameTotals {
   totalRecords: number;
   totalBet: bigint;
-  totalPotentialPayout: bigint;
   totalCommission: bigint;
   settledProfit: bigint;
   unsettledAmount: bigint;
@@ -52,22 +51,15 @@ export async function computeDaySummary(
       where: { session: { businessId, drawDate: date, gameType }, reopenedAt: null },
       select: { netProfit: true },
     });
-    let totalBet = 0n, totalPayout = 0n, totalCommission = 0n, unsettled = 0n;
+    let totalBet = 0n, totalCommission = 0n, unsettled = 0n;
     for (const t of txns) {
       totalBet += t.betAmount;
       totalCommission += t.commissionAmount;
-      // Exposure is what could still have to be paid out. Once a record is settled the
-      // result is known and nothing is owed on it beyond what settlement already booked,
-      // so counting it here would report a liability that no longer exists.
-      if (t.settlementStatus === "PENDING") {
-        totalPayout += t.potentialPayout;
-        unsettled += t.betAmount;
-      }
+      if (t.settlementStatus === "PENDING") unsettled += t.betAmount;
     }
     return {
       totalRecords: txns.length,
       totalBet,
-      totalPotentialPayout: totalPayout,
       totalCommission,
       settledProfit: settlements.reduce((a, x) => a + x.netProfit, 0n),
       unsettledAmount: unsettled,

@@ -59,6 +59,8 @@ export async function createThreeDBets(
     customerPhone?: string;
     odds?: string;
     notes?: string;
+    /** Present when the bets came from an approved Telegram order. */
+    telegramOrderId?: string;
   }
 ) {
   if (opts.rows.length === 0) throw new ApiError(422, "No records to save");
@@ -121,6 +123,7 @@ export async function createThreeDBets(
         commissionAmount: calculation.commissionAmount,
         netAmount: calculation.netAmount,
         notes: opts.notes,
+        telegramOrderId: opts.telegramOrderId,
         createdById: opts.userId,
       },
     }));

@@ -115,6 +115,9 @@ model TelegramCustomer {
   ownerUserId String
   chatId      String
   name        String?
+  /** Telegram @handle, if they have one. Kept so staff can recognise a customer whose
+   *  display name changes, and because a chat id alone is unreadable. */
+  username    String?
   phone       String?
   blocked     Boolean  @default(false)
   createdAt   DateTime @default(now())
@@ -236,6 +239,9 @@ model ThreeDTransaction {
   branchId         String
   sessionId        String
   session          ThreeDSession @relation(fields: [sessionId], references: [id])
+  /** Set when the bet came from an approved Telegram order, so a customer can be shown
+   *  exactly what they bet and what it won. */
+  telegramOrderId  String?
   agentId          String?
   customerId       String?
   customer         Contact?  @relation(fields: [customerId], references: [id])

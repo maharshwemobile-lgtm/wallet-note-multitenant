@@ -11,7 +11,7 @@ import { gameRules, numberRangeLabel } from "@/lib/lotteryGame";
 interface Detail {
   session: { id: string; name: string; drawDate: string; status: string; gameType: string; resultNumber?: string; defaultOdds: string; settlement?: { id: string; netProfit: string; totalPayout: string; grossCollected: string; totalCommission: string } };
   exposure: { number: string; totalStake: string; potentialPayout: string; count: number }[];
-  totals: { count: number; totalBet: string; totalPotentialPayout: string; totalCommission: string };
+  totals: { count: number; totalBet: string; totalCommission: string };
 }
 interface Txn {
   id: string; txnNo: string; number: string; betAmount: string; potentialPayout: string;
@@ -164,10 +164,8 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
         <StatCard label="Records" value={detail.totals.count} />
         <StatCard label="Total bet" value={fmtMoney(detail.totals.totalBet, "MMK")} />
         <StatCard label="Total commission" value={fmtMoney(detail.totals.totalCommission, "MMK")} />
-        {s.status === "SETTLED" && s.settlement ? (
+        {s.status === "SETTLED" && s.settlement && (
           <StatCard label="Paid out" value={fmtMoney(s.settlement.totalPayout, "MMK")} />
-        ) : (
-          <StatCard label="Potential payout" value={fmtMoney(detail.totals.totalPotentialPayout, "MMK")} tone="amber" />
         )}
       </div>
 

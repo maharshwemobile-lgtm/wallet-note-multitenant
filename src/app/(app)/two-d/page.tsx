@@ -13,7 +13,7 @@ import { useNewModal } from "@/lib/useNewModal";
 interface Session {
   id: string; name: string; drawDate: string; drawTime?: string; status: string;
   resultNumber?: string; defaultOdds: string;
-  totalBet: string; totalPotentialPayout: string;
+  totalBet: string;
   _count: { transactions: number };
 }
 interface OfficialResult {
@@ -84,7 +84,7 @@ export default function TwoDPage() {
           <Empty message="No 2D sessions yet. They open automatically on the next trading day once 2D is switched on in Settings → Modules." />
         </Card>
       ) : (
-        <Table headers={["Session", "Draw date", "Status", "Result", "Records", "Total bet", "Exposure"]} rightAlign={[4, 5, 6]}>
+        <Table headers={["Session", "Draw date", "Status", "Result", "Records", "Total bet"]} rightAlign={[4, 5]}>
           {sessions.map((s) => (
             <tr
               key={s.id}
@@ -99,10 +99,6 @@ export default function TwoDPage() {
               <td className="px-3 py-2.5 font-mono font-bold">{s.resultNumber ?? "—"}</td>
               <td className="px-3 py-2.5 text-right tabular-nums">{s._count.transactions}</td>
               <td className="px-3 py-2.5 text-right tabular-nums">{fmtMoney(s.totalBet)}</td>
-              {/* A drawn session owes nothing further, so it carries no exposure. */}
-              <td className="px-3 py-2.5 text-right tabular-nums text-amber-600">
-                {s.status === "SETTLED" ? <span className="text-gray-400">—</span> : fmtMoney(s.totalPotentialPayout)}
-              </td>
             </tr>
           ))}
         </Table>

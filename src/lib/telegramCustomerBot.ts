@@ -15,6 +15,7 @@ import { gameRules, numberRangeLabel } from "./lotteryGame";
 import { parseBulkLines, createThreeDBets } from "@/services/threeDService";
 import { activePaymentMethods, paymentInstructionsMy, type PaymentMethod } from "./payments";
 import { nextNumber } from "./sequence";
+import { audit } from "./audit";
 import { toMinor } from "./money";
 import { fmtMoneyMy } from "./telegramCustomerText";
 
@@ -25,7 +26,18 @@ interface CustomerRow {
   businessId: string;
   ownerUserId: string;
   chatId: string;
+  name: string | null;
+  username: string | null;
+  phone: string | null;
   blocked: boolean;
+}
+
+/** How a customer is written in a staff-facing message: the @handle if they have one,
+ *  because a display name can change and a chat id alone means nothing to a person. */
+function customerLabel(customer: { name: string | null; username: string | null; chatId: string }): string {
+  const parts = [customer.name, customer.username ? `@${customer.username}` : null].filter(Boolean);
+  parts.push(`#${customer.chatId}`);
+  return parts.join(" · ");
 }
 
 /** Customer conversations reuse the staff session table, keyed by the owning bot and the
@@ -60,15 +72,24 @@ export async function resolveCustomer(
   ownerUserId: string,
   businessId: string,
   chatId: string,
-  name?: string
+  name?: string,
+  username?: string
 ): Promise<CustomerRow> {
   const existing = await prisma.telegramCustomer.findUnique({
     where: { ownerUserId_chatId: { ownerUserId, chatId } },
   });
-  if (existing) return existing;
-  return prisma.telegramCustomer.create({
-    data: { businessId, ownerUserId, chatId, name: name ?? null },
-  });
+  if (!existing) {
+    return prisma.telegramCustomer.create({
+      data: { businessId, ownerUserId, chatId, name: name ?? null, username: username ?? null },
+    });
+  }
+  // People rename themselves and add handles later, so keep the record current — but
+  // never blank a stored value just because this update did not carry one.
+  const patch: { name?: string; username?: string } = {};
+  if (name && name !== existing.name) patch.name = name;
+  if (username && username !== existing.username) patch.username = username;
+  if (Object.keys(patch).length === 0) return existing;
+  return prisma.telegramCustomer.update({ where: { id: existing.id }, data: patch });
 }
 
 /** HH:mm now, in the business's own timezone — the cut-off is written in local time. */
@@ -314,7 +335,7 @@ async function notifyStaffOfOrder(orderId: string, fileId: string) {
   const session = await prisma.threeDSession.findUnique({ where: { id: order.sessionId } });
   const rows = JSON.parse(order.rows) as { number: string; amount: string }[];
   const list = rows.map((r) => `${r.number} — ${r.amount}`).join("\n");
-  const who = order.customer.name || order.customer.chatId;
+  const who = customerLabel(order.customer);
 
   const caption =
     `🧾 ${order.orderNo}\n` +
@@ -359,10 +380,31 @@ export async function approveOrder(orderId: string, staffUserId: string, branchI
         customerName: order.customer.name ?? undefined,
         customerPhone: order.customer.phone ?? undefined,
         notes: `Telegram order ${order.orderNo}`,
+        telegramOrderId: order.id,
       });
       await tx.lotteryOrder.update({
         where: { id: order.id },
         data: { status: "APPROVED", reviewedById: staffUserId, reviewedAt: new Date() },
+      });
+      // Who approved whose money, and for which numbers. Records the customer by handle
+      // and chat id, since a display name is not something they can be held to.
+      await audit(tx, {
+        businessId: order.businessId,
+        userId: staffUserId,
+        branchId,
+        action: "APPROVE",
+        module: "telegram_order",
+        resourceType: "LotteryOrder",
+        resourceId: order.id,
+        after: {
+          orderNo: order.orderNo,
+          customer: customerLabel(order.customer),
+          chatId: order.customer.chatId,
+          username: order.customer.username,
+          sessionId: order.sessionId,
+          numbers: rows,
+          totalAmount: order.totalAmount.toString(),
+        },
       });
     });
   } catch (error) {
@@ -394,14 +436,31 @@ export async function rejectOrder(orderId: string, staffUserId: string, reason: 
     return { ok: false as const, message: `ဤအော်ဒါကို ကိုင်တွယ်ပြီးဖြစ်သည် (${order.status})။` };
   }
 
-  await prisma.lotteryOrder.update({
-    where: { id: order.id },
-    data: {
-      status: "REJECTED",
-      reviewedById: staffUserId,
-      reviewedAt: new Date(),
-      rejectReason: reason || null,
-    },
+  await prisma.$transaction(async (tx) => {
+    await tx.lotteryOrder.update({
+      where: { id: order.id },
+      data: {
+        status: "REJECTED",
+        reviewedById: staffUserId,
+        reviewedAt: new Date(),
+        rejectReason: reason || null,
+      },
+    });
+    await audit(tx, {
+      businessId: order.businessId,
+      userId: staffUserId,
+      action: "REJECT",
+      module: "telegram_order",
+      resourceType: "LotteryOrder",
+      resourceId: order.id,
+      reason: reason || undefined,
+      after: {
+        orderNo: order.orderNo,
+        customer: customerLabel(order.customer),
+        chatId: order.customer.chatId,
+        totalAmount: order.totalAmount.toString(),
+      },
+    });
   });
 
   await sendMessage(
@@ -414,27 +473,78 @@ export async function rejectOrder(orderId: string, staffUserId: string, reason: 
   return { ok: true as const, message: `${order.orderNo} ငြင်းပယ်ပြီးပါပြီ။` };
 }
 
+const ORDER_STATUS_MY: Record<string, string> = {
+  AWAITING_SLIP: "ပြေစာ စောင့်ဆိုင်းဆဲ",
+  REVIEW: "စစ်ဆေးဆဲ",
+  APPROVED: "အတည်ပြုပြီး",
+  REJECTED: "လက်မခံပါ",
+  EXPIRED: "သက်တမ်းကုန်",
+};
+
+/** Everything this customer has bet, 2D and 3D together: the numbers they backed, what
+ *  came out, and what won. Being able to read it back is the point — a customer who
+ *  cannot check their own record has to take the shop's word for it. */
 export async function customerOrders(customer: CustomerRow) {
   const orders = await prisma.lotteryOrder.findMany({
     where: { customerId: customer.id },
     orderBy: { createdAt: "desc" },
-    take: 5,
+    take: 10,
   });
   if (orders.length === 0) {
     return sendMessage(customer.chatId, "မှတ်တမ်း မရှိသေးပါ။");
   }
-  const statusMy: Record<string, string> = {
-    AWAITING_SLIP: "ပြေစာ စောင့်ဆိုင်းဆဲ",
-    REVIEW: "စစ်ဆေးဆဲ",
-    APPROVED: "အတည်ပြုပြီး",
-    REJECTED: "လက်မခံပါ",
-    EXPIRED: "သက်တမ်းကုန်",
-  };
-  const lines = orders.map(
-    (order) =>
-      `${order.orderNo} — ${fmtMoneyMy(order.totalAmount)} ကျပ် — ${statusMy[order.status] ?? order.status}`
-  );
-  await sendMessage(customer.chatId, `🧾 နောက်ဆုံး မှတ်တမ်းများ\n\n${lines.join("\n")}`);
+
+  const sessions = await prisma.threeDSession.findMany({
+    where: { id: { in: [...new Set(orders.map((o) => o.sessionId))] } },
+    select: { id: true, name: true, drawDate: true, gameType: true, resultNumber: true },
+  });
+  const sessionById = new Map(sessions.map((s) => [s.id, s]));
+
+  const bets = await prisma.threeDTransaction.findMany({
+    where: { telegramOrderId: { in: orders.map((o) => o.id) }, deletedAt: null },
+    select: { telegramOrderId: true, number: true, betAmount: true, isWinner: true, winAmount: true },
+  });
+  const betsByOrder = new Map<string, typeof bets>();
+  for (const bet of bets) {
+    const key = bet.telegramOrderId!;
+    betsByOrder.set(key, [...(betsByOrder.get(key) ?? []), bet]);
+  }
+
+  let totalWon = 0n;
+  const blocks: string[] = [];
+
+  for (const order of orders) {
+    const session = sessionById.get(order.sessionId);
+    const head =
+      `🧾 ${order.orderNo} — ${ORDER_STATUS_MY[order.status] ?? order.status}` +
+      (session ? `\n${gameRules(session.gameType).label} · ${session.name} · ${session.drawDate}` : "");
+
+    const placed = betsByOrder.get(order.id) ?? [];
+    let body: string;
+    if (placed.length > 0) {
+      body = placed
+        .map((bet) => {
+          const line = `${bet.number} — ${fmtMoneyMy(bet.betAmount)}`;
+          if (bet.isWinner) {
+            totalWon += bet.winAmount;
+            return `✅ ${line}  →  ပေါက်  ${fmtMoneyMy(bet.winAmount)} ကျပ်`;
+          }
+          // Only shown as a loss once the number is actually out.
+          return session?.resultNumber ? `▫️ ${line}` : `⏳ ${line}`;
+        })
+        .join("\n");
+    } else {
+      // Not approved yet, so there are no records — show what was asked for.
+      const rows = JSON.parse(order.rows) as { number: string; amount: string }[];
+      body = rows.map((r) => `⏳ ${r.number} — ${r.amount}`).join("\n");
+    }
+
+    const result = session?.resultNumber ? `\nထွက်ဂဏန်း — ${session.resultNumber}` : "";
+    blocks.push(`${head}${result}\n${body}\nစုစုပေါင်း — ${fmtMoneyMy(order.totalAmount)} ကျပ်`);
+  }
+
+  const footer = totalWon > 0n ? `\n\n🏆 စုစုပေါင်း ပေါက်ငွေ — ${fmtMoneyMy(totalWon)} ကျပ်` : "";
+  await sendMessage(customer.chatId, `📜 ကျွန်ုပ်၏ မှတ်တမ်း\n\n${blocks.join("\n\n")}${footer}`);
 }
 
 export async function customerCancel(customer: CustomerRow) {

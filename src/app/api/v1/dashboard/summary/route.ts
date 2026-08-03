@@ -97,7 +97,6 @@ export const GET = withAuth("dashboard.view", async ({ req, user }) => {
   const zeroGame = {
     totalRecords: 0,
     totalBet: 0n,
-    totalPotentialPayout: 0n,
     totalCommission: 0n,
     settledProfit: 0n,
     unsettledAmount: 0n,

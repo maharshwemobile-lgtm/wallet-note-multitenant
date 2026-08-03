@@ -16,18 +16,12 @@ export const GET = withAuth("three_d.view", async ({ user, params }) => {
     _sum: { betAmount: true, commissionAmount: true },
     _count: true,
   });
-  // Only records still awaiting a result carry exposure.
-  const pending = await prisma.threeDTransaction.aggregate({
-    where: { sessionId: session.id, deletedAt: null, settlementStatus: "PENDING" },
-    _sum: { potentialPayout: true },
-  });
   return json({
     session,
     exposure,
     totals: {
       count: agg._count,
       totalBet: agg._sum.betAmount ?? 0n,
-      totalPotentialPayout: pending._sum.potentialPayout ?? 0n,
       totalCommission: agg._sum.commissionAmount ?? 0n,
     },
   });

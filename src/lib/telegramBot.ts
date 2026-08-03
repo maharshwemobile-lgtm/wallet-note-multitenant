@@ -892,11 +892,13 @@ async function handleCustomerUpdate(
     return sendMessage(chatId, "This bot is already linked to a different Telegram account. Unlink it in Wallet Note first if this is you.");
   }
 
+  const from = update.message?.from ?? update.callback_query?.from;
   const customer = await resolveCustomer(
     ownerUserId,
     businessId,
     chatId,
-    update.message?.from?.first_name ?? update.callback_query?.from.first_name
+    from?.first_name,
+    from?.username
   );
   if (customer.blocked) return;
 

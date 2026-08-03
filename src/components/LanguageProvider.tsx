@@ -223,7 +223,6 @@ const MM: Record<string, string> = {
   "Search supplier name or phone...": "ကုန်သွင်းသူအမည် သို့မဟုတ် ဖုန်းဖြင့်ရှာရန်…",
   "Search name, SKU, or barcode…": "အမည်၊ SKU သို့မဟုတ် ဘားကုဒ်ဖြင့်ရှာရန်…",
   "Search or scan barcode…": "ရှာရန် သို့မဟုတ် ဘားကုဒ်ဖတ်ရန်…",
-  "3D Payout Exposure": "3D ပေးလျော်နိုင်ခြေ",
   "3D Settled P/L": "3D စာရင်းရှင်း အမြတ်/အရှုံး",
   "3D Total Today": "ယနေ့ 3D စုစုပေါင်း",
   "3D commission %": "3D ကော်မရှင် %",

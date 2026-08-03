@@ -14,7 +14,6 @@ function playSafeSummary<T extends { threeD: unknown }>(summary: T): T {
     threeD: {
       totalRecords: 0,
       totalBet: 0n,
-      totalPotentialPayout: 0n,
       totalCommission: 0n,
       settledProfit: 0n,
       unsettledAmount: 0n,
