@@ -500,15 +500,17 @@ async function exConfirm(chatId: string, user: AuthUser, data: Record<string, un
 async function startThreeD(chatId: string, user: AuthUser) {
   const branchId = await defaultBranchId(user);
   if (!branchId) return sendMessage(chatId, "No branch is available for your account.");
+  // 2D and 3D share this table, so an unfiltered list offers 2D sessions under "3D".
+  // Each is shown with its game, or MORNING/EVENING would be ambiguous.
   const sessions = await prisma.threeDSession.findMany({
     where: { businessId: user.businessId, status: "OPEN" },
     orderBy: { drawDate: "desc" },
     take: 10,
   });
-  if (sessions.length === 0) return sendMessage(chatId, "No open 3D session. Open one in Wallet Note first.");
-  const rows = sessions.map((s) => [btn(`${s.name} (${s.drawDate})`, `s:${s.id}`)]);
+  if (sessions.length === 0) return sendMessage(chatId, "No open session. Open one in Wallet Note first.");
+  const rows = sessions.map((s) => [btn(`${gameRules(s.gameType).label} · ${s.name} (${s.drawDate})`, `s:${s.id}`)]);
   await setSession(user.id, chatId, "3d.session", { branchId });
-  await sendMessage(chatId, "🔢 3D\n\nWhich session?", { replyMarkup: keyboard([...rows, CANCEL_ROW]) });
+  await sendMessage(chatId, "🔢 Lottery\n\nWhich session?", { replyMarkup: keyboard([...rows, CANCEL_ROW]) });
 }
 
 async function tdStepSession(chatId: string, user: AuthUser, data: Record<string, unknown>, sessionId: string) {

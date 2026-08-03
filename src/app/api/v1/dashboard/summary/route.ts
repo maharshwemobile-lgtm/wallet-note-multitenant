@@ -18,20 +18,30 @@ export const GET = withAuth("dashboard.view", async ({ req, user }) => {
 
   const summary = await computeDaySummary(prisma, user.businessId, date, branchIds);
 
-  const [recentThreeD, recentExchanges, pendingSessions, moduleSetting] = await Promise.all([
+  // Each list names its game. These share one table, so an unfiltered query shows 2D bets
+  // under a "3D" heading.
+  const recentByGame = (gameType: string) =>
     playEdition ? Promise.resolve([]) : prisma.threeDTransaction.findMany({
-      where: { businessId: user.businessId, deletedAt: null, settlementStatus: { not: "CANCELLED" } },
+      where: {
+        businessId: user.businessId, deletedAt: null,
+        settlementStatus: { not: "CANCELLED" },
+        session: { gameType },
+      },
       orderBy: { createdAt: "desc" },
       take: 8,
       include: { session: { select: { name: true } } },
-    }),
+    });
+
+  const [recentThreeD, recentTwoD, recentExchanges, pendingSessions, moduleSetting] = await Promise.all([
+    recentByGame("THREE_D"),
+    recentByGame("TWO_D"),
     prisma.exchangeTransaction.findMany({
       where: { businessId: user.businessId, deletedAt: null, status: "COMPLETED" },
       orderBy: { createdAt: "desc" },
       take: 8,
     }),
     playEdition ? Promise.resolve([]) : prisma.threeDSession.findMany({
-      where: { businessId: user.businessId, status: { in: ["OPEN", "CLOSED", "RESULT_ENTERED"] } },
+      where: { businessId: user.businessId, gameType: "THREE_D", status: { in: ["OPEN", "CLOSED", "RESULT_ENTERED"] } },
       orderBy: { drawDate: "desc" },
       take: 5,
     }),
@@ -82,22 +92,22 @@ export const GET = withAuth("dashboard.view", async ({ req, user }) => {
     };
   }
 
+  // PLAY hides the lottery area entirely, so both games are zeroed — not just 3D, or 2D
+  // figures would show in an edition that is meant to have none.
+  const zeroGame = {
+    totalRecords: 0,
+    totalBet: 0n,
+    totalPotentialPayout: 0n,
+    totalCommission: 0n,
+    settledProfit: 0n,
+    unsettledAmount: 0n,
+  };
   const safeSummary = playEdition
-    ? {
-        ...summary,
-        threeD: {
-          totalRecords: 0,
-          totalBet: 0n,
-          totalPotentialPayout: 0n,
-          totalCommission: 0n,
-          settledProfit: 0n,
-          unsettledAmount: 0n,
-        },
-      }
+    ? { ...summary, threeD: zeroGame, twoD: zeroGame }
     : summary;
 
   return json({
-    date, summary: safeSummary, recentThreeD, recentExchanges, pendingSessions,
+    date, summary: safeSummary, recentThreeD, recentTwoD, recentExchanges, pendingSessions,
     rates,
     pos,
   });

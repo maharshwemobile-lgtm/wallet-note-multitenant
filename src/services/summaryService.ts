@@ -3,15 +3,20 @@ import { dateRangeUtc } from "@/lib/dates";
 
 // Computes the daily business summary used by both the dashboard and daily close.
 
+export interface GameTotals {
+  totalRecords: number;
+  totalBet: bigint;
+  totalPotentialPayout: bigint;
+  totalCommission: bigint;
+  settledProfit: bigint;
+  unsettledAmount: bigint;
+}
+
 export interface DaySummary {
-  threeD: {
-    totalRecords: number;
-    totalBet: bigint;
-    totalPotentialPayout: bigint;
-    totalCommission: bigint;
-    settledProfit: bigint;
-    unsettledAmount: bigint;
-  };
+  // Reported per game. 2D and 3D share one table, so without splitting them here a 2D bet
+  // would be counted and shown as 3D.
+  threeD: GameTotals;
+  twoD: GameTotals;
   exchange: {
     buyVolumeThb: bigint;
     sellVolumeThb: bigint;
@@ -33,28 +38,38 @@ export async function computeDaySummary(
   const range = dateRangeUtc(date);
   const branchFilter = branchIds ? { branchId: { in: branchIds } } : {};
 
-  // --- 3D (sessions drawn on this date)
-  const threeDTxns = await tx.threeDTransaction.findMany({
-    where: {
-      businessId, deletedAt: null, settlementStatus: { not: "CANCELLED" },
-      session: { drawDate: date },
-      ...branchFilter,
-    },
-    select: { betAmount: true, potentialPayout: true, commissionAmount: true, settlementStatus: true },
-  });
-  const settlements = await tx.threeDSettlement.findMany({
-    where: { session: { businessId, drawDate: date }, reopenedAt: null },
-    select: { netProfit: true },
-  });
-
-  let totalBet = 0n, totalPayout = 0n, totalCommission = 0n, unsettled = 0n;
-  for (const t of threeDTxns) {
-    totalBet += t.betAmount;
-    totalPayout += t.potentialPayout;
-    totalCommission += t.commissionAmount;
-    if (t.settlementStatus === "PENDING") unsettled += t.betAmount;
+  // --- Lottery, per game (sessions drawn on this date)
+  async function gameTotals(gameType: string): Promise<GameTotals> {
+    const txns = await tx.threeDTransaction.findMany({
+      where: {
+        businessId, deletedAt: null, settlementStatus: { not: "CANCELLED" },
+        session: { drawDate: date, gameType },
+        ...branchFilter,
+      },
+      select: { betAmount: true, potentialPayout: true, commissionAmount: true, settlementStatus: true },
+    });
+    const settlements = await tx.threeDSettlement.findMany({
+      where: { session: { businessId, drawDate: date, gameType }, reopenedAt: null },
+      select: { netProfit: true },
+    });
+    let totalBet = 0n, totalPayout = 0n, totalCommission = 0n, unsettled = 0n;
+    for (const t of txns) {
+      totalBet += t.betAmount;
+      totalPayout += t.potentialPayout;
+      totalCommission += t.commissionAmount;
+      if (t.settlementStatus === "PENDING") unsettled += t.betAmount;
+    }
+    return {
+      totalRecords: txns.length,
+      totalBet,
+      totalPotentialPayout: totalPayout,
+      totalCommission,
+      settledProfit: settlements.reduce((a, x) => a + x.netProfit, 0n),
+      unsettledAmount: unsettled,
+    };
   }
-  const settledProfit = settlements.reduce((a, s) => a + s.netProfit, 0n);
+  const threeD = await gameTotals("THREE_D");
+  const twoD = await gameTotals("TWO_D");
 
   // --- Exchange (transactions created within the date)
   const exchanges = await tx.exchangeTransaction.findMany({
@@ -139,14 +154,8 @@ export async function computeDaySummary(
   for (const l of ledger) netCash += l.direction === "DEBIT" ? l.amount : -l.amount;
 
   return {
-    threeD: {
-      totalRecords: threeDTxns.length,
-      totalBet,
-      totalPotentialPayout: totalPayout,
-      totalCommission,
-      settledProfit,
-      unsettledAmount: unsettled,
-    },
+    threeD,
+    twoD,
     exchange: { buyVolumeThb: buyThb, sellVolumeThb: sellThb, serviceFees: fees, profit: exProfit },
     wallets: { totalMmk, totalThb, lowBalance },
     credit: {

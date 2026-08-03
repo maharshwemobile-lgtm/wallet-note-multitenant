@@ -28,19 +28,22 @@ export const GET = withAuth("report.export", async ({ req, user }) => {
   const from = sp.get("from") ?? addDays(to, -30);
   const range = { gte: dateRangeUtc(from).gte, lt: dateRangeUtc(to).lt };
 
-  if (type === "three_d") {
+  if (type === "three_d" || type === "two_d") {
+    const gameType = type === "two_d" ? "TWO_D" : "THREE_D";
     const txns = await prisma.threeDTransaction.findMany({
       where: {
         businessId: user.businessId,
         deletedAt: null,
         settlementStatus: { not: "CANCELLED" },
         createdAt: range,
+        // These share one table; without this a 3D export also contains every 2D bet.
+        session: { gameType },
         ...branchScope(user),
       },
       include: { session: { select: { name: true, drawDate: true } }, customer: { select: { name: true } } },
       orderBy: { createdAt: "asc" },
     });
-    return csvResponse(`three-d-${from}-to-${to}.csv`, [
+    return csvResponse(`${type === "two_d" ? "two" : "three"}-d-${from}-to-${to}.csv`, [
       ["Txn No", "Draw Date", "Session", "Number", "Customer", "Bet Amount", "Odds", "Potential Payout", "Commission", "Net Amount", "Winner", "Win Amount", "Status"],
       ...txns.map((t) => [
         t.txnNo, t.session.drawDate, t.session.name, `="${t.number}"`, t.customer?.name ?? t.customerName ?? "",

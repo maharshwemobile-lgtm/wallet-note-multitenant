@@ -55,7 +55,7 @@ export default function TwoDPage() {
       });
       push("Session created");
       setShowNew(false);
-      router.push(`/three-d/${s.id}`);
+      router.push(`/two-d/${s.id}`);
     } catch (e) {
       push(e instanceof Error ? e.message : "Failed", "error");
     }
@@ -89,7 +89,7 @@ export default function TwoDPage() {
             <tr
               key={s.id}
               className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50"
-              onClick={() => router.push(`/three-d/${s.id}`)}
+              onClick={() => router.push(`/two-d/${s.id}`)}
             >
               <td className="px-3 py-2.5 font-medium">
                 {s.name} {s.drawTime && <span className="text-xs text-gray-400">{s.drawTime}</span>}

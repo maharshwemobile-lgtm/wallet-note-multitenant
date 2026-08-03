@@ -5,7 +5,7 @@ import { branchScope } from "@/lib/auth";
 import { assertBranchAccess } from "@/lib/tenant";
 import { toMinor } from "@/lib/money";
 import { computeThreeD, parseBulkLines } from "@/services/threeDService";
-import { gameRules, isValidNumber, numberRangeLabel } from "@/lib/lotteryGame";
+import { gameRules, isGameType, isValidNumber, numberRangeLabel } from "@/lib/lotteryGame";
 import { nextNumber } from "@/lib/sequence";
 import { audit } from "@/lib/audit";
 import { assertDateOpen } from "@/services/closeGuard";
@@ -19,7 +19,10 @@ export const GET = withAuth("three_d.view", async ({ req, user }) => {
     deletedAt: null,
     settlementStatus: { not: "CANCELLED" },
     ...branchScope(user),
-    ...(sp.get("sessionId") ? { sessionId: sp.get("sessionId")! } : {}),
+    ...(sp.get("sessionId")
+      ? { sessionId: sp.get("sessionId")! }
+      // Without a specific session, scope to one game — otherwise a 3D listing includes 2D bets.
+      : { session: { gameType: isGameType(sp.get("game")) ? sp.get("game")! : "THREE_D" } }),
     ...(sp.get("number") ? { number: sp.get("number")! } : {}),
     ...(sp.get("agentId") ? { agentId: sp.get("agentId")! } : {}),
     ...(sp.get("customerId") ? { customerId: sp.get("customerId")! } : {}),
@@ -115,7 +118,7 @@ export const POST = withAuth("three_d.create", async ({ req, user }) => {
       const betAmount = toMinor(r.amount);
       if (betAmount <= 0n) throw new ApiError(422, "Bet amount must be greater than zero");
       const calc = computeThreeD(betAmount, odds, commissionRate);
-      const txnNo = await nextNumber(tx, user.businessId, "THREE_D");
+      const txnNo = await nextNumber(tx, user.businessId, session.gameType);
       out.push(
         await tx.threeDTransaction.create({
           data: {

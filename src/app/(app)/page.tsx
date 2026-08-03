@@ -9,6 +9,7 @@ import { useAuth } from "@/components/AppShell";
 
 interface Summary {
   threeD: { totalRecords: number; totalBet: string; totalPotentialPayout: string; totalCommission: string; settledProfit: string; unsettledAmount: string };
+  twoD: { totalRecords: number; totalBet: string; totalPotentialPayout: string; totalCommission: string; settledProfit: string; unsettledAmount: string };
   exchange: { buyVolumeThb: string; sellVolumeThb: string; serviceFees: string; profit: string };
   wallets: { totalMmk: string; totalThb: string; lowBalance: { id: string; name: string; currentBalance: string; minBalance: string }[] };
   credit: { newIssued: string; collected: string; outstanding: string };
@@ -20,6 +21,7 @@ interface DashData {
   date: string;
   summary: Summary;
   recentThreeD: { id: string; txnNo: string; number: string; betAmount: string; createdAt: string; session: { name: string } }[];
+  recentTwoD: { id: string; txnNo: string; number: string; betAmount: string; createdAt: string; session: { name: string } }[];
   recentExchanges: { id: string; txnNo: string; type: string; fromAmount: string; fromCurrency: string; toAmount: string; toCurrency: string; createdAt: string; status: string }[];
   pendingSessions: { id: string; name: string; drawDate: string; status: string }[];
   rates: { pair: string; buyRate: string; sellRate: string }[];
@@ -92,6 +94,10 @@ export default function DashboardPage() {
         {!playEdition && featureEnabled("threeD") && <StatCard label="3D Payout Exposure" value={fmtMoney(s.threeD.totalPotentialPayout, "MMK")} tone="amber" onClick={() => router.push("/three-d")} />}
         {!playEdition && featureEnabled("threeD") && <StatCard label="3D Settled P/L" value={fmtMoney(s.threeD.settledProfit, "MMK")} tone={BigInt(s.threeD.settledProfit) >= 0n ? "green" : "red"} onClick={() => router.push("/three-d")} />}
         {!playEdition && featureEnabled("threeD") && <StatCard label="Unsettled 3D" value={fmtMoney(s.threeD.unsettledAmount, "MMK")} tone="amber" onClick={() => router.push("/three-d")} />}
+        {!playEdition && featureEnabled("twoD") && <StatCard label="2D Total Today" value={fmtMoney(s.twoD.totalBet, "MMK")} sub={`${s.twoD.totalRecords} records`} onClick={() => router.push("/two-d")} />}
+        {!playEdition && featureEnabled("twoD") && <StatCard label="2D Payout Exposure" value={fmtMoney(s.twoD.totalPotentialPayout, "MMK")} tone="amber" onClick={() => router.push("/two-d")} />}
+        {!playEdition && featureEnabled("twoD") && <StatCard label="2D Settled P/L" value={fmtMoney(s.twoD.settledProfit, "MMK")} tone={BigInt(s.twoD.settledProfit) >= 0n ? "green" : "red"} onClick={() => router.push("/two-d")} />}
+        {!playEdition && featureEnabled("twoD") && <StatCard label="Unsettled 2D" value={fmtMoney(s.twoD.unsettledAmount, "MMK")} tone="amber" onClick={() => router.push("/two-d")} />}
         {featureEnabled("wallets") && <>
         <StatCard label="Total MMK Balance" value={fmtMoney(s.wallets.totalMmk, "MMK")} onClick={() => router.push("/wallets")} />
         <StatCard label="Total THB Balance" value={fmtMoney(s.wallets.totalThb, "THB")} onClick={() => router.push("/wallets")} />
@@ -164,6 +170,21 @@ export default function DashboardPage() {
           <h3 className="mb-3 text-sm font-semibold">Recent 3D records</h3>
           <ul className="space-y-2">
             {data.recentThreeD.map((t) => (
+              <li key={t.id} className="flex items-center justify-between text-sm">
+                <span className="font-mono font-bold">{t.number}</span>
+                <span className="tabular-nums">{fmtMoney(t.betAmount)} MMK</span>
+                <span className="text-xs text-gray-500">{fmtDateTime(t.createdAt)}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+        )}
+        {!playEdition && featureEnabled("twoD") && (
+        <Card>
+          <h3 className="mb-3 text-sm font-semibold">Recent 2D records</h3>
+          {data.recentTwoD.length === 0 && <p className="text-sm text-gray-500">No 2D records yet</p>}
+          <ul className="space-y-2">
+            {data.recentTwoD.map((t) => (
               <li key={t.id} className="flex items-center justify-between text-sm">
                 <span className="font-mono font-bold">{t.number}</span>
                 <span className="tabular-nums">{fmtMoney(t.betAmount)} MMK</span>

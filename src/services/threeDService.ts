@@ -102,7 +102,7 @@ export async function createThreeDBets(
     const betAmount = toMinor(row.amount);
     if (betAmount <= 0n) throw new ApiError(422, "Bet amount must be greater than zero");
     const calculation = computeThreeD(betAmount, odds, opts.commissionRate);
-    const txnNo = await nextNumber(tx, opts.businessId, "THREE_D");
+    const txnNo = await nextNumber(tx, opts.businessId, betGame);
     created.push(await tx.threeDTransaction.create({
       data: {
         txnNo,
@@ -240,7 +240,7 @@ export async function settleSession(
       amount: preview.netProfit > 0n ? preview.netProfit : -preview.netProfit,
       refType: "THREE_D_SETTLE",
       refId: settlement.id,
-      description: `3D settlement ${session.name} ${session.drawDate} result ${preview.resultNumber}`,
+      description: `${gameRules(session.gameType).label} settlement ${session.name} ${session.drawDate} result ${preview.resultNumber}`,
       createdById: opts.userId,
       allowNegative: true,
     });
