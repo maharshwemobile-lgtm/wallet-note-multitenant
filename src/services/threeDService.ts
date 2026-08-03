@@ -1,6 +1,7 @@
 import { Tx } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
 import { mulMinor, percentOf, isThreeDigit, toMinor } from "@/lib/money";
+import { gameRules, isValidNumber, numberRangeLabel } from "@/lib/lotteryGame";
 import { postLedger, reverseLedgerEntries } from "./walletService";
 import { audit } from "@/lib/audit";
 import { nextNumber } from "@/lib/sequence";
@@ -57,9 +58,20 @@ export async function createThreeDBets(
   }
 ) {
   if (opts.rows.length === 0) throw new ApiError(422, "No records to save");
+  // Validate against the session's own game, so a 3D number cannot be booked into a 2D
+  // session (or the reverse) and then never match a result.
+  const betSession = await tx.threeDSession.findUnique({
+    where: { id: opts.sessionId },
+    select: { gameType: true },
+  });
+  const betGame = betSession?.gameType ?? "THREE_D";
   for (const row of opts.rows) {
-    if (!isThreeDigit(row.number))
-      throw new ApiError(422, `Invalid 3D number: "${row.number}" (must be 000-999)`);
+    if (!isValidNumber(row.number, betGame)) {
+      throw new ApiError(
+        422,
+        `Invalid ${gameRules(betGame).label} number: "${row.number}" (must be ${numberRangeLabel(betGame)})`
+      );
+    }
   }
 
   const session = await tx.threeDSession.findFirst({
@@ -136,7 +148,15 @@ export async function previewSettlement(
   sessionId: string,
   resultNumber: string
 ): Promise<SettlementPreview> {
-  if (!isThreeDigit(resultNumber)) throw new ApiError(422, "Result must be a three-digit number");
+  // The session decides how many digits a result has — 2D and 3D share this table.
+  const owning = await tx.threeDSession.findUnique({
+    where: { id: sessionId },
+    select: { gameType: true },
+  });
+  const gameType = owning?.gameType ?? "THREE_D";
+  if (!isValidNumber(resultNumber, gameType)) {
+    throw new ApiError(422, `Result must be a ${gameRules(gameType).digits}-digit number (${numberRangeLabel(gameType)})`);
+  }
   const txns = await tx.threeDTransaction.findMany({
     where: { sessionId, deletedAt: null, settlementStatus: { not: "CANCELLED" } },
   });

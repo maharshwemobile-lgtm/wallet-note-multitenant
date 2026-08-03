@@ -5,13 +5,18 @@ import { audit } from "@/lib/audit";
 import { todayBusinessDate, isValidBusinessDate } from "@/lib/dates";
 import { assertBranchAccess } from "@/lib/tenant";
 import { closeExpiredThreeDSessions } from "@/services/thaiLottoService";
+import { gameRules, isGameType } from "@/lib/lotteryGame";
 
 export const GET = withAuth("three_d.view", async ({ req, user }) => {
   await closeExpiredThreeDSessions();
   const sp = req.nextUrl.searchParams;
   const { skip, take, page, pageSize } = pagination(req);
+  // 2D and 3D share this table, so the game has to be named or a 2D session would show up
+  // on the 3D page. Defaults to 3D, which is what every pre-existing row is.
+  const gameType = isGameType(sp.get("game")) ? sp.get("game")! : "THREE_D";
   const where = {
     businessId: user.businessId,
+    gameType,
     ...(sp.get("date") ? { drawDate: sp.get("date")! } : {}),
     ...(sp.get("status") ? { status: sp.get("status")! } : {}),
   };
@@ -47,7 +52,8 @@ const createSchema = z.object({
   drawDate: z.string().refine(isValidBusinessDate, "Invalid date").default(todayBusinessDate),
   drawTime: z.string().optional(),
   cutoffTime: z.string().optional(),
-  defaultOdds: z.string().regex(/^\d+(\.\d+)?$/).default("500"),
+  defaultOdds: z.string().regex(/^\d+(\.\d+)?$/).optional(),
+  gameType: z.enum(["THREE_D", "TWO_D"]).default("THREE_D"),
   branchId: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -55,16 +61,19 @@ const createSchema = z.object({
 export const POST = withAuth("three_d.create", async ({ req, user }) => {
   const body = await parseBody(req, createSchema);
   if (body.branchId) await assertBranchAccess(user, body.branchId);
+  // 2D pays 85, 3D pays 500 — take the game's rate unless one was given.
+  const defaultOdds = body.defaultOdds ?? gameRules(body.gameType).defaultOdds;
   const session = await prisma.$transaction(async (tx) => {
     const s = await tx.threeDSession.create({
       data: {
         businessId: user.businessId,
         branchId: body.branchId,
+        gameType: body.gameType,
         name: body.name,
         drawDate: body.drawDate,
         drawTime: body.drawTime,
         cutoffTime: body.cutoffTime,
-        defaultOdds: body.defaultOdds,
+        defaultOdds,
         notes: body.notes,
         status: "OPEN",
         createdById: user.id,

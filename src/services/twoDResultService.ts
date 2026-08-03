@@ -96,6 +96,134 @@ async function fetchFromThaiStock2D(): Promise<TwoDResult[]> {
   return out;
 }
 
+/** Today's date in a business's own timezone, as YYYY-MM-DD. */
+function businessToday(timezone: string | null | undefined): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: timezone || "Asia/Yangon" });
+}
+
+/** Open today's 2D sessions for every business that has 2D switched on.
+ *
+ *  2D draws twice every trading day, so making someone create a session by hand each
+ *  morning — and pick the right draw date — is work the app can do itself. The draw date
+ *  is always the business's own today, so it cannot be typed wrong.
+ *
+ *  Sessions are only opened Monday to Friday: the Thai SET does not trade at the weekend,
+ *  so a Saturday session would never receive a number to settle against. A Thai public
+ *  holiday still produces an empty session, which simply never settles and can be
+ *  cancelled — better than missing a real trading day.
+ */
+export async function autoOpenTwoDSessions() {
+  const businesses = await prisma.business.findMany({
+    select: { id: true, timezone: true, settings: true },
+  });
+
+  let opened = 0;
+  let skipped = 0;
+
+  for (const business of businesses) {
+    // Opt-in: only businesses that turned 2D on.
+    const modules = (business.settings as { modules?: { features?: Record<string, boolean> } } | null)?.modules;
+    if (modules?.features?.twoD !== true) { skipped += 1; continue; }
+
+    const drawDate = businessToday(business.timezone);
+    const weekday = new Date(`${drawDate}T00:00:00Z`).getUTCDay(); // 0 Sun … 6 Sat
+    if (weekday === 0 || weekday === 6) { skipped += 1; continue; }
+
+    for (const session of TWO_D_SESSIONS) {
+      const existing = await prisma.threeDSession.findFirst({
+        where: { businessId: business.id, gameType: "TWO_D", drawDate, name: session.name },
+        select: { id: true },
+      });
+      if (existing) continue;
+
+      const rules = TWO_D_SESSION_TIMES[session.name];
+      await prisma.threeDSession.create({
+        data: {
+          businessId: business.id,
+          gameType: "TWO_D",
+          name: session.name,
+          drawDate,
+          drawTime: rules.drawTime,
+          cutoffTime: rules.cutoffTime,
+          defaultOdds: "85",
+          status: "OPEN",
+        },
+      });
+      opened += 1;
+    }
+  }
+
+  return { opened, skipped };
+}
+
+/** Cutoff a few minutes before the draw, so bets stop before the number is known. */
+const TWO_D_SESSION_TIMES: Record<string, { drawTime: string; cutoffTime: string }> = {
+  MORNING: { drawTime: "12:01", cutoffTime: "11:55" },
+  EVENING: { drawTime: "16:30", cutoffTime: "16:25" },
+};
+
+/** Settle closed 2D sessions against the official number for their date and session.
+ *
+ *  Kept separate from the 3D version because the number comes from a different table and
+ *  is matched on date *and* session — morning and evening draw different numbers on the
+ *  same day, so matching on date alone would settle bets against the wrong draw.
+ *
+ *  No wallet is passed, so nothing moves money, matching the 3D behaviour.
+ */
+export async function autoSettleTwoDSessions() {
+  const { settleSession } = await import("./threeDService");
+
+  const sessions = await prisma.threeDSession.findMany({
+    where: { gameType: "TWO_D", status: "CLOSED" },
+    select: { id: true, businessId: true, drawDate: true, name: true },
+  });
+  if (!sessions.length) return { settled: 0, skipped: 0, warnings: [] as string[] };
+
+  const results = await prisma.twoDOfficialResult.findMany({
+    where: { drawDate: { in: [...new Set(sessions.map((s) => s.drawDate))] } },
+    select: { drawDate: true, sessionName: true, resultNumber: true },
+  });
+  const byKey = new Map(results.map((r) => [`${r.drawDate}:${r.sessionName}`, r.resultNumber]));
+
+  const owners = new Map<string, string>();
+  let settled = 0;
+  let skipped = 0;
+  const warnings: string[] = [];
+
+  for (const session of sessions) {
+    const resultNumber = byKey.get(`${session.drawDate}:${session.name}`);
+    if (!resultNumber) { skipped += 1; continue; }
+
+    let ownerId = owners.get(session.businessId);
+    if (!ownerId) {
+      const owner = await prisma.user.findFirst({
+        where: { businessId: session.businessId, deletedAt: null, role: { name: "Owner" } },
+        select: { id: true },
+      });
+      if (!owner) { skipped += 1; warnings.push(`No Owner for business ${session.businessId}`); continue; }
+      ownerId = owner.id;
+      owners.set(session.businessId, ownerId);
+    }
+
+    try {
+      await prisma.$transaction((tx) =>
+        settleSession(tx, {
+          sessionId: session.id,
+          resultNumber,
+          userId: ownerId!,
+          businessId: session.businessId,
+        })
+      );
+      settled += 1;
+    } catch (error) {
+      skipped += 1;
+      warnings.push(`${session.drawDate} ${session.name}: ${error instanceof Error ? error.message : "settle failed"}`);
+    }
+  }
+
+  return { settled, skipped, warnings };
+}
+
 /** Fetch and store the official 2D results.
  *
  *  RapidAPI is tried first — it is the paid source and reports is_close_day — but its

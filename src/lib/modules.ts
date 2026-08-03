@@ -16,6 +16,7 @@ export const FEATURE_KEYS = [
   "items",
   "stock",
   "threeD",
+  "twoD",
   "exchange",
   "wallets",
   "transfers",
@@ -44,6 +45,7 @@ export const FEATURE_DEFINITIONS: {
   { key: "stock", label: "Stock", group: "Mini Mart" },
   { key: "suppliers", label: "Suppliers", group: "Mini Mart" },
   { key: "threeD", label: "3D Records", group: "Wallet Note" },
+  { key: "twoD", label: "2D Records", group: "Wallet Note" },
   { key: "exchange", label: "Exchange", group: "Wallet Note" },
   { key: "wallets", label: "Wallets", group: "Wallet Note" },
   { key: "transfers", label: "Transfer", group: "Wallet Note" },
@@ -105,7 +107,7 @@ export function categoryPreset(category: BusinessCategory): FeatureVisibility {
       ]);
     case "THREE_D":
       return visibility([
-        "threeD", "wallets", "transfers", "withdraw", "credit", "incomeExpense",
+        "threeD", "twoD", "wallets", "transfers", "withdraw", "credit", "incomeExpense",
         "reports", "customers", "telegram", "about",
       ]);
     case "MONEY_SERVICE":

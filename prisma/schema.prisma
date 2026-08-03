@@ -160,6 +160,7 @@ model ThreeDSession {
   id           String    @id @default(uuid())
   businessId   String
   branchId     String?
+  gameType     String    @default("THREE_D") // THREE_D | TWO_D
   name         String    // Morning / Evening / custom
   drawDate     String    // YYYY-MM-DD (business date)
   drawTime     String?   // HH:mm
@@ -176,6 +177,7 @@ model ThreeDSession {
   settlement   ThreeDSettlement?
 
   @@index([businessId, drawDate])
+  @@index([businessId, gameType, drawDate])
 }
 
 model ThreeDTransaction {

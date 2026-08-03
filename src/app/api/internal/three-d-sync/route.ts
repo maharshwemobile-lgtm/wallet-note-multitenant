@@ -4,7 +4,11 @@ import {
   closeExpiredThreeDSessions,
   syncThaiThreeDHistory,
 } from "@/services/thaiLottoService";
-import { syncTwoDResults } from "@/services/twoDResultService";
+import {
+  autoOpenTwoDSessions,
+  autoSettleTwoDSessions,
+  syncTwoDResults,
+} from "@/services/twoDResultService";
 
 export async function POST(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
@@ -12,13 +16,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  // Open today's 2D sessions before closing, so a session created this minute is still
+  // subject to its own cutoff in the same run.
+  const opened = await autoOpenTwoDSessions();
   const closed = await closeExpiredThreeDSessions();
 
   if (req.nextUrl.searchParams.get("sync") !== "1") {
     // The every-minute run still settles: a session that closed earlier may only now have
     // an official number to settle against.
     const settle = await autoSettleClosedSessions();
-    return NextResponse.json({ ok: true, closed, settle });
+    const settleTwoD = await autoSettleTwoDSessions();
+    return NextResponse.json({ ok: true, opened, closed, settle, settleTwoD });
   }
 
   let history;
@@ -40,5 +48,6 @@ export async function POST(req: NextRequest) {
 
   // Always after the fetch, so a number that just arrived settles on the same run.
   const settle = await autoSettleClosedSessions();
-  return NextResponse.json({ ok: true, closed, history, twoD, settle });
+  const settleTwoD = await autoSettleTwoDSessions();
+  return NextResponse.json({ ok: true, opened, closed, history, twoD, settle, settleTwoD });
 }
