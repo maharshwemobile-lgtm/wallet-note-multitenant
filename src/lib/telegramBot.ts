@@ -516,12 +516,26 @@ async function startThreeD(chatId: string, user: AuthUser) {
   if (!branchId) return sendMessage(chatId, "No branch is available for your account.");
   // 2D and 3D share this table, so an unfiltered list offers 2D sessions under "3D".
   // Each is shown with its game, or MORNING/EVENING would be ambiguous.
-  const sessions = await prisma.threeDSession.findMany({
+  const allOpen = await prisma.threeDSession.findMany({
     where: { businessId: user.businessId, status: "OPEN" },
     orderBy: { drawDate: "desc" },
-    take: 10,
+    take: 20,
   });
-  if (sessions.length === 0) return sendMessage(chatId, "No open session. Open one in Wallet Note first.");
+  // Drop draws whose cut-off has gone. In the evening the morning session is still OPEN
+  // until the closer runs, and offering it just produces a refusal at save time.
+  const business = await prisma.business.findUnique({
+    where: { id: user.businessId },
+    select: { timezone: true },
+  });
+  const zone = business?.timezone || "Asia/Yangon";
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: zone });
+  const nowHhMm = new Date().toLocaleTimeString("en-GB", {
+    timeZone: zone, hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  const sessions = allOpen
+    .filter((s) => s.drawDate > today || !s.cutoffTime || nowHhMm < s.cutoffTime)
+    .slice(0, 10);
+  if (sessions.length === 0) return sendMessage(chatId, "No session is open for betting right now.");
   const rows = sessions.map((s) => [btn(`${gameRules(s.gameType).label} · ${s.name} (${s.drawDate})`, `s:${s.id}`)]);
   await setSession(user.id, chatId, "3d.session", { branchId });
   await sendMessage(chatId, "🔢 Lottery\n\nWhich session?", { replyMarkup: keyboard([...rows, CANCEL_ROW]) });

@@ -2,9 +2,12 @@ import { z } from "zod";
 import { withAuth, json, parseBody, ApiError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { previewSettlement, settleSession } from "@/services/threeDService";
+import { notifySettlementToCustomers } from "@/lib/telegramCustomerBot";
 
+// Digit count is checked against the session's own game below, not here — this table
+// holds 2D as well, and a fixed three-digit rule would reject every 2D result.
 const schema = z.object({
-  resultNumber: z.string().regex(/^\d{3}$/, "Result must be exactly three digits"),
+  resultNumber: z.string().regex(/^\d+$/, "Result must be digits"),
   walletId: z.string().optional(),
   preview: z.boolean().default(false),
 });
@@ -28,5 +31,7 @@ export const POST = withAuth("three_d.settle", async ({ req, user, params }) => 
       businessId: user.businessId,
     });
   });
+  // After the commit, so a customer is never told a result that then rolls back.
+  notifySettlementToCustomers(session.id).catch(() => null);
   return json(result);
 });

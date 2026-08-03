@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GAME_RULES, gameRules, isGameType, isValidNumber, numberRangeLabel, sessionSchedule } from "@/lib/lotteryGame";
+import { GAME_RULES, gameRules, isGameType, isValidNumber, numberRangeLabel, nextDrawDate, sessionSchedule } from "@/lib/lotteryGame";
 
 describe("game rules", () => {
   it("keeps 2D and 3D apart", () => {
@@ -108,5 +108,43 @@ describe("session schedule", () => {
   it("returns null for an unknown draw rather than guessing a cut-off", () => {
     expect(sessionSchedule("TWO_D", "AFTERNOON")).toBeNull();
     expect(sessionSchedule("TWO_D", "")).toBeNull();
+  });
+});
+
+describe("next draw date", () => {
+  it("finds the coming 3D draw, which is the 1st or the 16th", () => {
+    expect(nextDrawDate("THREE_D", "2026-08-03")).toBe("2026-08-16");
+    expect(nextDrawDate("THREE_D", "2026-08-17")).toBe("2026-09-01");
+    expect(nextDrawDate("THREE_D", "2026-01-02")).toBe("2026-01-16");
+  });
+
+  it("keeps a date that is already a draw day", () => {
+    expect(nextDrawDate("THREE_D", "2026-08-16")).toBe("2026-08-16");
+    expect(nextDrawDate("THREE_D", "2026-08-01")).toBe("2026-08-01");
+  });
+
+  it("crosses a short month without landing on a day that does not exist", () => {
+    expect(nextDrawDate("THREE_D", "2026-02-17")).toBe("2026-03-01");
+    expect(nextDrawDate("THREE_D", "2024-02-17")).toBe("2024-03-01");
+  });
+
+  it("is today for 2D, which draws every trading day", () => {
+    expect(nextDrawDate("TWO_D", "2026-08-03")).toBe("2026-08-03");
+    expect(nextDrawDate("TWO_D", "2026-08-04")).toBe("2026-08-04");
+  });
+
+  it("gives the date back rather than guessing when it cannot parse it", () => {
+    expect(nextDrawDate("THREE_D", "not-a-date")).toBe("not-a-date");
+  });
+});
+
+describe("3D schedule", () => {
+  it("has a draw time so a session does not need one typed", () => {
+    expect(sessionSchedule("THREE_D", "Official")).toEqual({ drawTime: "16:00", cutoffTime: "15:30" });
+  });
+
+  it("still stops bets before the draw", () => {
+    const s = sessionSchedule("THREE_D", "Official")!;
+    expect(s.cutoffTime < s.drawTime).toBe(true);
   });
 });

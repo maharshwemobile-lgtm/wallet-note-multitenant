@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { settleSession } from "./threeDService";
+import { notifySettlementToCustomers } from "@/lib/telegramCustomerBot";
 
 const HOST = "thai-lotto-new-api.p.rapidapi.com";
 const RESULTS_URL = `https://${HOST}/api/v1/results`;
@@ -200,6 +201,8 @@ export async function autoSettleClosedSessions() {
         })
       );
       settled += 1;
+      // After the commit, so a customer is never told a result that then rolls back.
+      await notifySettlementToCustomers(session.id).catch(() => null);
     } catch (error) {
       // One bad session must not stop the rest of the batch.
       skipped += 1;

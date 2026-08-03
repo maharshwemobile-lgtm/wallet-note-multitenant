@@ -10,6 +10,7 @@ import { Button, Card, Input, Modal, Select, Spinner, Badge, Table, Empty, useTo
 import { useAuth } from "@/components/AppShell";
 import { parseThreeDImportCsv, threeDImportTemplate, type ThreeDImportRow } from "@/lib/threeDTransfer";
 import { useNewModal } from "@/lib/useNewModal";
+import { nextDrawDate, sessionSchedule } from "@/lib/lotteryGame";
 
 interface Session {
   id: string; name: string; drawDate: string; drawTime?: string; status: string;
@@ -34,13 +35,18 @@ export default function ThreeDPage() {
   const [importErrors, setImportErrors] = useState<string[]>([]);
   const [importFileName, setImportFileName] = useState("");
   const [importing, setImporting] = useState(false);
-  const [form, setForm] = useState(() => ({
-    name: "Morning",
-    drawDate: todayBusinessDate(),
-    drawTime: "12:01",
-    cutoffTime: "11:45",
-    defaultOdds: "500",
-  }));
+  // Thai 3D draws on the 1st and the 16th, so the date is worked out rather than typed;
+  // the times come from the game's schedule. All still editable for an odd draw.
+  const [form, setForm] = useState(() => {
+    const schedule = sessionSchedule("THREE_D", "Official");
+    return {
+      name: "Official",
+      drawDate: nextDrawDate("THREE_D", todayBusinessDate()),
+      drawTime: schedule?.drawTime ?? "16:00",
+      cutoffTime: schedule?.cutoffTime ?? "15:30",
+      defaultOdds: "500",
+    };
+  });
   const router = useRouter();
   const { push } = useToast();
   const { hasPerm, branches, defaultBranchId } = useAuth();
@@ -281,6 +287,7 @@ export default function ThreeDPage() {
         <div className="space-y-3">
           <Input label="Session name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <Input label="Draw date" type="date" value={form.drawDate} onChange={(e) => setForm({ ...form, drawDate: e.target.value })} required />
+          <p className="text-xs text-gray-500">Set to the next official draw (the 1st or the 16th).</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Draw time" type="time" value={form.drawTime} onChange={(e) => setForm({ ...form, drawTime: e.target.value })} />
             <Input label="Cut-off time" type="time" value={form.cutoffTime} onChange={(e) => setForm({ ...form, cutoffTime: e.target.value })} />

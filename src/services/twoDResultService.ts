@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { GAME_RULES, sessionSchedule } from "@/lib/lotteryGame";
+import { notifySettlementToCustomers } from "@/lib/telegramCustomerBot";
 
 /** Myanmar 2D takes two results a day from the Thai SET close: 12:01 and 16:30.
  *  The 11:00 and 15:00 ticks exist but are not settled against here.
@@ -241,6 +242,7 @@ export async function autoSettleTwoDSessions() {
         })
       );
       settled += 1;
+      await notifySettlementToCustomers(session.id).catch(() => null);
     } catch (error) {
       skipped += 1;
       warnings.push(`${session.drawDate} ${session.name}: ${error instanceof Error ? error.message : "settle failed"}`);

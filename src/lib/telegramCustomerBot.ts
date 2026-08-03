@@ -10,7 +10,7 @@
  */
 
 import { prisma } from "./prisma";
-import { btn, keyboard, sendMessage, sendPhoto, type TgMessage } from "./telegram";
+import { btn, keyboard, sendMessage, sendPhoto, withBotToken, type TgMessage } from "./telegram";
 import { gameRules, numberRangeLabel } from "./lotteryGame";
 import { parseBulkLines, createThreeDBets } from "@/services/threeDService";
 import { activePaymentMethods, paymentInstructionsMy, type PaymentMethod } from "./payments";
@@ -553,3 +553,82 @@ export async function customerCancel(customer: CustomerRow) {
 }
 
 export { getStep as customerGetStep, setStep as customerSetStep, clearStep as customerClearStep };
+
+/** Tell every customer who bet in a session how it went, win or lose.
+ *
+ *  Both outcomes are sent. A winner needs to know so they can come and collect — nobody
+ *  should have to think to ask — and a loser who hears nothing cannot tell the difference
+ *  between "did not win" and "the shop forgot", which is the same silence a cheated
+ *  customer would get.
+ *
+ *  Best effort by design: a chat that has blocked the bot must not stop the next customer
+ *  being told, and settlement itself has already happened either way.
+ */
+export async function notifySettlementToCustomers(sessionId: string) {
+  const bets = await prisma.threeDTransaction.findMany({
+    where: { sessionId, telegramOrderId: { not: null }, deletedAt: null,
+             settlementStatus: { not: "CANCELLED" } },
+    select: { telegramOrderId: true, number: true, betAmount: true, isWinner: true, winAmount: true },
+  });
+  if (bets.length === 0) return { notified: 0 };
+
+  const orders = await prisma.lotteryOrder.findMany({
+    where: { id: { in: [...new Set(bets.map((b) => b.telegramOrderId!))] } },
+    include: { customer: true },
+  });
+  const orderById = new Map(orders.map((o) => [o.id, o]));
+  const session = await prisma.threeDSession.findUnique({ where: { id: sessionId } });
+  if (!session) return { notified: 0 };
+
+  // One message per customer, even if they placed several orders into the session.
+  const byCustomer = new Map<string, { customer: (typeof orders)[number]["customer"]; bets: typeof bets }>();
+  for (const bet of bets) {
+    const order = orderById.get(bet.telegramOrderId!);
+    if (!order) continue;
+    const entry = byCustomer.get(order.customerId);
+    if (entry) entry.bets.push(bet);
+    else byCustomer.set(order.customerId, { customer: order.customer, bets: [bet] });
+  }
+
+  // Grouped by bot, since the token is what a message is sent with.
+  const tokens = new Map<string, string | null>();
+  let notified = 0;
+
+  for (const { customer, bets: theirs } of byCustomer.values()) {
+    if (!tokens.has(customer.ownerUserId)) {
+      const owner = await prisma.user.findUnique({
+        where: { id: customer.ownerUserId },
+        select: { telegramBotToken: true },
+      });
+      tokens.set(customer.ownerUserId, owner?.telegramBotToken ?? null);
+    }
+    const token = tokens.get(customer.ownerUserId);
+    if (!token) continue;
+
+    const won = theirs.reduce((sum, b) => sum + (b.isWinner ? b.winAmount : 0n), 0n);
+    const lines = theirs.map((bet) =>
+      bet.isWinner
+        ? `✅ ${bet.number} — ${fmtMoneyMy(bet.betAmount)}  →  ပေါက်  ${fmtMoneyMy(bet.winAmount)} ကျပ်`
+        : `▫️ ${bet.number} — ${fmtMoneyMy(bet.betAmount)}`
+    );
+
+    const head =
+      `${gameRules(session.gameType).label} · ${session.name} · ${session.drawDate}\n` +
+      `ထွက်ဂဏန်း — ${session.resultNumber ?? "-"}`;
+    const tail =
+      won > 0n
+        ? `\n\n🎉 ဂုဏ်ယူပါတယ်! စုစုပေါင်း ပေါက်ငွေ — ${fmtMoneyMy(won)} ကျပ်\nငွေထုတ်ရန် ဆိုင်သို့ ဆက်သွယ်ပါ။`
+        : `\n\nဒီတစ်ခေါက် မပေါက်ပါ။ နောက်တစ်ခေါက် ကံကောင်းပါစေ 🍀`;
+
+    try {
+      await withBotToken(token, () =>
+        sendMessage(customer.chatId, `📣 ရလဒ် ထွက်ပါပြီ\n\n${head}\n\n${lines.join("\n")}${tail}`)
+      );
+      notified += 1;
+    } catch {
+      // Blocked the bot, deleted the chat — not a reason to skip anyone else.
+    }
+  }
+
+  return { notified };
+}
