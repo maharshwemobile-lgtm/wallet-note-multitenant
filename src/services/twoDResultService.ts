@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@prisma/client";
 import { GAME_RULES, sessionSchedule } from "@/lib/lotteryGame";
 
 /** Myanmar 2D takes two results a day from the Thai SET close: 12:01 and 16:30.
@@ -156,26 +157,31 @@ export async function autoOpenTwoDSessions() {
     if (weekday === 0 || weekday === 6) { skipped += 1; continue; }
 
     for (const session of TWO_D_SESSIONS) {
-      const existing = await prisma.threeDSession.findFirst({
-        where: { businessId: business.id, gameType: "TWO_D", drawDate, name: session.name },
-        select: { id: true },
-      });
-      if (existing) continue;
-
       const rules = sessionSchedule("TWO_D", session.name)!;
-      await prisma.threeDSession.create({
-        data: {
-          businessId: business.id,
-          gameType: "TWO_D",
-          name: session.name,
-          drawDate,
-          drawTime: rules.drawTime,
-          cutoffTime: rules.cutoffTime,
-          defaultOdds: "85",
-          status: "OPEN",
-        },
-      });
-      opened += 1;
+      try {
+        await prisma.threeDSession.create({
+          data: {
+            businessId: business.id,
+            gameType: "TWO_D",
+            name: session.name,
+            drawDate,
+            drawTime: rules.drawTime,
+            cutoffTime: rules.cutoffTime,
+            defaultOdds: "85",
+            status: "OPEN",
+          },
+        });
+        opened += 1;
+      } catch (error) {
+        // The session already exists — either from an earlier run or from one racing this
+        // one. Checking first would not have prevented that, since the check and the
+        // insert are not a single step; the unique index is what actually decides.
+        if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+          skipped += 1;
+          continue;
+        }
+        throw error;
+      }
     }
   }
 

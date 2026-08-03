@@ -230,6 +230,9 @@ model ThreeDSession {
 
   @@index([businessId, drawDate])
   @@index([businessId, gameType, drawDate])
+  // One session per draw. Auto-open's check-then-create is not atomic, so overlapping
+  // runs could split a day's bets across two sessions for the same draw.
+  @@unique([businessId, gameType, drawDate, name], map: "ThreeDSession_business_game_draw_name_key")
 }
 
 model ThreeDTransaction {
