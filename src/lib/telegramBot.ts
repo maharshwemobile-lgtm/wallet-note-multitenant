@@ -1,7 +1,8 @@
 import { prisma } from "./prisma";
 import { branchScope } from "./auth";
 import type { AuthUser } from "./auth";
-import { toMinor, isValidDecimalString, isThreeDigit } from "./money";
+import { toMinor, isValidDecimalString } from "./money";
+import { gameRules, isValidNumber, numberRangeLabel } from "./lotteryGame";
 import { fmtMoney } from "./format";
 import { todayBusinessDate } from "./dates";
 import { createIncomeExpenseEntry } from "@/services/incomeExpenseService";
@@ -513,22 +514,26 @@ async function startThreeD(chatId: string, user: AuthUser) {
 async function tdStepSession(chatId: string, user: AuthUser, data: Record<string, unknown>, sessionId: string) {
   const session = await prisma.threeDSession.findUnique({ where: { id: sessionId } });
   if (!session) return sendMessage(chatId, "Session not found.");
-  await setSession(user.id, chatId, "3d.lines", { ...data, sessionId, sessionName: session.name });
+  // Carried into the next step so the lines are checked against this session's own game.
+  await setSession(user.id, chatId, "3d.lines", { ...data, sessionId, sessionName: session.name, gameType: session.gameType });
+  const example = gameRules(session.gameType).digits === 2 ? "07=5000\n42=3000" : "123=5000\n456=3000";
   await sendMessage(
     chatId,
-    `Session: ${session.name}\n\nSend the numbers, one per line:\n123=5000\n456=3000`,
+    `Session: ${session.name}\n\nSend the numbers, one per line:\n${example}`,
     { replyMarkup: keyboard([CANCEL_ROW]) }
   );
 }
 
 async function tdStepLinesText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
-  const parsed = parseBulkLines(text);
+  const gameType = typeof data.gameType === "string" ? data.gameType : "THREE_D";
+  const parsed = parseBulkLines(text, gameType);
   if (parsed.errors.length) {
     return sendMessage(chatId, `Invalid lines:\n${parsed.errors.map((e) => `Line ${e.line}: "${e.text}" — ${e.message}`).join("\n")}`);
   }
   if (parsed.rows.length === 0) return sendMessage(chatId, "No valid lines found. Try again, e.g. 123=5000");
   for (const r of parsed.rows) {
-    if (!isThreeDigit(r.number)) return sendMessage(chatId, `"${r.number}" must be exactly three digits.`);
+    if (!isValidNumber(r.number, gameType))
+      return sendMessage(chatId, `"${r.number}" must be a ${gameRules(gameType).label} number (${numberRangeLabel(gameType)}).`);
   }
   const total = parsed.rows.reduce((sum, r) => sum + Number(r.amount.replace(/,/g, "")), 0);
   const lines = [

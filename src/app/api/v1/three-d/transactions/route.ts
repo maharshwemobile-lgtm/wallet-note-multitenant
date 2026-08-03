@@ -3,8 +3,9 @@ import { withAuth, json, parseBody, ApiError, pagination } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { branchScope } from "@/lib/auth";
 import { assertBranchAccess } from "@/lib/tenant";
-import { toMinor, isThreeDigit } from "@/lib/money";
+import { toMinor } from "@/lib/money";
 import { computeThreeD, parseBulkLines } from "@/services/threeDService";
+import { gameRules, isValidNumber, numberRangeLabel } from "@/lib/lotteryGame";
 import { nextNumber } from "@/lib/sequence";
 import { audit } from "@/lib/audit";
 import { assertDateOpen } from "@/services/closeGuard";
@@ -81,7 +82,7 @@ export const POST = withAuth("three_d.create", async ({ req, user }) => {
 
   let rows = body.rows ?? [];
   if (body.bulkText) {
-    const parsed = parseBulkLines(body.bulkText);
+    const parsed = parseBulkLines(body.bulkText, session.gameType);
     if (parsed.errors.length) {
       throw new ApiError(422, `Bulk entry has invalid lines: ${parsed.errors.map((e) => `line ${e.line} "${e.text}"`).join(", ")}`);
     }
@@ -89,7 +90,12 @@ export const POST = withAuth("three_d.create", async ({ req, user }) => {
   }
   if (rows.length === 0) throw new ApiError(422, "No records to save");
   for (const r of rows) {
-    if (!isThreeDigit(r.number)) throw new ApiError(422, `Invalid 3D number: "${r.number}" (must be 000–999)`);
+    if (!isValidNumber(r.number, session.gameType)) {
+      throw new ApiError(
+        422,
+        `Invalid ${gameRules(session.gameType).label} number: "${r.number}" (must be ${numberRangeLabel(session.gameType)})`
+      );
+    }
   }
 
   const odds = body.odds ?? session.defaultOdds;

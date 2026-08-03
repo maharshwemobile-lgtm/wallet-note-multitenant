@@ -6,9 +6,10 @@ import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Select, Modal, Spinner, Badge, Table, Empty, StatCard, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
 import { autoInsertThreeDEquals } from "@/lib/threeDEntry";
+import { gameRules, numberRangeLabel } from "@/lib/lotteryGame";
 
 interface Detail {
-  session: { id: string; name: string; drawDate: string; status: string; resultNumber?: string; defaultOdds: string; settlement?: { id: string; netProfit: string; totalPayout: string; grossCollected: string; totalCommission: string } };
+  session: { id: string; name: string; drawDate: string; status: string; gameType: string; resultNumber?: string; defaultOdds: string; settlement?: { id: string; netProfit: string; totalPayout: string; grossCollected: string; totalCommission: string } };
   exposure: { number: string; totalStake: string; potentialPayout: string; count: number }[];
   totals: { count: number; totalBet: string; totalPotentialPayout: string; totalCommission: string };
 }
@@ -124,6 +125,9 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
 
   if (!detail) return <Spinner />;
   const s = detail.session;
+  // 2D and 3D share this page, so every digit count and label below comes from the
+  // session itself rather than being written as "3".
+  const game = gameRules(s.gameType);
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
@@ -219,7 +223,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       </div>
 
       {/* Entry modal */}
-      <Modal open={showEntry} onClose={() => setShowEntry(false)} title="New 3D records" wide>
+      <Modal open={showEntry} onClose={() => setShowEntry(false)} title={`New ${game.label} records`} wide>
         <div className="space-y-3">
           {branches.length > 1 && (
             <Select label="Branch" value={branchId || defaultBranchId} onChange={(e) => setBranchId(e.target.value)}>
@@ -238,13 +242,17 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             <span className="mb-1 block text-sm font-medium">Numbers — one per line as number=amount</span>
             <textarea
               value={entry.bulkText}
-              onChange={(e) => setEntry({ ...entry, bulkText: autoInsertThreeDEquals(e.target.value) })}
+              onChange={(e) => setEntry({ ...entry, bulkText: autoInsertThreeDEquals(e.target.value, s.gameType) })}
               rows={8}
-              placeholder={"123=5000\n456=3000\n007=2000"}
+              placeholder={game.digits === 2 ? "07=5000\n42=3000\n00=2000" : "123=5000\n456=3000\n007=2000"}
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-sm dark:border-gray-700 dark:bg-gray-800"
             />
           </label>
-          <p className="text-xs text-gray-500">Leading zeros are preserved: 001, 010 and 100 are different numbers.</p>
+          <p className="text-xs text-gray-500">
+            {game.digits === 2
+              ? "Leading zeros are preserved: 07 and 70 are different numbers."
+              : "Leading zeros are preserved: 001, 010 and 100 are different numbers."}
+          </p>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setShowEntry(false)}>Cancel</Button>
             <Button onClick={saveEntry} disabled={busy || !entry.bulkText.trim()}>{busy ? "Saving…" : "Save records"}</Button>
@@ -256,11 +264,11 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
       <Modal open={showSettle} onClose={() => { setShowSettle(false); setPreview(null); }} title="Enter result & settle">
         <div className="space-y-3">
           <Input
-            label="Winning number (3 digits)"
+            label={`Winning number (${game.digits} digits, ${numberRangeLabel(s.gameType)})`}
             value={settle.resultNumber}
-            onChange={(e) => { setSettle({ ...settle, resultNumber: e.target.value.replace(/\D/g, "").slice(0, 3) }); setPreview(null); }}
+            onChange={(e) => { setSettle({ ...settle, resultNumber: e.target.value.replace(/\D/g, "").slice(0, game.digits) }); setPreview(null); }}
             className="font-mono text-2xl tracking-[0.5em]"
-            maxLength={3}
+            maxLength={game.digits}
             inputMode="numeric"
           />
           <Select label="Settlement wallet (optional — records net P/L movement)" value={settle.walletId} onChange={(e) => setSettle({ ...settle, walletId: e.target.value })}>
@@ -270,7 +278,7 @@ export default function SessionDetail({ params }: { params: Promise<{ id: string
             ))}
           </Select>
           {!preview ? (
-            <Button onClick={previewSettle} disabled={settle.resultNumber.length !== 3} className="w-full">Preview settlement</Button>
+            <Button onClick={previewSettle} disabled={settle.resultNumber.length !== game.digits} className="w-full">Preview settlement</Button>
           ) : (
             <>
               <Card className="space-y-1 bg-gray-50 text-sm dark:bg-gray-800/50">

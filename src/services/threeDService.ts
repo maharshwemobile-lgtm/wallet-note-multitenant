@@ -1,6 +1,6 @@
 import { Tx } from "@/lib/prisma";
 import { ApiError } from "@/lib/api";
-import { mulMinor, percentOf, isThreeDigit, toMinor } from "@/lib/money";
+import { mulMinor, percentOf, toMinor } from "@/lib/money";
 import { gameRules, isValidNumber, numberRangeLabel } from "@/lib/lotteryGame";
 import { postLedger, reverseLedgerEntries } from "./walletService";
 import { audit } from "@/lib/audit";
@@ -16,24 +16,28 @@ export function computeThreeD(betAmount: bigint, odds: string, commissionRate: s
   return { potentialPayout, commissionAmount, netAmount };
 }
 
-/** Parse bulk entry lines like "123=5000". Returns rows or per-line errors. */
-export function parseBulkLines(text: string): {
+/** Parse bulk entry lines like "123=5000". Returns rows or per-line errors.
+ *  The digit count follows the game: a 2D session's "07=5000" is not a malformed 3D line. */
+export function parseBulkLines(text: string, gameType: string = "THREE_D"): {
   rows: { number: string; amount: string }[];
   errors: { line: number; text: string; message: string }[];
 } {
+  const { digits, label } = gameRules(gameType);
+  const lineFormat = new RegExp(`^(\\d{${digits}})\\s*[=\\-:\\s]\\s*([\\d,]+(?:\\.\\d+)?)$`);
+  const example = digits === 2 ? "07=5000" : "123=5000";
   const rows: { number: string; amount: string }[] = [];
   const errors: { line: number; text: string; message: string }[] = [];
   const lines = text.split(/\r?\n/);
   lines.forEach((raw, i) => {
     const line = raw.trim();
     if (!line) return;
-    const m = line.match(/^(\d{3})\s*[=\-:\s]\s*([\d,]+(?:\.\d+)?)$/);
+    const m = line.match(lineFormat);
     if (!m) {
-      errors.push({ line: i + 1, text: line, message: "Expected format: 123=5000" });
+      errors.push({ line: i + 1, text: line, message: `Expected format: ${example}` });
       return;
     }
-    if (!isThreeDigit(m[1])) {
-      errors.push({ line: i + 1, text: line, message: "Number must be exactly three digits" });
+    if (!isValidNumber(m[1], gameType)) {
+      errors.push({ line: i + 1, text: line, message: `${label} number must be ${numberRangeLabel(gameType)}` });
       return;
     }
     rows.push({ number: m[1], amount: m[2].replace(/,/g, "") });

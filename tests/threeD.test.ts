@@ -96,3 +96,35 @@ describe("settlement math (pure)", () => {
     expect(net).toBe(450000n);
   });
 });
+
+describe("bulk entry follows the session's game", () => {
+  it("takes two-digit lines for a 2D session", () => {
+    const { rows, errors } = parseBulkLines("07=5000\n42=3000\n00=1000", "TWO_D");
+    expect(errors).toEqual([]);
+    expect(rows.map((r) => r.number)).toEqual(["07", "42", "00"]);
+  });
+
+  it("rejects a 3D number typed into a 2D session", () => {
+    // Without this the bet is stored and then never matches a two-digit result.
+    const { rows, errors } = parseBulkLines("123=5000", "TWO_D");
+    expect(rows).toEqual([]);
+    expect(errors[0].message).toContain("07=5000");
+  });
+
+  it("still rejects a 2D number in a 3D session", () => {
+    const { rows, errors } = parseBulkLines("07=5000", "THREE_D");
+    expect(rows).toEqual([]);
+    expect(errors).toHaveLength(1);
+  });
+
+  it("defaults to 3D when no game is given, so existing callers are unchanged", () => {
+    expect(parseBulkLines("123=5000").rows).toHaveLength(1);
+    expect(parseBulkLines("07=5000").rows).toHaveLength(0);
+  });
+
+  it("completes a 2D line after two digits, not three", () => {
+    expect(autoInsertThreeDEquals("07", "TWO_D")).toBe("07=");
+    expect(autoInsertThreeDEquals("07", "THREE_D")).toBe("07");
+    expect(autoInsertThreeDEquals("123", "TWO_D")).toBe("123");
+  });
+});

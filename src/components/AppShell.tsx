@@ -65,6 +65,7 @@ const NAV = [
   { href: "/items", label: "Items", icon: Package, perm: "item.view", feature: "items" },
   { href: "/stock", label: "Stock", icon: Boxes, perm: "stock.view", feature: "stock" },
   { href: "/three-d", label: "3D Records", icon: Hash, perm: "three_d.view", feature: "threeD" },
+  { href: "/two-d", label: "2D Records", icon: Hash, perm: "three_d.view", feature: "twoD" },
   { href: "/exchange", label: "Exchange", icon: ArrowLeftRight, perm: "exchange.view", feature: "exchange" },
   { href: "/wallets", label: "Wallets", icon: Wallet, perm: "wallet.view", feature: "wallets" },
   { href: "/transfers", label: "Transfer", icon: Send, perm: "wallet.transfer", feature: "transfers" },
