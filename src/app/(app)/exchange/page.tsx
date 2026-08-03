@@ -7,6 +7,7 @@ import { api } from "@/lib/client";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { Button, Card, Input, Select, Modal, Spinner, Badge, Table, Empty, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { useNewModal } from "@/lib/useNewModal";
 
 interface Rate { id: string; pair: string; buyRate: string; sellRate: string; effectiveAt: string; active: boolean }
 interface Wallet { id: string; name: string; currency: string; currentBalance: string; branchId?: string }
@@ -20,7 +21,7 @@ export default function ExchangePage() {
   const [rates, setRates] = useState<Rate[]>([]);
   const [txns, setTxns] = useState<Txn[] | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useNewModal();
   const [showRate, setShowRate] = useState(false);
   const [reverseId, setReverseId] = useState<string | null>(null);
   const [reverseReason, setReverseReason] = useState("");

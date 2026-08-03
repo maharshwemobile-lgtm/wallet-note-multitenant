@@ -6,6 +6,7 @@ import { api } from "@/lib/client";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { Button, Card, Input, Select, Modal, Spinner, Badge, Table, Empty, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { useNewModal } from "@/lib/useNewModal";
 
 interface Purchase {
   id: string; txnNo: string; date: string; total: string; paidAmount: string;
@@ -22,7 +23,7 @@ export default function PurchasesPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [suppliers, setSuppliers] = useState<Contact[]>([]);
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useNewModal();
   const [cancelTarget, setCancelTarget] = useState<Purchase | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);

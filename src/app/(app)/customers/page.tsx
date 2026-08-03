@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { api } from "@/lib/client";
 import { Button, Card, Input, Select, Modal, Spinner, Table, Empty, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { useNewModal } from "@/lib/useNewModal";
 
 interface Contact { id: string; name: string; phone?: string; type: string; active: boolean; notes?: string }
 
@@ -13,7 +14,7 @@ export default function CustomersPage() {
   const [contacts, setContacts] = useState<Contact[] | null>(null);
   const [q, setQ] = useState("");
   const [type, setType] = useState("");
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useNewModal();
   const [busy, setBusy] = useState(false);
   const router = useRouter();
   const { push } = useToast();

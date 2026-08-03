@@ -6,6 +6,7 @@ import { api } from "@/lib/client";
 import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Select, Modal, Spinner, Table, Empty, StatCard, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { useNewModal } from "@/lib/useNewModal";
 
 interface Withdrawal {
   id: string;
@@ -32,7 +33,7 @@ export default function WithdrawPage() {
   const [items, setItems] = useState<Withdrawal[] | null>(null);
   const [totals, setTotals] = useState<{ currency: string; amount: string }[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useNewModal();
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [reverseId, setReverseId] = useState<string | null>(null);

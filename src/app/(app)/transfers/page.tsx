@@ -6,6 +6,7 @@ import { api } from "@/lib/client";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
 import { Button, Card, Input, Select, Modal, Spinner, Badge, StatCard, Table, Empty, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { useNewModal } from "@/lib/useNewModal";
 
 interface Transfer {
   id: string;
@@ -41,7 +42,7 @@ export default function TransfersPage() {
   const [transfers, setTransfers] = useState<Transfer[] | null>(null);
   const [todayTotal, setTodayTotal] = useState<{ currency: string; amount: string }[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useNewModal();
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [reverseId, setReverseId] = useState<string | null>(null);

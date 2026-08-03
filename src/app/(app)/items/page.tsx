@@ -6,6 +6,7 @@ import { api } from "@/lib/client";
 import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Select, Modal, Spinner, Table, Empty, cn, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { useNewModal } from "@/lib/useNewModal";
 
 interface Item {
   id: string; name: string; sku: string; barcode?: string; active: boolean;
@@ -19,7 +20,7 @@ export default function ItemsPage() {
   const [items, setItems] = useState<Item[] | null>(null);
   const [meta, setMeta] = useState<Meta>({ categories: [], units: [] });
   const [q, setQ] = useState("");
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useNewModal();
   const [editItem, setEditItem] = useState<Item | null>(null);
   const [showMeta, setShowMeta] = useState(false);
   const [busy, setBusy] = useState(false);

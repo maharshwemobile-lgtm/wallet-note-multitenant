@@ -1,7 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, Suspense } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Download, FileDown, History, Plus, Upload } from "lucide-react";
 import { api } from "@/lib/client";
 import { todayBusinessDate } from "@/lib/dates";
@@ -9,6 +9,7 @@ import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Modal, Select, Spinner, Badge, Table, Empty, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
 import { parseThreeDImportCsv, threeDImportTemplate, type ThreeDImportRow } from "@/lib/threeDTransfer";
+import { useNewModal } from "@/lib/useNewModal";
 
 interface Session {
   id: string; name: string; drawDate: string; drawTime?: string; status: string;
@@ -21,11 +22,10 @@ interface OfficialResult {
   id: string; drawDate: string; drawTime?: string; sessionName: string; resultNumber: string;
 }
 
-function ThreeDContent() {
-  const search = useSearchParams();
+export default function ThreeDPage() {
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [results, setResults] = useState<OfficialResult[]>([]);
-  const [showNew, setShowNew] = useState(() => search.get("new") === "1");
+  const [showNew, setShowNew] = useNewModal();
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferSessionId, setTransferSessionId] = useState("");
   const [transferBranchId, setTransferBranchId] = useState("");
@@ -295,8 +295,4 @@ function ThreeDContent() {
       </Modal>
     </div>
   );
-}
-
-export default function ThreeDPage() {
-  return <Suspense fallback={<Spinner />}><ThreeDContent /></Suspense>;
 }

@@ -5,6 +5,7 @@ import { Plus } from "lucide-react";
 import { api } from "@/lib/client";
 import { Button, Card, Input, Select, Modal, Spinner, Table, cn, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { useNewModal } from "@/lib/useNewModal";
 
 interface User {
   id: string; name: string; username: string; phone?: string; active: boolean;
@@ -19,7 +20,7 @@ export default function UsersPage() {
   const [roles, setRoles] = useState<Role[]>([]);
   const [allPerms, setAllPerms] = useState<string[]>([]);
   const [tab, setTab] = useState<"users" | "roles">("users");
-  const [showNewUser, setShowNewUser] = useState(false);
+  const [showNewUser, setShowNewUser] = useNewModal();
   const [editUser, setEditUser] = useState<User | null>(null);
   const [showNewRole, setShowNewRole] = useState(false);
   const [busy, setBusy] = useState(false);

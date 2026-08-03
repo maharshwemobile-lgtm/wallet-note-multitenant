@@ -6,6 +6,7 @@ import { Plus } from "lucide-react";
 import { api } from "@/lib/client";
 import { Button, Card, Empty, Input, Modal, Spinner, Table, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { useNewModal } from "@/lib/useNewModal";
 
 interface Supplier {
   id: string;
@@ -20,7 +21,7 @@ const emptyForm = { name: "", phone: "", telegram: "", address: "", notes: "" };
 export default function SuppliersPage() {
   const [suppliers, setSuppliers] = useState<Supplier[] | null>(null);
   const [q, setQ] = useState("");
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useNewModal();
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const { hasPerm } = useAuth();

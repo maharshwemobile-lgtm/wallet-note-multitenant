@@ -35,7 +35,12 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           // apply saved theme before paint to avoid flashing
           dangerouslySetInnerHTML={{
             __html: `try{const t=localStorage.getItem("wn-theme");if(t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch{}
-if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));`,
+if("serviceWorker" in navigator)addEventListener("load",()=>navigator.serviceWorker.register("/sw.js").catch(()=>{}));
+/* The browser fires beforeinstallprompt once, usually before React has hydrated. A
+   listener added by a component therefore misses it and the Install button never
+   appears. Catch it here and hand it over once the component is listening. */
+addEventListener("beforeinstallprompt",function(e){e.preventDefault();window.__wnInstallPrompt=e;dispatchEvent(new Event("wn-install-ready"))});
+addEventListener("appinstalled",function(){window.__wnInstallPrompt=null});`,
           }}
         />
       </head>

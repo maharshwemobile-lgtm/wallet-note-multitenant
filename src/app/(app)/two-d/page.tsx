@@ -8,6 +8,7 @@ import { todayBusinessDate } from "@/lib/dates";
 import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Modal, Spinner, Badge, Table, Empty, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { useNewModal } from "@/lib/useNewModal";
 
 interface Session {
   id: string; name: string; drawDate: string; drawTime?: string; status: string;
@@ -23,7 +24,7 @@ interface OfficialResult {
 export default function TwoDPage() {
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [results, setResults] = useState<OfficialResult[]>([]);
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useNewModal();
   // Only needed to fill a gap — a Thai holiday, or a day auto-open missed. The normal
   // path creates these by itself.
   const [form, setForm] = useState(() => ({

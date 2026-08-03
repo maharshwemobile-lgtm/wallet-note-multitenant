@@ -6,6 +6,7 @@ import { api } from "@/lib/client";
 import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Select, Modal, Spinner, Table, Empty, StatCard, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { useNewModal } from "@/lib/useNewModal";
 
 interface Item {
   id: string; txnNo: string; type: string; categoryName?: string; amount: string;
@@ -19,7 +20,7 @@ export default function IncomeExpensePage() {
   const [totals, setTotals] = useState({ income: "0", expense: "0" });
   const [categories, setCategories] = useState<Category[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useNewModal();
   const [newCategory, setNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [busy, setBusy] = useState(false);

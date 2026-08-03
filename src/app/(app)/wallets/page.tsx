@@ -8,6 +8,7 @@ import { fmtMoney } from "@/lib/format";
 import { minorToDecimalString } from "@/lib/money";
 import { Button, Card, Input, Select, Modal, Spinner, Table, Empty, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { useNewModal } from "@/lib/useNewModal";
 
 interface Wallet {
   id: string; name: string; code: string; type: string; currency: string;
@@ -36,7 +37,7 @@ function walletCode(name: string) {
 
 export default function WalletsPage() {
   const [wallets, setWallets] = useState<Wallet[] | null>(null);
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useNewModal();
   const [showTransfer, setShowTransfer] = useState(false);
   const [showAdjust, setShowAdjust] = useState<Wallet | null>(null);
   const [showReconcile, setShowReconcile] = useState<Wallet | null>(null);

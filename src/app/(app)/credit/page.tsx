@@ -7,6 +7,7 @@ import { api } from "@/lib/client";
 import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Select, Modal, Spinner, Badge, Table, Empty, cn, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { useNewModal } from "@/lib/useNewModal";
 
 interface Item {
   id: string; txnNo: string; originalAmount: string; paidAmount: string; remainingAmount: string;
@@ -24,7 +25,7 @@ function CreditContent() {
   const [outstanding, setOutstanding] = useState("0");
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [showNew, setShowNew] = useState(false);
+  const [showNew, setShowNew] = useNewModal();
   const [payItem, setPayItem] = useState<Item | null>(null);
   const [busy, setBusy] = useState(false);
   const { push } = useToast();

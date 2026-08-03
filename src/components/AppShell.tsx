@@ -14,6 +14,7 @@ import { ToastProvider, cn } from "./ui";
 import { PwaInstall } from "./PwaInstall";
 import { LanguageSwitch } from "./LanguageProvider";
 import type { FeatureKey, FeatureVisibility, ModuleMode } from "@/lib/modules";
+import { isThreeDPath } from "@/lib/edition";
 
 interface Me {
   user: {
@@ -57,6 +58,29 @@ const AuthCtx = createContext<{
 export function useAuth() {
   return useContext(AuthCtx);
 }
+
+/** What "+" creates, per section. A section is listed only if it has something to create:
+ *  on Reports or Audit there is nothing to add, and the button is hidden rather than
+ *  sending the user somewhere unrelated. POS is left out because that page is itself the
+ *  new-sale screen.
+ *
+ *  Each entry names the permission to create, which is not always the permission to view
+ *  the section — being able to read wallets does not mean being able to open one. */
+const CREATE_ACTIONS: { section: string; perm: string; feature?: FeatureKey; label: string }[] = [
+  { section: "/purchases", perm: "purchase.create", feature: "purchases", label: "New purchase" },
+  { section: "/items", perm: "item.manage", feature: "items", label: "New item" },
+  { section: "/three-d", perm: "three_d.create", feature: "threeD", label: "New 3D session" },
+  { section: "/two-d", perm: "three_d.create", feature: "twoD", label: "New 2D session" },
+  { section: "/exchange", perm: "exchange.create", feature: "exchange", label: "New exchange" },
+  { section: "/wallets", perm: "wallet.create", feature: "wallets", label: "New wallet" },
+  { section: "/transfers", perm: "wallet.transfer", feature: "transfers", label: "New transfer" },
+  { section: "/withdraw", perm: "wallet.withdraw", feature: "withdraw", label: "New withdrawal" },
+  { section: "/credit", perm: "credit.create", feature: "credit", label: "New credit record" },
+  { section: "/income-expense", perm: "income_expense.create", feature: "incomeExpense", label: "New income or expense" },
+  { section: "/customers", perm: "customer.manage", feature: "customers", label: "New customer" },
+  { section: "/suppliers", perm: "customer.manage", feature: "suppliers", label: "New supplier" },
+  { section: "/users", perm: "users.manage", feature: "users", label: "New user" },
+];
 
 const NAV = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, perm: "dashboard.view" },
@@ -157,6 +181,19 @@ export function AppShell({ children }: { children: ReactNode }) {
     (!n.feature || featureEnabled(n.feature))
   );
   const mobileNav = visibleNav.slice(0, 4);
+
+  // "+" creates for whatever section is open, so it is only shown where that means
+  // something and the user is allowed to do it.
+  const matchedCreate = CREATE_ACTIONS.find(
+    (action) => pathname === action.section || pathname.startsWith(`${action.section}/`)
+  );
+  const createAction =
+    matchedCreate &&
+    !(playEdition && isThreeDPath(pathname)) &&
+    hasPerm(matchedCreate.perm) &&
+    (!matchedCreate.feature || featureEnabled(matchedCreate.feature))
+      ? matchedCreate
+      : null;
 
   const sidebar = (
     <nav className="flex flex-col gap-0.5 p-3">
@@ -272,12 +309,13 @@ export function AppShell({ children }: { children: ReactNode }) {
               })}
             </nav>
 
-            {/* Floating new-transaction button (mobile) */}
-            {!playEdition && hasPerm("three_d.create") && (
+            {/* Floating create button (mobile) — acts on the section being viewed */}
+            {createAction && (
               <Link
-                href="/three-d?new=1"
+                href={`${createAction.section}?new=1`}
                 className="no-print fixed bottom-16 right-4 z-30 rounded-full bg-blue-600 p-3.5 text-white shadow-lg lg:hidden"
-                title="New transaction"
+                title={createAction.label}
+                aria-label={createAction.label}
               >
                 <Plus size={22} />
               </Link>
