@@ -113,17 +113,39 @@ function businessToday(timezone: string | null | undefined): string {
  *  cancelled — better than missing a real trading day.
  */
 export async function autoOpenTwoDSessions() {
+  // Module settings live in SystemSetting under the "modules" key, not on Business —
+  // Business.settings is the relation to those rows, not the document itself.
+  const moduleSettings = await prisma.systemSetting.findMany({
+    where: { key: "modules" },
+    select: { businessId: true, value: true },
+  });
+  // Deliberately reads the stored flag rather than the parsed one: parsing fills in
+  // defaults, and twoD defaults to on, which would open sessions every day for all ~227
+  // businesses including those that have never touched 2D. Saving Settings > Modules
+  // writes every key explicitly, so switching 2D on there is what opts a business in.
+  const enabled = new Set(
+    moduleSettings
+      .filter((setting) => {
+        try {
+          const stored = JSON.parse(setting.value) as { features?: Record<string, unknown> };
+          return stored.features?.twoD === true;
+        } catch {
+          return false;
+        }
+      })
+      .map((setting) => setting.businessId)
+  );
+  if (enabled.size === 0) return { opened: 0, skipped: 0 };
+
   const businesses = await prisma.business.findMany({
-    select: { id: true, timezone: true, settings: true },
+    where: { id: { in: [...enabled] } },
+    select: { id: true, timezone: true },
   });
 
   let opened = 0;
   let skipped = 0;
 
   for (const business of businesses) {
-    // Opt-in: only businesses that turned 2D on.
-    const modules = (business.settings as { modules?: { features?: Record<string, boolean> } } | null)?.modules;
-    if (modules?.features?.twoD !== true) { skipped += 1; continue; }
 
     const drawDate = businessToday(business.timezone);
     const weekday = new Date(`${drawDate}T00:00:00Z`).getUTCDay(); // 0 Sun … 6 Sat
