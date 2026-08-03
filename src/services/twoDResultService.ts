@@ -1,11 +1,15 @@
 import { prisma } from "@/lib/prisma";
+import { GAME_RULES, sessionSchedule } from "@/lib/lotteryGame";
 
 /** Myanmar 2D takes two results a day from the Thai SET close: 12:01 and 16:30.
- *  The 11:00 and 15:00 ticks exist but are not settled against here. */
-export const TWO_D_SESSIONS = [
-  { name: "MORNING", time: "12:01" },
-  { name: "EVENING", time: "16:30" },
-] as const;
+ *  The 11:00 and 15:00 ticks exist but are not settled against here.
+ *
+ *  Taken from the game rules rather than repeated, so the times a session opens with and
+ *  the times results are matched on cannot drift apart. */
+export const TWO_D_SESSIONS = GAME_RULES.TWO_D.sessions.map((session) => ({
+  name: session.name,
+  time: session.drawTime,
+}));
 
 const RAPID_HOST = "myanmar-all-in-one-2d-results.p.rapidapi.com";
 const FALLBACK_URL = "https://api.thaistock2d.com/live";
@@ -158,7 +162,7 @@ export async function autoOpenTwoDSessions() {
       });
       if (existing) continue;
 
-      const rules = TWO_D_SESSION_TIMES[session.name];
+      const rules = sessionSchedule("TWO_D", session.name)!;
       await prisma.threeDSession.create({
         data: {
           businessId: business.id,
@@ -177,12 +181,6 @@ export async function autoOpenTwoDSessions() {
 
   return { opened, skipped };
 }
-
-/** Cutoff a few minutes before the draw, so bets stop before the number is known. */
-const TWO_D_SESSION_TIMES: Record<string, { drawTime: string; cutoffTime: string }> = {
-  MORNING: { drawTime: "12:01", cutoffTime: "11:55" },
-  EVENING: { drawTime: "16:30", cutoffTime: "16:25" },
-};
 
 /** Settle closed 2D sessions against the official number for their date and session.
  *

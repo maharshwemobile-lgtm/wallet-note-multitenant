@@ -6,7 +6,7 @@ import { History, Plus } from "lucide-react";
 import { api } from "@/lib/client";
 import { todayBusinessDate } from "@/lib/dates";
 import { fmtMoney } from "@/lib/format";
-import { Button, Card, Input, Modal, Spinner, Badge, Table, Empty, useToast } from "@/components/ui";
+import { Button, Card, Input, Modal, Select, Spinner, Badge, Table, Empty, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
 import { useNewModal } from "@/lib/useNewModal";
 
@@ -27,12 +27,11 @@ export default function TwoDPage() {
   const [showNew, setShowNew] = useNewModal();
   // Only needed to fill a gap — a Thai holiday, or a day auto-open missed. The normal
   // path creates these by itself.
+  // Only the draw and the date. Times come from the session name on the server, and the
+  // odds from the game, so there is nothing here that can be mistyped.
   const [form, setForm] = useState(() => ({
     name: "MORNING",
     drawDate: todayBusinessDate(),
-    drawTime: "12:01",
-    cutoffTime: "11:55",
-    defaultOdds: "85",
   }));
   const router = useRouter();
   const { push } = useToast();
@@ -134,15 +133,13 @@ export default function TwoDPage() {
 
       <Modal open={showNew} onClose={() => setShowNew(false)} title="Add a missed 2D session">
         <div className="space-y-3">
-          <Input label="Session name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <Select label="Draw" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}>
+            <option value="MORNING">Morning — draws 12:01, closes 11:55</option>
+            <option value="EVENING">Evening — draws 16:30, closes 16:25</option>
+          </Select>
           <Input label="Draw date" type="date" value={form.drawDate} onChange={(e) => setForm({ ...form, drawDate: e.target.value })} required />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input label="Draw time" type="time" value={form.drawTime} onChange={(e) => setForm({ ...form, drawTime: e.target.value })} />
-            <Input label="Cut-off time" type="time" value={form.cutoffTime} onChange={(e) => setForm({ ...form, cutoffTime: e.target.value })} />
-          </div>
-          <Input label="Default odds (payout multiplier)" value={form.defaultOdds} onChange={(e) => setForm({ ...form, defaultOdds: e.target.value })} />
           <p className="text-xs text-gray-500">
-            The name must be MORNING or EVENING for the official number to settle it automatically.
+            Times and odds (85) are set from the draw you pick.
           </p>
           <div className="flex justify-end gap-2 pt-2">
             <Button variant="secondary" onClick={() => setShowNew(false)}>Cancel</Button>

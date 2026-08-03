@@ -43,6 +43,18 @@ export function isValidNumber(n: string, gameType: string): boolean {
   return new RegExp(`^\\d{${digits}}$`).test(String(n ?? "").trim());
 }
 
+/** The draw and cut-off times a named session runs to, or null if the game has no fixed
+ *  schedule. 2D draws at the same two times every trading day, so nobody should have to
+ *  type them — and a typo in the cut-off would let bets in after the number is known. */
+export function sessionSchedule(
+  gameType: string,
+  name: string
+): { drawTime: string; cutoffTime: string } | null {
+  const wanted = String(name ?? "").trim().toUpperCase();
+  const match = gameRules(gameType).sessions.find((session) => session.name === wanted);
+  return match ? { drawTime: match.drawTime, cutoffTime: match.cutoffTime } : null;
+}
+
 export function numberRangeLabel(gameType: string): string {
   const { digits } = gameRules(gameType);
   return digits === 2 ? "00–99" : "000–999";

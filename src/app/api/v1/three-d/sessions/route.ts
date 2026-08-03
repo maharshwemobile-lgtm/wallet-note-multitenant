@@ -5,7 +5,7 @@ import { audit } from "@/lib/audit";
 import { todayBusinessDate, isValidBusinessDate } from "@/lib/dates";
 import { assertBranchAccess } from "@/lib/tenant";
 import { closeExpiredThreeDSessions } from "@/services/thaiLottoService";
-import { gameRules, isGameType } from "@/lib/lotteryGame";
+import { gameRules, isGameType, sessionSchedule } from "@/lib/lotteryGame";
 
 export const GET = withAuth("three_d.view", async ({ req, user }) => {
   await closeExpiredThreeDSessions();
@@ -69,6 +69,11 @@ export const POST = withAuth("three_d.create", async ({ req, user }) => {
   if (body.branchId) await assertBranchAccess(user, body.branchId);
   // 2D pays 85, 3D pays 500 — take the game's rate unless one was given.
   const defaultOdds = body.defaultOdds ?? gameRules(body.gameType).defaultOdds;
+  // A named session runs to fixed times, so they are filled in from its name rather than
+  // typed. Getting the cut-off wrong by hand would let bets in after the number is known.
+  const schedule = sessionSchedule(body.gameType, body.name);
+  const drawTime = body.drawTime ?? schedule?.drawTime;
+  const cutoffTime = body.cutoffTime ?? schedule?.cutoffTime;
   const session = await prisma.$transaction(async (tx) => {
     const s = await tx.threeDSession.create({
       data: {
@@ -77,8 +82,8 @@ export const POST = withAuth("three_d.create", async ({ req, user }) => {
         gameType: body.gameType,
         name: body.name,
         drawDate: body.drawDate,
-        drawTime: body.drawTime,
-        cutoffTime: body.cutoffTime,
+        drawTime,
+        cutoffTime,
         defaultOdds,
         notes: body.notes,
         status: "OPEN",

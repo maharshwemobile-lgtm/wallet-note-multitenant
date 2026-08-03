@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GAME_RULES, gameRules, isGameType, isValidNumber, numberRangeLabel } from "@/lib/lotteryGame";
+import { GAME_RULES, gameRules, isGameType, isValidNumber, numberRangeLabel, sessionSchedule } from "@/lib/lotteryGame";
 
 describe("game rules", () => {
   it("keeps 2D and 3D apart", () => {
@@ -87,5 +87,26 @@ describe("2D settlement pairing", () => {
   it("leaves a session unsettled when its own draw has no number", () => {
     const official = new Map([[key("2026-07-31", "MORNING"), "16"]]);
     expect(official.get(key("2026-07-31", "EVENING"))).toBeUndefined();
+  });
+});
+
+describe("session schedule", () => {
+  it("knows the times for each 2D draw so nobody types them", () => {
+    expect(sessionSchedule("TWO_D", "MORNING")).toEqual({ drawTime: "12:01", cutoffTime: "11:55" });
+    expect(sessionSchedule("TWO_D", "EVENING")).toEqual({ drawTime: "16:30", cutoffTime: "16:25" });
+  });
+
+  it("matches the name however it was typed", () => {
+    expect(sessionSchedule("TWO_D", "morning")?.drawTime).toBe("12:01");
+    expect(sessionSchedule("TWO_D", "  Evening ")?.drawTime).toBe("16:30");
+  });
+
+  it("has nothing for a 3D session, which has no fixed daily time", () => {
+    expect(sessionSchedule("THREE_D", "MORNING")).toBeNull();
+  });
+
+  it("returns null for an unknown draw rather than guessing a cut-off", () => {
+    expect(sessionSchedule("TWO_D", "AFTERNOON")).toBeNull();
+    expect(sessionSchedule("TWO_D", "")).toBeNull();
   });
 });
