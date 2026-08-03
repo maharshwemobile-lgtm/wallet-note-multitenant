@@ -35,12 +35,18 @@ export const GET = withAuth("three_d.view", async ({ req, user }) => {
     sessions.map(async (s) => {
       const agg = await prisma.threeDTransaction.aggregate({
         where: { sessionId: s.id, deletedAt: null, settlementStatus: { not: "CANCELLED" } },
-        _sum: { betAmount: true, potentialPayout: true },
+        _sum: { betAmount: true },
+      });
+      // Exposure covers only records still waiting on a result — a settled session owes
+      // nothing further, and its real payout is on the settlement.
+      const pending = await prisma.threeDTransaction.aggregate({
+        where: { sessionId: s.id, deletedAt: null, settlementStatus: "PENDING" },
+        _sum: { potentialPayout: true },
       });
       return {
         ...s,
         totalBet: agg._sum.betAmount ?? 0n,
-        totalPotentialPayout: agg._sum.potentialPayout ?? 0n,
+        totalPotentialPayout: pending._sum.potentialPayout ?? 0n,
       };
     })
   );

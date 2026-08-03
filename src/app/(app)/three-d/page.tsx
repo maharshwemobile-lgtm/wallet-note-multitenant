@@ -171,7 +171,10 @@ export default function ThreeDPage() {
               <td className="px-3 py-2.5 font-mono font-bold">{s.resultNumber ?? "—"}</td>
               <td className="px-3 py-2.5 text-right tabular-nums">{s._count.transactions}</td>
               <td className="px-3 py-2.5 text-right tabular-nums">{fmtMoney(s.totalBet)}</td>
-              <td className="px-3 py-2.5 text-right tabular-nums text-amber-600">{fmtMoney(s.totalPotentialPayout)}</td>
+              {/* A drawn session owes nothing further, so it carries no exposure. */}
+              <td className="px-3 py-2.5 text-right tabular-nums text-amber-600">
+                {s.status === "SETTLED" ? <span className="text-gray-400">—</span> : fmtMoney(s.totalPotentialPayout)}
+              </td>
             </tr>
           ))}
         </Table>

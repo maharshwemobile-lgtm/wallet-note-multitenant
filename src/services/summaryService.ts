@@ -55,9 +55,14 @@ export async function computeDaySummary(
     let totalBet = 0n, totalPayout = 0n, totalCommission = 0n, unsettled = 0n;
     for (const t of txns) {
       totalBet += t.betAmount;
-      totalPayout += t.potentialPayout;
       totalCommission += t.commissionAmount;
-      if (t.settlementStatus === "PENDING") unsettled += t.betAmount;
+      // Exposure is what could still have to be paid out. Once a record is settled the
+      // result is known and nothing is owed on it beyond what settlement already booked,
+      // so counting it here would report a liability that no longer exists.
+      if (t.settlementStatus === "PENDING") {
+        totalPayout += t.potentialPayout;
+        unsettled += t.betAmount;
+      }
     }
     return {
       totalRecords: txns.length,

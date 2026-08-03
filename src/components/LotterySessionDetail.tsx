@@ -164,7 +164,11 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
         <StatCard label="Records" value={detail.totals.count} />
         <StatCard label="Total bet" value={fmtMoney(detail.totals.totalBet, "MMK")} />
         <StatCard label="Total commission" value={fmtMoney(detail.totals.totalCommission, "MMK")} />
-        <StatCard label="Potential payout" value={fmtMoney(detail.totals.totalPotentialPayout, "MMK")} tone="amber" />
+        {s.status === "SETTLED" && s.settlement ? (
+          <StatCard label="Paid out" value={fmtMoney(s.settlement.totalPayout, "MMK")} />
+        ) : (
+          <StatCard label="Potential payout" value={fmtMoney(detail.totals.totalPotentialPayout, "MMK")} tone="amber" />
+        )}
       </div>
 
       {s.settlement && s.status === "SETTLED" && hasPerm("three_d.view_profit") && (
@@ -186,10 +190,12 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <h3 className="mb-3 text-sm font-semibold">Exposure by number (highest first)</h3>
+          <h3 className="mb-3 text-sm font-semibold">
+            {s.status === "SETTLED" ? "Records by number (highest first)" : "Exposure by number (highest first)"}
+          </h3>
           {detail.exposure.length === 0 ? <Empty message="No records yet" /> : (
             <div className="max-h-96 overflow-y-auto">
-              <Table headers={["Number", "Bets", "Total stake", "Potential payout"]} rightAlign={[1, 2, 3]}>
+              <Table headers={["Number", "Bets", "Total stake", s.status === "SETTLED" ? "Payout if drawn" : "Potential payout"]} rightAlign={[1, 2, 3]}>
                 {detail.exposure.map((e) => (
                   <tr key={e.number} className={e.number === s.resultNumber ? "bg-green-50 dark:bg-green-900/20" : ""}>
                     <td className="px-3 py-2 font-mono font-bold">{e.number}</td>
