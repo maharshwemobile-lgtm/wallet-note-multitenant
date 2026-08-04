@@ -54,10 +54,11 @@ async function callBestEffort<T = unknown>(method: string, payload: Record<strin
   }
 }
 
-export interface InlineButton {
-  text: string;
-  callback_data: string;
-}
+/** A button carries either a callback or a link, never both — Telegram rejects a button
+ *  with neither and ignores one with both. */
+export type InlineButton =
+  | { text: string; callback_data: string }
+  | { text: string; url: string };
 export type InlineKeyboard = InlineButton[][];
 
 export function keyboard(rows: InlineButton[][]): { inline_keyboard: InlineButton[][] } {
@@ -66,6 +67,12 @@ export function keyboard(rows: InlineButton[][]): { inline_keyboard: InlineButto
 
 export function btn(text: string, data: string): InlineButton {
   return { text, callback_data: data };
+}
+
+/** A button that opens a link — used to hand a customer straight to the shop's Telegram
+ *  rather than making them copy a name out of a message. */
+export function linkBtn(text: string, url: string): InlineButton {
+  return { text, url };
 }
 
 /** A keyboard that stays under the message it came with, and disappears with it. */

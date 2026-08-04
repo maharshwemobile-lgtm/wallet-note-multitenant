@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fmtMoneyMy } from "@/lib/telegramCustomerText";
+import { fmtMoneyMy, telegramLink } from "@/lib/telegramCustomerText";
 
 describe("customer money formatting", () => {
   it("shows whole kyat, grouped", () => {
@@ -15,5 +15,38 @@ describe("customer money formatting", () => {
 
   it("keeps a negative readable", () => {
     expect(fmtMoneyMy(-500000n)).toBe("-5,000");
+  });
+});
+
+describe("shop telegram link", () => {
+  it("accepts the shapes a shop actually types", () => {
+    for (const written of [
+      "maharshwe",
+      "@maharshwe",
+      " @maharshwe ",
+      "t.me/maharshwe",
+      "https://t.me/maharshwe",
+      "http://telegram.me/maharshwe",
+      "https://t.me/maharshwe?start=1",
+    ]) {
+      expect(telegramLink(written), written).toBe("https://t.me/maharshwe");
+    }
+  });
+
+  it("refuses a phone number, which looks like a handle but opens nothing", () => {
+    // The worst outcome is a button that does nothing when someone needs help.
+    expect(telegramLink("09778394052")).toBeNull();
+    expect(telegramLink("+959778394052")).toBeNull();
+  });
+
+  it("refuses anything Telegram would not accept as a username", () => {
+    for (const bad of ["", "  ", null, undefined, "abcd", "has space", "dash-name", "a".repeat(33)]) {
+      expect(telegramLink(bad as string), String(bad)).toBeNull();
+    }
+  });
+
+  it("takes the shortest handle Telegram allows", () => {
+    expect(telegramLink("abcde")).toBe("https://t.me/abcde");
+    expect(telegramLink("a_1_b")).toBe("https://t.me/a_1_b");
   });
 });

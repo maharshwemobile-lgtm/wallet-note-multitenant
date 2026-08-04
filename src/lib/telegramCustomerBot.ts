@@ -11,7 +11,8 @@
 
 import { prisma } from "./prisma";
 import {
-  btn, keyboard, persistentKeyboard, sendMessage, sendPhoto, withBotToken, type TgMessage,
+  btn, keyboard, linkBtn, persistentKeyboard, sendMessage, sendPhoto, withBotToken,
+  type TgMessage,
 } from "./telegram";
 import { gameRules, numberRangeLabel } from "./lotteryGame";
 import { parseBulkLines, createThreeDBets } from "@/services/threeDService";
@@ -19,7 +20,7 @@ import { activePaymentMethods, paymentInstructionsMy, type PaymentMethod } from 
 import { nextNumber } from "./sequence";
 import { audit } from "./audit";
 import { toMinor } from "./money";
-import { fmtMoneyMy } from "./telegramCustomerText";
+import { fmtMoneyMy, telegramLink } from "./telegramCustomerText";
 
 const CANCEL = [[btn("✕ ပယ်ဖျက်", "c:cancel")]];
 
@@ -673,9 +674,13 @@ export async function customerAbout(customer: CustomerRow) {
     oddsLines.push(`${rules.label} — ၁ ကျပ်လျှင် ${odds} ကျပ်`);
   }
 
+  // A tappable button when the shop's Telegram is a real handle; otherwise the customer
+  // is left with whatever else there is rather than a button that opens nothing.
+  const adminLink = telegramLink(business?.telegram);
+
   const contact: string[] = [];
   if (business?.phone) contact.push(`📞 ${business.phone}`);
-  if (business?.telegram) contact.push(`✈️ ${business.telegram}`);
+  if (business?.telegram && !adminLink) contact.push(`✈️ ${business.telegram}`);
   if (business?.address) contact.push(`📍 ${business.address}`);
 
   const methods = await shopPaymentMethods(customer.businessId);
@@ -689,13 +694,21 @@ export async function customerAbout(customer: CustomerRow) {
   if (methods.length > 0) {
     parts.push(``, `💳 ငွေပေးချေရန်`, paymentInstructionsMy(methods));
   }
-  parts.push(
-    ``,
-    contact.length > 0
-      ? `☎️ ဆက်သွယ်ရန်\n${contact.join("\n")}`
-      : `☎️ ဆက်သွယ်ရန် — ဆိုင်သို့ တိုက်ရိုက် စာပို့ပါ။`
-  );
+  if (adminLink) {
+    parts.push(``, `☎️ ဆက်သွယ်ရန်`, ...(contact.length > 0 ? [contact.join("\n")] : []),
+      `အောက်က ခလုတ်ကို နှိပ်၍ Admin ထံ တိုက်ရိုက် စာပို့နိုင်ပါသည်။`);
+  } else {
+    parts.push(
+      ``,
+      contact.length > 0
+        ? `☎️ ဆက်သွယ်ရန်\n${contact.join("\n")}`
+        : `☎️ ဆက်သွယ်ရန် — ဆိုင်သို့ တိုက်ရိုက် စာပို့ပါ။`
+    );
+  }
 
-  // No button of its own: the menu under the text box already has one.
-  await sendMessage(customer.chatId, parts.join("\n"));
+  await sendMessage(customer.chatId, parts.join("\n"), {
+    replyMarkup: adminLink
+      ? keyboard([[linkBtn("💬 Admin ကို ဆက်သွယ်ရန်", adminLink)]])
+      : undefined,
+  });
 }

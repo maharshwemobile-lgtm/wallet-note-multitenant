@@ -329,7 +329,11 @@ async function trStepSource(chatId: string, user: AuthUser, data: Record<string,
   const wallet = await prisma.wallet.findUnique({ where: { id: walletId } });
   if (!wallet) return sendMessage(chatId, "Wallet not found.");
   const { rows } = await walletButtons(user.businessId, data.branchId as string);
-  const filtered = rows.filter((r) => !r[0].callback_data.endsWith(walletId));
+  // Every wallet button carries a callback; the guard is for the type, since a button may
+  // now carry a link instead.
+  const filtered = rows.filter(
+    (r) => !("callback_data" in r[0] && r[0].callback_data.endsWith(walletId))
+  );
   await setSession(user.id, chatId, "tr.dest", { ...data, sourceWalletId: walletId, sourceName: wallet.name, sourceCurrency: wallet.currency });
   await sendMessage(chatId, `From: ${wallet.name}\n\nTo which wallet?`, { replyMarkup: keyboard([...filtered, CANCEL_ROW]) });
 }
