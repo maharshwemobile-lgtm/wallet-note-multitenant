@@ -220,7 +220,7 @@ export default function AdminPage() {
         </section>
 
         <div className="grid items-start gap-4 xl:grid-cols-2">
-        <section ref={userAuditRef} className="scroll-mt-4 border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
+        {named && <section ref={userAuditRef} className="scroll-mt-4 border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
             <div>
               <h2 className="text-sm font-semibold">
@@ -300,7 +300,7 @@ export default function AdminPage() {
           <footer className="border-t border-gray-200 px-4 py-3 text-xs text-gray-500 dark:border-gray-800">
             Showing {visibleUsers.length.toLocaleString()} of {scopedUsers.length.toLocaleString()} {userScope === "today" ? "users registered today" : "loaded users"}
           </footer>
-        </section>
+        </section>}
 
         <section ref={activityAuditRef} className="scroll-mt-4 border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
           <header className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
