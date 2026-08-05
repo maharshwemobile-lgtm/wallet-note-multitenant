@@ -7,6 +7,7 @@ import { Wallet } from "lucide-react";
 import { Button, Card, Input, Select } from "@/components/ui";
 import { PwaInstall } from "@/components/PwaInstall";
 import { GoogleSignIn } from "@/components/GoogleSignIn";
+import { BUSINESS_CATEGORIES, BUSINESS_CATEGORY_LABELS } from "@/lib/modules";
 import { LanguageSwitch } from "@/components/LanguageProvider";
 import { api } from "@/lib/client";
 
@@ -98,11 +99,13 @@ export default function RegisterPage() {
             required
           >
             <option value="">Choose category...</option>
-            <option value="PERSONAL">Personal wallet & notes</option>
-            <option value="MINI_MART">Mini Mart / retail shop</option>
-            <option value="THREE_D">3D record business</option>
-            <option value="MONEY_SERVICE">Money transfer & exchange</option>
-            <option value="ALL_IN_ONE">All-in-one business</option>
+            {/* Driven by the shared list: these were written out by hand and a new business
+                type was added without appearing here. */}
+            {BUSINESS_CATEGORIES.map((category) => (
+              <option key={category} value={category}>
+                {BUSINESS_CATEGORY_LABELS[category]}
+              </option>
+            ))}
           </Select>
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
