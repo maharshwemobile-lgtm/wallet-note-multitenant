@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useState, ReactNode } from "react";
 import { X } from "lucide-react";
 import { STATUS_COLORS } from "@/lib/format";
+import { playError, playSuccess } from "@/lib/sound";
 
 export function cn(...parts: (string | false | null | undefined)[]) {
   return parts.filter(Boolean).join(" ");
@@ -184,6 +185,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const push = useCallback((message: string, kind: "success" | "error" = "success") => {
     const id = Date.now() + Math.random();
     setToasts((t) => [...t, { id, message, kind }]);
+    // Every confirmation in the app already comes through here, so this is the one place
+    // that makes them all audible — the counter hears the outcome without looking up.
+    if (kind === "success") playSuccess();
+    else playError();
     setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4500);
   }, []);
   return (

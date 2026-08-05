@@ -6,6 +6,7 @@ import { api } from "@/lib/client";
 import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Modal, Select, Spinner, cn, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
+import { playBeep, playSuccess } from "@/lib/sound";
 
 interface Item {
   id: string; name: string; sku: string; barcode?: string;
@@ -173,6 +174,9 @@ export default function PosPage() {
       }
       return [...current, { item, quantity: 1, unitPrice: Number(BigInt(item.sellingPrice)) / 100 }];
     });
+    // Both tapping a product and scanning a barcode arrive here, so one beep covers both.
+    // The out-of-stock case above returns before this: it gets the error tone instead.
+    playBeep();
   }
 
   function changeQuantity(itemId: string, quantity: number) {
@@ -243,6 +247,9 @@ export default function PosPage() {
       });
       setReviewOpen(false);
       setLastSale(sale);
+      // A finished sale opens a modal rather than a toast, so it would otherwise be the
+      // one completion in the app that made no sound.
+      playSuccess();
       clearSale();
       load();
     } catch (error) {
