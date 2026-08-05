@@ -97,7 +97,9 @@ export async function GET(req: NextRequest) {
   // Nobody matched, so this is a new business — the same thing the registration form
   // creates, which anyone can already use. Google is never a way into a shop that
   // already exists: that would turn knowing an address into access to someone's money.
+  let isNewAccount = false;
   if (!user) {
+    isNewAccount = true;
     try {
       user = await signUpWithGoogle(identity);
     } catch (error) {
@@ -132,7 +134,11 @@ export async function GET(req: NextRequest) {
     after: { method: "google" },
   });
 
-  const response = NextResponse.redirect(new URL("/", process.env.APP_URL));
+  // A new account has never been asked what kind of business it is, and that decides which
+  // modules show. Existing accounts already answered and go straight in.
+  const response = NextResponse.redirect(
+    new URL(isNewAccount ? "/welcome" : "/", process.env.APP_URL)
+  );
   response.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true,
     sameSite: "lax",
