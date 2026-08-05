@@ -158,6 +158,58 @@ model LotteryOrder {
   @@index([sessionId])
 }
 
+/** A device left in for repair.
+ *
+ *  The shop's promise to a customer: what was handed over, what is wrong with it, what it
+ *  will cost and when it will be ready. Money only moves when the phone goes back out, so
+ *  a deposit and the final charge are held here until then.
+ */
+model RepairJob {
+  id           String    @id @default(uuid())
+  jobNo        String
+  businessId   String
+  branchId     String
+
+  customerId   String?
+  customerName String?
+  customerPhone String?
+
+  deviceBrand  String
+  deviceModel  String
+  /** Serial or IMEI, as read off the device. */
+  imei         String?
+  /** What came in with it — case, SIM, memory card — so a dispute has an answer. */
+  accessories  String?
+  problem      String
+
+  status       String    @default("RECEIVED") // RECEIVED IN_PROGRESS WAITING_PARTS DONE DELIVERED CANCELLED
+  /** Quoted up front; the final charge may differ once it is opened up. */
+  estimatedCost BigInt   @default(0)
+  partsCost    BigInt    @default(0)
+  finalCost    BigInt    @default(0)
+  /** Taken at drop-off and set against the final charge. */
+  depositAmount BigInt   @default(0)
+  paidAmount   BigInt    @default(0)
+
+  technicianId String?
+  notes        String?
+
+  receivedAt   DateTime  @default(now())
+  promisedAt   DateTime?
+  completedAt  DateTime?
+  deliveredAt  DateTime?
+
+  createdById  String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  @@unique([businessId, jobNo])
+  @@index([businessId, status])
+  @@index([businessId, receivedAt])
+  @@index([customerId])
+}
+
 model UserBranch {
   userId   String
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)

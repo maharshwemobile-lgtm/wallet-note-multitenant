@@ -4,6 +4,7 @@ export type ModuleMode = (typeof MODULE_MODES)[number];
 export const BUSINESS_CATEGORIES = [
   "PERSONAL",
   "MINI_MART",
+  "MOBILE_SHOP",
   "THREE_D",
   "MONEY_SERVICE",
   "ALL_IN_ONE",
@@ -15,6 +16,7 @@ export const FEATURE_KEYS = [
   "purchases",
   "items",
   "stock",
+  "repair",
   "threeD",
   "twoD",
   "exchange",
@@ -43,6 +45,7 @@ export const FEATURE_DEFINITIONS: {
   { key: "purchases", label: "Purchases", group: "Mini Mart" },
   { key: "items", label: "Items", group: "Mini Mart" },
   { key: "stock", label: "Stock", group: "Mini Mart" },
+  { key: "repair", label: "Repair Jobs", group: "Mini Mart" },
   { key: "suppliers", label: "Suppliers", group: "Mini Mart" },
   { key: "threeD", label: "3D Records", group: "Wallet Note" },
   { key: "twoD", label: "2D Records", group: "Wallet Note" },
@@ -63,12 +66,13 @@ export const FEATURE_DEFINITIONS: {
 export const BUSINESS_CATEGORY_LABELS: Record<BusinessCategory, string> = {
   PERSONAL: "Personal wallet & notes",
   MINI_MART: "Mini Mart / retail shop",
+  MOBILE_SHOP: "Mobile phone shop & repair",
   THREE_D: "3D record business",
   MONEY_SERVICE: "Money transfer & exchange",
   ALL_IN_ONE: "All-in-one business",
 };
 
-const MINI_MART_FEATURES: FeatureKey[] = ["pos", "purchases", "items", "stock", "suppliers"];
+const MINI_MART_FEATURES: FeatureKey[] = ["pos", "purchases", "items", "stock", "suppliers", "repair"];
 const WALLET_FEATURES: FeatureKey[] = [
   "exchange",
   "wallets",
@@ -103,6 +107,13 @@ export function categoryPreset(category: BusinessCategory): FeatureVisibility {
     case "MINI_MART":
       return visibility([
         "pos", "purchases", "items", "stock", "wallets", "transfers", "withdraw",
+        "credit", "incomeExpense", "reports", "customers", "suppliers", "telegram", "about",
+      ]);
+    case "MOBILE_SHOP":
+      // A phone shop sells handsets and accessories and repairs them, so it wants the
+      // whole retail side plus repair jobs.
+      return visibility([
+        "pos", "purchases", "items", "stock", "repair", "wallets", "transfers", "withdraw",
         "credit", "incomeExpense", "reports", "customers", "suppliers", "telegram", "about",
       ]);
     case "THREE_D":

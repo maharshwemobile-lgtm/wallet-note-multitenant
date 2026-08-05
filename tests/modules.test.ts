@@ -59,9 +59,22 @@ describe("module access", () => {
     expect(moneyService.features.transfers).toBe(true);
     expect(moneyService.features.threeD).toBe(false);
 
+    const mobileShop = parseModuleAccess(moduleSettingForCategory("MOBILE_SHOP"));
+    // A phone shop both sells and repairs, so it gets the retail side and repair jobs.
+    expect(mobileShop.features.repair).toBe(true);
+    expect(mobileShop.features.pos).toBe(true);
+    expect(mobileShop.features.stock).toBe(true);
+    expect(mobileShop.features.threeD).toBe(false);
+    // Repair is a shop counter's job, not something a plain mini mart asked for.
+    expect(miniMart.features.repair).toBe(false);
+
     const allInOne = parseModuleAccess(moduleSettingForCategory("ALL_IN_ONE"));
     expect(Object.values(allInOne.features).every(Boolean)).toBe(true);
-    expect(BUSINESS_CATEGORIES).toHaveLength(5);
+    // Every category must have a preset of its own; this catches one added without.
+    for (const category of BUSINESS_CATEGORIES) {
+      const preset = parseModuleAccess(moduleSettingForCategory(category));
+      expect(Object.values(preset.features).some(Boolean), category).toBe(true);
+    }
   });
 
   it("recomputes workspace mode from individual feature switches", () => {

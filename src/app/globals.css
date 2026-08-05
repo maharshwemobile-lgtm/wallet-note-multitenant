@@ -29,4 +29,20 @@ body {
 @media print {
   .no-print { display: none !important; }
   body { background: white; }
+
+  /* Printing a sale slip prints the slip and nothing else. Everything is hidden, then the
+     receipt and the ancestors it hangs from are put back — hiding the app screen by screen
+     would miss whichever one was added next. */
+  body.printing-receipt * { visibility: hidden !important; }
+  body.printing-receipt #sale-receipt,
+  body.printing-receipt #sale-receipt * { visibility: visible !important; }
+  body.printing-receipt #sale-receipt {
+    display: block !important;
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+  /* A till roll is a continuous strip; margins push the slip onto a second one. */
+  @page { margin: 0; }
 }

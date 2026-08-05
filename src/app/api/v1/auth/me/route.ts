@@ -4,7 +4,13 @@ import { parseModuleAccess } from "@/lib/modules";
 import { appEdition } from "@/lib/edition";
 
 export const GET = withAuth(null, async ({ user }) => {
-  const [branches, moduleSetting] = await Promise.all([
+  // The shop's own details, so a printed slip can carry them. Anyone signed in already
+  // belongs to this business, so there is nothing here they may not see.
+  const [business, branches, moduleSetting] = await Promise.all([
+    prisma.business.findUnique({
+      where: { id: user.businessId },
+      select: { name: true, phone: true, address: true, currency: true },
+    }),
     prisma.branch.findMany({
       where: {
         businessId: user.businessId,
@@ -28,5 +34,5 @@ export const GET = withAuth(null, async ({ user }) => {
     }
   }
 
-  return json({ user, branches, modules, edition: appEdition() });
+  return json({ user, business, branches, modules, edition: appEdition() });
 });

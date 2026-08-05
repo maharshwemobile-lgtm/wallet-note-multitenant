@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Hash, ArrowLeftRight, Wallet, HandCoins, FileBarChart,
   Users, UserCog, Settings, ScrollText, Info, Menu, X, LogOut,
   Moon, Sun, Receipt, Plus, ShoppingCart, Package, Boxes, Truck, Building2, MessageCircle,
-  Send, MinusCircle,
+  Send, MinusCircle, Wrench,
 } from "lucide-react";
 import { api } from "@/lib/client";
 import { ToastProvider, cn } from "./ui";
@@ -22,6 +22,7 @@ interface Me {
     id: string; name: string; username: string; roleName: string;
     permissions: string[]; allBranches: boolean; branchIds: string[];
   };
+  business: { name: string; phone: string | null; address: string | null; currency: string } | null;
   branches: { id: string; name: string; code: string }[];
   modules: {
     mode: ModuleMode;
@@ -70,6 +71,7 @@ export function useAuth() {
 const CREATE_ACTIONS: { section: string; perm: string; feature?: FeatureKey; label: string }[] = [
   { section: "/purchases", perm: "purchase.create", feature: "purchases", label: "New purchase" },
   { section: "/items", perm: "item.manage", feature: "items", label: "New item" },
+  { section: "/repairs", perm: "repair.create", feature: "repair", label: "Take in a device" },
   { section: "/three-d", perm: "three_d.create", feature: "threeD", label: "New 3D session" },
   { section: "/two-d", perm: "three_d.create", feature: "twoD", label: "New 2D session" },
   { section: "/exchange", perm: "exchange.create", feature: "exchange", label: "New exchange" },
@@ -89,6 +91,7 @@ const NAV = [
   { href: "/purchases", label: "Purchases", icon: Truck, perm: "purchase.view", feature: "purchases" },
   { href: "/items", label: "Items", icon: Package, perm: "item.view", feature: "items" },
   { href: "/stock", label: "Stock", icon: Boxes, perm: "stock.view", feature: "stock" },
+  { href: "/repairs", label: "Repair Jobs", icon: Wrench, perm: "repair.view", feature: "repair" },
   { href: "/three-d", label: "3D Records", icon: Hash, perm: "three_d.view", feature: "threeD" },
   { href: "/two-d", label: "2D Records", icon: Hash, perm: "three_d.view", feature: "twoD" },
   { href: "/exchange", label: "Exchange", icon: ArrowLeftRight, perm: "exchange.view", feature: "exchange" },

@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Minus, Plus, Search, Trash2 } from "lucide-react";
+import { CheckCircle2, Minus, Plus, Printer, Search, Trash2 } from "lucide-react";
 import { api } from "@/lib/client";
 import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Modal, Select, Spinner, cn, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
 import { playBeep, playSuccess } from "@/lib/sound";
+import { SaleReceipt, type ReceiptData } from "@/components/SaleReceipt";
+import { printReceipt } from "@/lib/printReceipt";
 
 interface Item {
   id: string; name: string; sku: string; barcode?: string;
@@ -59,6 +61,7 @@ export default function PosPage() {
   const [reviewOpen, setReviewOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [lastSale, setLastSale] = useState<SaleResult | null>(null);
+  const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [draftReady, setDraftReady] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
   const { push } = useToast();
@@ -244,6 +247,27 @@ export default function PosPage() {
           paidAmount: paidAmount.toString(),
           walletId: paidAmount > 0 ? walletId : undefined,
         },
+      });
+      // Captured before clearSale empties the cart, or there would be nothing to print.
+      setReceipt({
+        txnNo: sale.txnNo,
+        at: new Date().toISOString(),
+        shopName: me?.business?.name ?? "Wallet Note",
+        shopPhone: me?.business?.phone ?? undefined,
+        shopAddress: me?.business?.address ?? undefined,
+        customerName: customers.find((c) => c.id === customerId)?.name,
+        cashierName: me?.user.name,
+        lines: cart.map((line) => ({
+          name: line.item.name,
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+        })),
+        subtotal,
+        discount: disc,
+        total,
+        paid: paidAmount,
+        change,
+        credit: creditAmount,
       });
       setReviewOpen(false);
       setLastSale(sale);
@@ -440,10 +464,16 @@ export default function PosPage() {
               <p className="font-mono text-lg font-bold">{lastSale.txnNo}</p>
               <p className="mt-1 text-2xl font-bold text-blue-600">{fmtMoney(lastSale.total)} MMK</p>
             </div>
-            <Button className="w-full" onClick={() => { setLastSale(null); searchRef.current?.focus(); }}>New sale</Button>
+            <div className="grid grid-cols-2 gap-2">
+              <Button variant="secondary" onClick={() => receipt && printReceipt()} disabled={!receipt}>
+                <Printer size={16} className="mr-1 inline" />Print slip
+              </Button>
+              <Button onClick={() => { setLastSale(null); searchRef.current?.focus(); }}>New sale</Button>
+            </div>
           </div>
         )}
       </Modal>
+      {receipt && <SaleReceipt data={receipt} />}
     </div>
   );
 }
