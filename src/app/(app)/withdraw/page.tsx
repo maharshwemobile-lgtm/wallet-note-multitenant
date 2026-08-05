@@ -161,7 +161,7 @@ export default function WithdrawPage() {
             value={form.walletId}
             onChange={(event) => setForm({ ...form, walletId: event.target.value })}
           >
-            <option value="">Select...</option>
+            <option value="">Select…</option>
             {walletOptions.map((wallet) => (
               <option key={wallet.id} value={wallet.id}>
                 {wallet.name} ({fmtMoney(wallet.currentBalance)} {wallet.currency})

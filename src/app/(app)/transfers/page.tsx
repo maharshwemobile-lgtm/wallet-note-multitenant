@@ -151,7 +151,7 @@ export default function TransfersPage() {
             value={form.sourceWalletId}
             onChange={(event) => setForm({ ...form, sourceWalletId: event.target.value })}
           >
-            <option value="">Select...</option>
+            <option value="">Select…</option>
             {wallets.map((wallet) => (
               <option key={wallet.id} value={wallet.id}>
                 {wallet.name} ({fmtMoney(wallet.currentBalance)} {wallet.currency})
@@ -163,7 +163,7 @@ export default function TransfersPage() {
             value={form.destWalletId}
             onChange={(event) => setForm({ ...form, destWalletId: event.target.value })}
           >
-            <option value="">Select...</option>
+            <option value="">Select…</option>
             {wallets
               .filter((wallet) => wallet.id !== form.sourceWalletId)
               .map((wallet) => (
