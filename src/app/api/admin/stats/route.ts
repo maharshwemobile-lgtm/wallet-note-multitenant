@@ -63,7 +63,7 @@ export async function GET() {
           },
         },
       }) : Promise.resolve([]),
-      detailed ? prisma.auditLog.findMany({
+      prisma.auditLog.findMany({
         orderBy: { createdAt: "desc" },
         take: 500,
         select: {
@@ -81,10 +81,10 @@ export async function GET() {
             },
           },
         },
-      }) : Promise.resolve([]),
+      }),
     ]);
 
-    const activityBusinessIds = [...new Set(activityLogs.map((log) => log.businessId))];
+    const activityBusinessIds = detailed ? [...new Set(activityLogs.map((log) => log.businessId))] : [];
     const activityBusinesses = await prisma.business.findMany({
       where: { id: { in: activityBusinessIds } },
       select: { id: true, name: true },
@@ -113,15 +113,19 @@ export async function GET() {
             lastSessionAt: user.sessions[0]?.createdAt ?? null,
             createdAt: user.createdAt,
           })),
+          // What happened is public; who it happened to is not. Without a signed-in
+          // admin the names are simply never put in the response — not hidden by the
+          // page, which would still have shipped them to the browser.
           activityLogs: activityLogs.map((log) => ({
             id: log.id,
-            businessName: activityBusinessNames.get(log.businessId) ?? "Unknown business",
-            userDisplayName: log.user?.name ?? "System",
-            username: log.user?.username ?? "system",
+            businessName: detailed ? (activityBusinessNames.get(log.businessId) ?? "Unknown business") : null,
+            userDisplayName: detailed ? (log.user?.name ?? "System") : null,
+            username: detailed ? (log.user?.username ?? "system") : null,
             action: log.action,
             module: log.module,
             resourceType: log.resourceType,
-            reason: log.reason,
+            // Free text a person typed; it can name anyone or anything.
+            reason: detailed ? log.reason : null,
             createdAt: log.createdAt,
           })),
           updatedAt: now.toISOString(),

@@ -27,9 +27,10 @@ interface AdminStats {
   }[];
   activityLogs: {
     id: string;
-    businessName: string;
-    userDisplayName: string;
-    username: string;
+    // Null unless an admin is signed in: the feed is public, the names are not.
+    businessName: string | null;
+    userDisplayName: string | null;
+    username: string | null;
     action: string;
     module: string;
     resourceType: string | null;
@@ -110,14 +111,15 @@ export default function AdminPage() {
     user.name.toLowerCase().includes(needle) ||
     user.businessName.toLowerCase().includes(needle)
   );
+  const named = data?.detailed ?? false;
   const activityNeedle = activityQuery.trim().toLowerCase();
   const activityActions = [...new Set((data?.activityLogs ?? []).map((log) => log.action))].sort();
   const visibleActivity = (data?.activityLogs ?? []).filter((log) =>
     (!activityAction || log.action === activityAction) &&
     (!activityNeedle ||
-      log.username.toLowerCase().includes(activityNeedle) ||
-      log.userDisplayName.toLowerCase().includes(activityNeedle) ||
-      log.businessName.toLowerCase().includes(activityNeedle) ||
+      log.username?.toLowerCase().includes(activityNeedle) ||
+      log.userDisplayName?.toLowerCase().includes(activityNeedle) ||
+      log.businessName?.toLowerCase().includes(activityNeedle) ||
       log.module.toLowerCase().includes(activityNeedle) ||
       log.resourceType?.toLowerCase().includes(activityNeedle))
   );
@@ -218,14 +220,6 @@ export default function AdminPage() {
         </section>
 
         <div className="grid items-start gap-4 xl:grid-cols-2">
-        {data && !data.detailed && (
-          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
-            The figures above are open to anyone. The user and activity lists name other
-            businesses and their staff, so they only appear for an admin who is signed in.{" "}
-            <a className="font-medium underline" href="/login">Sign in</a>
-          </div>
-        )}
-
         <section ref={userAuditRef} className="scroll-mt-4 border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
             <div>
@@ -312,7 +306,10 @@ export default function AdminPage() {
           <header className="flex flex-wrap items-end justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
             <div>
               <h2 className="text-sm font-semibold">Activity Audit Logs</h2>
-              <p className="mt-1 text-xs text-gray-500">Latest 500 activities across registered businesses.</p>
+              <p className="mt-1 text-xs text-gray-500">
+                Latest 500 activities across registered businesses.
+                {!named && " Sign in as an admin to see which business and who."}
+              </p>
             </div>
             <div className="grid w-full gap-2 sm:w-auto sm:grid-cols-[18rem_12rem]">
               <label className="relative">
@@ -335,9 +332,9 @@ export default function AdminPage() {
               <thead className="border-b border-gray-200 bg-gray-50 text-left text-xs text-gray-500 dark:border-gray-800 dark:bg-gray-950">
                 <tr>
                   <th className="px-4 py-3 font-medium">Time</th>
-                  <th className="px-4 py-3 font-medium">Business</th>
-                  <th className="px-4 py-3 font-medium">User</th>
-                  <th className="px-4 py-3 font-medium">Username</th>
+                  {named && <th className="px-4 py-3 font-medium">Business</th>}
+                  {named && <th className="px-4 py-3 font-medium">User</th>}
+                  {named && <th className="px-4 py-3 font-medium">Username</th>}
                   <th className="px-4 py-3 font-medium">Action</th>
                   <th className="px-4 py-3 font-medium">Module</th>
                   <th className="px-4 py-3 font-medium">Resource</th>
@@ -347,9 +344,9 @@ export default function AdminPage() {
                 {visibleActivity.map((log) => (
                   <tr key={log.id}>
                     <td className="whitespace-nowrap px-4 py-3 text-xs text-gray-500">{fmtDateTime(log.createdAt)}</td>
-                    <td className="px-4 py-3 font-medium">{log.businessName}</td>
-                    <td className="px-4 py-3">{log.userDisplayName}</td>
-                    <td className="px-4 py-3 font-mono font-semibold text-blue-700 dark:text-blue-400">{log.username}</td>
+                    {named && <td className="px-4 py-3 font-medium">{log.businessName}</td>}
+                    {named && <td className="px-4 py-3">{log.userDisplayName}</td>}
+                    {named && <td className="px-4 py-3 font-mono font-semibold text-blue-700 dark:text-blue-400">{log.username}</td>}
                     <td className="px-4 py-3">
                       <span className="rounded-md bg-gray-100 px-2 py-1 text-xs font-semibold dark:bg-gray-800">{log.action}</span>
                     </td>
