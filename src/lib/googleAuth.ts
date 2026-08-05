@@ -5,9 +5,10 @@
  *  identity is then read from Google's userinfo endpoint over that same channel rather
  *  than by parsing a token the browser handed us — nothing a caller controls is trusted.
  *
- *  This signs a person in to an account that already exists. It does not create users or
- *  businesses: an email address arriving from Google says who someone is, not that they
- *  should have access to a shop's money.
+ *  Signing in matches an existing account by verified email. Where none matches, a new
+ *  business is created — the same thing the registration form does, since anyone can
+ *  already sign themselves up there. Google never joins someone to a shop that already
+ *  exists; that stays an admin's decision.
  */
 
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
@@ -96,4 +97,33 @@ export async function exchangeCodeForIdentity(
     emailVerified: profile.email_verified === true || String(profile.email_verified) === "true",
     name: profile.name,
   };
+}
+
+/** A username built from the email's local part.
+ *
+ *  Signing up through Google never asks for one, so it is derived — kept to the characters
+ *  a username may contain, and padded when the result would be too short for the rule the
+ *  registration form applies. `suffix` distinguishes a name already taken.
+ */
+export function usernameFromEmail(email: string, suffix = 0): string {
+  const local = String(email ?? "").split("@")[0].toLowerCase();
+  let base = local.replace(/[^a-z0-9_]/g, "");
+  if (base.length === 0) base = "user";
+  // The registration rule is 3-40 characters; leave room for the suffix.
+  base = base.slice(0, 34);
+  while (base.length < 3) base += "0";
+  return suffix > 0 ? `${base}${suffix + 1}` : base;
+}
+
+/** What to call the business created for someone signing up through Google.
+ *
+ *  Their own name is the least surprising thing to see, and it is theirs to change in
+ *  settings afterwards. Falls back to the email when Google sends no name.
+ */
+export function businessNameFrom(identity: { email: string; name?: string }): string {
+  const named = String(identity.name ?? "").trim();
+  if (named.length >= 2) return named.slice(0, 80);
+  const local = String(identity.email ?? "").split("@")[0].trim();
+  // The registration rule is a minimum of two characters.
+  return (local.length >= 2 ? local : `${local}00`).slice(0, 80);
 }

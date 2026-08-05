@@ -6,14 +6,15 @@ import { useRouter } from "next/navigation";
 import { Wallet } from "lucide-react";
 import { Button, Input, Card } from "@/components/ui";
 import { PwaInstall } from "@/components/PwaInstall";
+import { GoogleSignIn } from "@/components/GoogleSignIn";
 import { LanguageSwitch } from "@/components/LanguageProvider";
 import { api } from "@/lib/client";
 
 /** Google sends people back here with a reason when sign-in did not go through. Each one
- *  says what to do next; "no account" is the common one and is not a failure of theirs. */
+ *  says what to do next rather than just reporting that it did not work. */
 const SIGN_IN_ERRORS: Record<string, string> = {
-  google_no_account:
-    "No Wallet Note account uses that Google address. Ask an admin to add it to your user first.",
+  google_disabled: "That account has been disabled. Please contact your admin.",
+  google_signup_failed: "Could not create an account from that Google address. Please try again.",
   google_unverified: "That Google address is not verified. Verify it with Google, then try again.",
   google_cancelled: "Google sign-in was cancelled.",
   google_state: "That sign-in link expired. Please try again.",
@@ -28,7 +29,6 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const [googleEnabled, setGoogleEnabled] = useState(false);
 
   useEffect(() => {
     // Read straight from the URL rather than through useSearchParams, which would make
@@ -37,11 +37,6 @@ export default function LoginPage() {
     const frame = window.requestAnimationFrame(() => {
       const reason = new URLSearchParams(window.location.search).get("error");
       if (reason) setError(SIGN_IN_ERRORS[reason] ?? "Sign-in failed. Please try again.");
-
-      // The button appears only where it would work, so nobody taps a dead end.
-      api<{ enabled: boolean }>("/api/v1/auth/google/status")
-        .then((d) => setGoogleEnabled(d.enabled))
-        .catch(() => setGoogleEnabled(false));
     });
     return () => window.cancelAnimationFrame(frame);
   }, []);
@@ -81,28 +76,8 @@ export default function LoginPage() {
           </Button>
         </form>
 
-        {googleEnabled && (
-          <>
-            <div className="my-5 flex items-center gap-3">
-              <span className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
-              <span className="text-xs text-gray-400">or</span>
-              <span className="h-px flex-1 bg-gray-200 dark:bg-gray-800" />
-            </div>
-            {/* A plain link, not fetch: this leaves the site for Google and comes back. */}
-            <a
-              href="/api/v1/auth/google/start"
-              className="flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700"
-            >
-              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-                <path fill="#4285F4" d="M17.64 9.2c0-.64-.06-1.25-.16-1.84H9v3.48h4.84a4.14 4.14 0 0 1-1.8 2.72v2.26h2.92c1.7-1.57 2.68-3.88 2.68-6.62Z" />
-                <path fill="#34A853" d="M9 18c2.43 0 4.47-.8 5.96-2.18l-2.92-2.26c-.8.54-1.84.86-3.04.86-2.34 0-4.32-1.58-5.03-3.7H.96v2.34A9 9 0 0 0 9 18Z" />
-                <path fill="#FBBC05" d="M3.97 10.72a5.4 5.4 0 0 1 0-3.44V4.94H.96a9 9 0 0 0 0 8.12l3.01-2.34Z" />
-                <path fill="#EA4335" d="M9 3.58c1.32 0 2.5.45 3.44 1.35l2.58-2.58C13.46.9 11.43 0 9 0A9 9 0 0 0 .96 4.94l3.01 2.34C4.68 5.16 6.66 3.58 9 3.58Z" />
-              </svg>
-              Continue with Google
-            </a>
-          </>
-        )}
+        <GoogleSignIn />
+
         <p className="mt-5 text-center text-sm text-gray-500 dark:text-gray-400">
           New to Wallet Note?{" "}
           <Link className="font-medium text-blue-600 hover:text-blue-700" href="/register">

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { Wallet } from "lucide-react";
 import { Button, Card, Input, Select } from "@/components/ui";
 import { PwaInstall } from "@/components/PwaInstall";
+import { GoogleSignIn } from "@/components/GoogleSignIn";
 import { LanguageSwitch } from "@/components/LanguageProvider";
 import { api } from "@/lib/client";
 
@@ -167,6 +168,8 @@ export default function RegisterPage() {
             {loading ? "Creating account..." : "Create free account"}
           </Button>
         </form>
+
+        <GoogleSignIn label="Sign up with Google" />
 
         <p className="mt-5 text-center text-sm text-gray-500 dark:text-gray-400">
           Already have an account?{" "}
