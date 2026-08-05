@@ -12,6 +12,8 @@ interface AdminStats {
   activeUsers: number;
   registeredToday: number;
   registrationAuditRecords: number;
+  /** False when nobody is signed in: the figures are there, the lists are not. */
+  detailed: boolean;
   users: {
     id: string;
     name: string;
@@ -47,8 +49,8 @@ const stats = [
 ] as const;
 
 export default function AdminPage() {
-  // null = not yet probed, true = session is enough, false = session refused
-  const [sessionAllowed, setSessionAllowed] = useState<boolean | null>(null);
+  // null until the first response arrives, so the page does not flash empty figures.
+  const [loadedOnce, setLoadedOnce] = useState(false);
   const [data, setData] = useState<AdminStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -65,37 +67,27 @@ export default function AdminPage() {
     try {
       const response = await fetch("/api/admin/stats", { cache: "no-store" });
       const body = await response.json();
-      if (response.status === 401) {
-        setSessionAllowed(false);
-        return;
-      }
       if (!response.ok || !body.ok) throw new Error(body.error || "Unable to load statistics");
       setData(body.data);
-      setSessionAllowed(true);
       setError("");
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Unable to load statistics");
     } finally {
       setLoading(false);
+      setLoadedOnce(true);
     }
   }, []);
 
-  // Ask once on mount; deferred so the fetch does not set state during the effect body.
+  // Load on mount and keep it fresh. Deferred so the fetch does not set state during the
+  // effect body.
   useEffect(() => {
-    if (sessionAllowed !== null) return undefined;
-    const probe = window.setTimeout(() => load(), 0);
-    return () => window.clearTimeout(probe);
-  }, [load, sessionAllowed]);
-
-  useEffect(() => {
-    if (!sessionAllowed) return;
     const firstLoad = window.setTimeout(() => load(), 0);
     const timer = window.setInterval(() => load(), 30_000);
     return () => {
       window.clearTimeout(firstLoad);
       window.clearInterval(timer);
     };
-  }, [load, sessionAllowed]);
+  }, [load]);
 
   const openUserAudit = (scope: "all" | "today") => {
     setUserScope(scope);
@@ -130,33 +122,11 @@ export default function AdminPage() {
       log.resourceType?.toLowerCase().includes(activityNeedle))
   );
 
-  // Still checking — don't flash the sign-in notice at someone who will not need it.
-  if (sessionAllowed === null) {
+  // Wait for the first response rather than flashing zeroes.
+  if (!loadedOnce) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-950">
         <Spinner />
-      </main>
-    );
-  }
-
-  if (!sessionAllowed) {
-    return (
-      <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-950">
-        <Card className="w-full max-w-sm space-y-3">
-          <div className="flex items-center gap-2">
-            <div className="rounded-lg bg-blue-600 p-2 text-white"><Wallet size={18} /></div>
-            <h1 className="text-lg font-bold">Wallet Note Admin</h1>
-          </div>
-          <p className="text-sm text-gray-600 dark:text-gray-300">
-            This page is open to admin accounts only. Sign in with yours to see it.
-          </p>
-          <a
-            href="/login"
-            className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
-          >
-            Sign in
-          </a>
-        </Card>
       </main>
     );
   }
@@ -248,6 +218,14 @@ export default function AdminPage() {
         </section>
 
         <div className="grid items-start gap-4 xl:grid-cols-2">
+        {data && !data.detailed && (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200">
+            The figures above are open to anyone. The user and activity lists name other
+            businesses and their staff, so they only appear for an admin who is signed in.{" "}
+            <a className="font-medium underline" href="/login">Sign in</a>
+          </div>
+        )}
+
         <section ref={userAuditRef} className="scroll-mt-4 border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900">
           <header className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 p-4 dark:border-gray-800">
             <div>

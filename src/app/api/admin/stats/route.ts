@@ -4,10 +4,17 @@ import { isAdminRequest } from "@/lib/adminAccess";
 
 export const dynamic = "force-dynamic";
 
+/** The counts are public; the lists are not.
+ *
+ *  How many accounts exist is a fact about this service and gives nothing away about
+ *  anyone. Who they are does: the user list and the activity feed carry other businesses'
+ *  names, their staff's names and usernames, and what those people did and when. That is
+ *  231 third parties' data, and the privacy policy this service publishes says it is not
+ *  shared. So the panel opens straight away with the figures, and fills in the detail for
+ *  an admin who is signed in.
+ */
 export async function GET() {
-  if (!(await isAdminRequest())) {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401, headers: { "Cache-Control": "no-store, max-age=0" } });
-  }
+  const detailed = await isAdminRequest();
   try {
     const now = new Date();
     const today = new Date(now);
@@ -37,7 +44,7 @@ export async function GET() {
       }),
       prisma.user.count({ where: { createdAt: { gte: today }, deletedAt: null } }),
       prisma.auditLog.count({ where: { action: "REGISTER", module: "auth" } }),
-      prisma.user.findMany({
+      detailed ? prisma.user.findMany({
         where: { deletedAt: null },
         orderBy: { createdAt: "desc" },
         take: 500,
@@ -55,8 +62,8 @@ export async function GET() {
             select: { createdAt: true, expiresAt: true },
           },
         },
-      }),
-      prisma.auditLog.findMany({
+      }) : Promise.resolve([]),
+      detailed ? prisma.auditLog.findMany({
         orderBy: { createdAt: "desc" },
         take: 500,
         select: {
@@ -74,7 +81,7 @@ export async function GET() {
             },
           },
         },
-      }),
+      }) : Promise.resolve([]),
     ]);
 
     const activityBusinessIds = [...new Set(activityLogs.map((log) => log.businessId))];
@@ -94,6 +101,7 @@ export async function GET() {
           activeUsers: activeSessions.length,
           registeredToday,
           registrationAuditRecords,
+          detailed,
           users: users.map((user) => ({
             id: user.id,
             name: user.name,
