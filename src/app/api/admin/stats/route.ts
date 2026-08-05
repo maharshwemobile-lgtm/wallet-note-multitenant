@@ -1,34 +1,11 @@
-import { timingSafeEqual } from "crypto";
-import { NextRequest, NextResponse } from "next/server";
-import { getAuthUser } from "@/lib/auth";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { isAdminRequest } from "@/lib/adminAccess";
 
 export const dynamic = "force-dynamic";
 
-function hasAdminSecret(req: NextRequest): boolean {
-  const expected = process.env.ADMIN_SECRET;
-  if (!expected) return false; // fail closed if the secret was never configured
-  const provided = req.headers.get("x-admin-secret") ?? "";
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
-
-/** Either an already signed-in Owner, or the shared secret.
- *
- *  Signing in is the normal path — an Owner who is already authenticated should not be
- *  asked to type a second password to reach this page. The secret is kept as a fallback
- *  for reaching the panel without a session. This page reports across every tenant, so
- *  it stays gated either way: the figures include other businesses' names, users and
- *  activity, which is not ours to publish. */
-async function isAuthorized(req: NextRequest): Promise<boolean> {
-  if (hasAdminSecret(req)) return true;
-  const user = await getAuthUser();
-  return user?.roleName === "Owner";
-}
-
-export async function GET(req: NextRequest) {
-  if (!(await isAuthorized(req))) {
+export async function GET() {
+  if (!(await isAdminRequest())) {
     return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401, headers: { "Cache-Control": "no-store, max-age=0" } });
   }
   try {

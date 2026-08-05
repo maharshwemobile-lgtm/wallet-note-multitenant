@@ -2,17 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Building2, RefreshCw, Search, ShieldCheck, UserCheck, UserPlus, Users, Wallet } from "lucide-react";
-import { Button, Card, Input, Select, Spinner } from "@/components/ui";
+import { Button, Card, Select, Spinner } from "@/components/ui";
 import { fmtDateTime } from "@/lib/format";
-
-const SECRET_STORAGE_KEY = "wn_admin_secret";
-
-/** fetch() rejects header values outside Latin-1, so anything typed in Burmese has to be
- *  caught before it reaches a request. */
-function isHeaderSafe(value: string): boolean {
-  for (const ch of value) if (ch.codePointAt(0)! > 255) return false;
-  return true;
-}
 
 interface AdminStats {
   registeredAccounts: number;
@@ -56,19 +47,6 @@ const stats = [
 ] as const;
 
 export default function AdminPage() {
-  const [secret, setSecret] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    const stored = window.sessionStorage.getItem(SECRET_STORAGE_KEY);
-    // A value stored before the check below existed could still be unsendable; drop it
-    // rather than let it crash the first request.
-    if (stored && !isHeaderSafe(stored)) {
-      window.sessionStorage.removeItem(SECRET_STORAGE_KEY);
-      return null;
-    }
-    return stored;
-  });
-  const [secretInput, setSecretInput] = useState("");
-  const [authError, setAuthError] = useState("");
   // null = not yet probed, true = session is enough, false = session refused
   const [sessionAllowed, setSessionAllowed] = useState<boolean | null>(null);
   const [data, setData] = useState<AdminStats | null>(null);
@@ -81,22 +59,14 @@ export default function AdminPage() {
   const userAuditRef = useRef<HTMLElement>(null);
   const activityAuditRef = useRef<HTMLElement>(null);
 
-  // An Owner who is already signed in is authorised by their session, so the passcode
-  // prompt only appears when there is no session to rely on. `key` is empty in that case.
-  const load = useCallback(async (key: string) => {
+  // Access follows from the signed-in account alone. Nothing is typed to get in.
+  const load = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await fetch("/api/admin/stats", {
-        cache: "no-store",
-        // Only send the header when the value can legally be one.
-        headers: key && isHeaderSafe(key) ? { "x-admin-secret": key } : undefined,
-      });
+      const response = await fetch("/api/admin/stats", { cache: "no-store" });
       const body = await response.json();
       if (response.status === 401) {
-        window.sessionStorage.removeItem(SECRET_STORAGE_KEY);
-        setSecret(null);
         setSessionAllowed(false);
-        setAuthError(key ? "Wrong passcode." : "");
         return;
       }
       if (!response.ok || !body.ok) throw new Error(body.error || "Unable to load statistics");
@@ -110,39 +80,22 @@ export default function AdminPage() {
     }
   }, []);
 
-  // Try the signed-in session once on mount; fall back to the passcode if it is refused.
-  // Deferred like the poll below so the fetch does not set state during the effect body.
+  // Ask once on mount; deferred so the fetch does not set state during the effect body.
   useEffect(() => {
-    if (secret || sessionAllowed !== null) return undefined;
-    const probe = window.setTimeout(() => load(""), 0);
+    if (sessionAllowed !== null) return undefined;
+    const probe = window.setTimeout(() => load(), 0);
     return () => window.clearTimeout(probe);
-  }, [load, secret, sessionAllowed]);
+  }, [load, sessionAllowed]);
 
   useEffect(() => {
-    if (!secret && !sessionAllowed) return;
-    const key = secret ?? "";
-    const firstLoad = window.setTimeout(() => load(key), 0);
-    const timer = window.setInterval(() => load(key), 30_000);
+    if (!sessionAllowed) return;
+    const firstLoad = window.setTimeout(() => load(), 0);
+    const timer = window.setInterval(() => load(), 30_000);
     return () => {
       window.clearTimeout(firstLoad);
       window.clearInterval(timer);
     };
-  }, [load, secret, sessionAllowed]);
-
-  function unlock() {
-    const entered = secretInput.trim();
-    if (!entered) return;
-    // HTTP header values are Latin-1 only. Typing Burmese here used to reach fetch() and
-    // fail with "String contains non ISO-8859-1 code point", which reads like a broken
-    // page rather than a rejected passcode.
-    if (!isHeaderSafe(entered)) {
-      setAuthError("Passcode must use Latin letters, digits or symbols only.");
-      return;
-    }
-    setAuthError("");
-    window.sessionStorage.setItem(SECRET_STORAGE_KEY, entered);
-    setSecret(entered);
-  }
+  }, [load, sessionAllowed]);
 
   const openUserAudit = (scope: "all" | "today") => {
     setUserScope(scope);
@@ -177,8 +130,8 @@ export default function AdminPage() {
       log.resourceType?.toLowerCase().includes(activityNeedle))
   );
 
-  // Still probing the session — don't flash the passcode form at an Owner who will not need it.
-  if (!secret && sessionAllowed === null) {
+  // Still checking — don't flash the sign-in notice at someone who will not need it.
+  if (sessionAllowed === null) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-950">
         <Spinner />
@@ -186,7 +139,7 @@ export default function AdminPage() {
     );
   }
 
-  if (!secret && !sessionAllowed) {
+  if (!sessionAllowed) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-950">
         <Card className="w-full max-w-sm space-y-3">
@@ -194,16 +147,15 @@ export default function AdminPage() {
             <div className="rounded-lg bg-blue-600 p-2 text-white"><Wallet size={18} /></div>
             <h1 className="text-lg font-bold">Wallet Note Admin</h1>
           </div>
-          <Input
-            label="Admin passcode"
-            type="password"
-            value={secretInput}
-            onChange={(e) => setSecretInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && unlock()}
-            autoFocus
-          />
-          {authError && <p className="text-sm text-red-600">{authError}</p>}
-          <Button onClick={unlock} disabled={!secretInput.trim()}>Unlock</Button>
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            This page is open to admin accounts only. Sign in with yours to see it.
+          </p>
+          <a
+            href="/login"
+            className="inline-flex min-h-11 w-full items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-blue-700"
+          >
+            Sign in
+          </a>
         </Card>
       </main>
     );
@@ -222,7 +174,7 @@ export default function AdminPage() {
               <p className="text-xs text-gray-500">Registration and user activity</p>
             </div>
           </div>
-          <Button variant="secondary" size="sm" onClick={() => load(secret ?? "")} disabled={loading}>
+          <Button variant="secondary" size="sm" onClick={() => load()} disabled={loading}>
             <RefreshCw size={15} className={`mr-1.5 inline ${loading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
