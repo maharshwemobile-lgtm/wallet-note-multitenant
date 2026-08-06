@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { withAuth, json, parseBody, pagination } from "@/lib/api";
+import { withAuth, json, parseBody, pagination, ApiError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 import { todayBusinessDate, isValidBusinessDate } from "@/lib/dates";
@@ -67,6 +67,23 @@ export const POST = withAuth("three_d.create", async ({ req, user }) => {
   const schedule = sessionSchedule(body.gameType, body.name);
   const drawTime = body.drawTime ?? schedule?.drawTime;
   const cutoffTime = body.cutoffTime ?? schedule?.cutoffTime;
+  // One 2D session per draw is enforced by the database. Without this, opening one that
+  // already exists surfaced a raw constraint error that read like a broken page.
+  if (body.gameType === "TWO_D") {
+    const existing = await prisma.threeDSession.findFirst({
+      where: {
+        businessId: user.businessId,
+        gameType: "TWO_D",
+        drawDate: body.drawDate,
+        name: body.name,
+      },
+      select: { id: true },
+    });
+    if (existing) {
+      throw new ApiError(409, `${body.name} for ${body.drawDate} is already open.`);
+    }
+  }
+
   const session = await prisma.$transaction(async (tx) => {
     const s = await tx.threeDSession.create({
       data: {

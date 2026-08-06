@@ -8,6 +8,7 @@ import { useAuth } from "@/components/AppShell";
 import {
   defaultFeaturesForMode,
   FEATURE_DEFINITIONS,
+  FEATURE_GROUPS,
   moduleSettingFromFeatures,
   parseModuleAccess,
   type FeatureVisibility,
@@ -125,7 +126,7 @@ export default function SettingsPage() {
 
       <Card>
         <h3 className="text-sm font-semibold">Sidebar functions</h3>
-        {(["Mini Mart", "Wallet Note", "General"] as const).map((group) => (
+        {FEATURE_GROUPS.map((group) => (
           <div key={group} className="mt-4">
             <h4 className="mb-2 text-xs font-semibold uppercase text-gray-500">{group}</h4>
             <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-700">

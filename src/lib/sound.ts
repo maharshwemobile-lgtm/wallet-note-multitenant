@@ -75,23 +75,29 @@ function tone(frequency: number, startAfter: number, seconds: number, peak: numb
   }
 }
 
+/** Loud enough to carry across a shop with a customer talking over it. Kept below 1.0,
+ *  where a sine starts to clip and the tone turns into a rasp. */
+const LEVEL = 0.55;
+
 /** A scanner-style beep, for an item joining the cart. */
 export function playBeep() {
   if (isMuted()) return;
-  tone(2000, 0, 0.07, 0.16);
+  // Dropped from 2kHz: small phone speakers reproduce this far better, so it sounds
+  // louder at the same level rather than thin.
+  tone(1600, 0, 0.09, LEVEL);
 }
 
 /** Two rising notes, for something that completed. */
 export function playSuccess() {
   if (isMuted()) return;
-  tone(880, 0, 0.11, 0.2);
-  tone(1320, 0.1, 0.16, 0.2);
+  tone(880, 0, 0.13, LEVEL);
+  tone(1320, 0.11, 0.2, LEVEL);
 }
 
 /** A low note, so a failure is not mistaken for a success by someone not looking at the
  *  screen — which at a counter is most of the time. */
 export function playError() {
   if (isMuted()) return;
-  tone(320, 0, 0.16, 0.18);
-  tone(240, 0.14, 0.22, 0.18);
+  tone(340, 0, 0.18, LEVEL);
+  tone(250, 0.16, 0.26, LEVEL);
 }

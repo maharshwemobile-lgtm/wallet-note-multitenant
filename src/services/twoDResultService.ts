@@ -141,6 +141,16 @@ export async function autoOpenTwoDSessions() {
       })
       .map((setting) => setting.businessId)
   );
+  // A shop that is already running 2D counts as opted in, whether or not anyone saved the
+  // settings switch. Opening today's sessions is the whole point of the feature, and
+  // making it wait on a toggle nobody found is how it ends up being done by hand.
+  const active = await prisma.threeDSession.findMany({
+    where: { gameType: "TWO_D" },
+    distinct: ["businessId"],
+    select: { businessId: true },
+  });
+  for (const row of active) enabled.add(row.businessId);
+
   if (enabled.size === 0) return { opened: 0, skipped: 0 };
 
   const businesses = await prisma.business.findMany({

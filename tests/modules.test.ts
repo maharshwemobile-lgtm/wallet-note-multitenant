@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   BUSINESS_CATEGORIES,
+  FEATURE_DEFINITIONS,
+  FEATURE_GROUPS,
   categoryPreset,
   defaultFeaturesForMode,
   moduleSetting,
@@ -58,6 +60,12 @@ describe("module access", () => {
     expect(moneyService.features.exchange).toBe(true);
     expect(moneyService.features.transfers).toBe(true);
     expect(moneyService.features.threeD).toBe(false);
+
+    // Every feature must sit in a group the settings screen renders, or its switch is
+    // simply absent — which is how the repair toggle went missing.
+    for (const feature of FEATURE_DEFINITIONS) {
+      expect(FEATURE_GROUPS, feature.key).toContain(feature.group);
+    }
 
     const mobileShop = parseModuleAccess(moduleSettingForCategory("MOBILE_SHOP"));
     // A phone shop both sells and repairs, so it gets the retail side and repair jobs.

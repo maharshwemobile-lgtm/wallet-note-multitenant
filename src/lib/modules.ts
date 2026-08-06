@@ -39,13 +39,13 @@ export type FeatureVisibility = Record<FeatureKey, boolean>;
 export const FEATURE_DEFINITIONS: {
   key: FeatureKey;
   label: string;
-  group: "Mini Mart" | "Wallet Note" | "General";
+  group: "Mini Mart" | "Mobile Shop" | "Wallet Note" | "General";
 }[] = [
   { key: "pos", label: "Sales & POS", group: "Mini Mart" },
   { key: "purchases", label: "Purchases", group: "Mini Mart" },
   { key: "items", label: "Items", group: "Mini Mart" },
   { key: "stock", label: "Stock", group: "Mini Mart" },
-  { key: "repair", label: "Repair Jobs", group: "Mini Mart" },
+  { key: "repair", label: "Repair Jobs", group: "Mobile Shop" },
   { key: "suppliers", label: "Suppliers", group: "Mini Mart" },
   { key: "threeD", label: "3D Records", group: "Wallet Note" },
   { key: "twoD", label: "2D Records", group: "Wallet Note" },
@@ -62,6 +62,8 @@ export const FEATURE_DEFINITIONS: {
   { key: "telegram", label: "Telegram", group: "General" },
   { key: "about", label: "About Us", group: "General" },
 ];
+
+export const FEATURE_GROUPS = ["Mini Mart", "Mobile Shop", "Wallet Note", "General"] as const;
 
 export const BUSINESS_CATEGORY_LABELS: Record<BusinessCategory, string> = {
   PERSONAL: "Personal wallet & notes",
