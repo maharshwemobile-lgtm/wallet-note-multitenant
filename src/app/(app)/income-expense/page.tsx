@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { api } from "@/lib/client";
 import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Select, Modal, Spinner, Table, Empty, StatCard, useToast } from "@/components/ui";
@@ -21,6 +21,8 @@ export default function IncomeExpensePage() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [showNew, setShowNew] = useNewModal();
+  const [showCategories, setShowCategories] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState<Category | null>(null);
   const [newCategory, setNewCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [busy, setBusy] = useState(false);
@@ -93,6 +95,30 @@ export default function IncomeExpensePage() {
     }
   }
 
+  async function removeCategory(category: Category) {
+    setBusy(true);
+    try {
+      const result = await api<{ removed: boolean; keptForRecords: number }>(
+        `/api/v1/categories?id=${encodeURIComponent(category.id)}`,
+        { method: "DELETE" }
+      );
+      push(
+        result.removed
+          ? `"${category.name}" removed`
+          : `"${category.name}" hidden — ${result.keptForRecords} record(s) still use it`
+      );
+      // Re-read rather than filtering locally: a used category is deactivated, not gone,
+      // and the list must show what the server actually did.
+      const fresh = await api<Category[]>("/api/v1/categories");
+      setCategories(fresh);
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Could not remove", "error");
+    } finally {
+      setBusy(false);
+      setConfirmRemove(null);
+    }
+  }
+
   if (!items) return <Spinner />;
   const catOptions = categories.filter((c) => c.type === form.type);
   const canSave =
@@ -102,10 +128,13 @@ export default function IncomeExpensePage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Income & Expense</h1>
         {hasPerm("income_expense.create") && (
-          <Button onClick={() => setShowNew(true)}><Plus size={16} className="mr-1 inline" />New entry</Button>
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={() => setShowCategories(true)}>Categories</Button>
+            <Button onClick={() => setShowNew(true)}><Plus size={16} className="mr-1 inline" />New entry</Button>
+          </div>
         )}
       </div>
 
@@ -139,6 +168,60 @@ export default function IncomeExpensePage() {
           ))}
         </Table>
       )}
+
+      <Modal open={showCategories} onClose={() => setShowCategories(false)} title="Categories">
+        <div className="space-y-4">
+          {(["INCOME", "EXPENSE"] as const).map((type) => {
+            const list = categories.filter((c) => c.type === type);
+            return (
+              <div key={type}>
+                <h4 className="mb-2 text-xs font-semibold uppercase text-gray-500">
+                  {type === "INCOME" ? "Income" : "Expense"}
+                </h4>
+                {list.length === 0 ? (
+                  <p className="text-sm text-gray-500">None yet.</p>
+                ) : (
+                  <div className="divide-y divide-gray-100 rounded-lg border border-gray-200 dark:divide-gray-800 dark:border-gray-700">
+                    {list.map((category) => (
+                      <div key={category.id} className="flex min-h-12 items-center justify-between gap-3 px-3 py-2">
+                        <span className="text-sm">{category.name}</span>
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          disabled={busy}
+                          onClick={() => setConfirmRemove(category)}
+                        >
+                          <Trash2 size={15} />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <p className="text-xs text-gray-500">
+            Past entries keep the category they were filed under, whatever happens here.
+          </p>
+        </div>
+      </Modal>
+
+      <Modal open={Boolean(confirmRemove)} onClose={() => setConfirmRemove(null)} title="Remove category">
+        {confirmRemove && (
+          <div className="space-y-3">
+            <p className="text-sm">
+              Remove <b>{confirmRemove.name}</b>? It will stop appearing when you record income
+              or expense. Entries already filed under it are not changed.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setConfirmRemove(null)}>Cancel</Button>
+              <Button variant="danger" disabled={busy} onClick={() => removeCategory(confirmRemove)}>
+                {busy ? "Removing…" : "Remove"}
+              </Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       <Modal open={showNew} onClose={() => setShowNew(false)} title="New income / expense">
         <div className="space-y-3">
