@@ -48,7 +48,7 @@ export default function RepairsPage() {
     promisedAt: "", notes: "",
   });
   const { push } = useToast();
-  const { hasPerm } = useAuth();
+  const { hasPerm, defaultBranchId } = useAuth();
 
   const load = useCallback(() => {
     const params = new URLSearchParams();
@@ -69,6 +69,9 @@ export default function RepairsPage() {
         method: "POST",
         body: {
           ...form,
+          // Sent explicitly so a multi-branch shop books the job against the branch the
+          // person is actually working in.
+          branchId: defaultBranchId || undefined,
           estimatedCost: form.estimatedCost || "0",
           depositAmount: form.depositAmount || "0",
           depositWalletId: form.depositWalletId || undefined,

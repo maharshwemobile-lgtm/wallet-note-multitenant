@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { withAuth, json, parseBody, pagination } from "@/lib/api";
+import { withAuth, json, parseBody, pagination, ApiError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { branchScope } from "@/lib/auth";
 import { assertBranchAccess } from "@/lib/tenant";
@@ -68,9 +68,22 @@ const createSchema = z.object({
 
 export const POST = withAuth("repair.create", async ({ req, user }) => {
   const body = await parseBody(req, createSchema);
-  const branchId = body.branchId ?? user.branchIds[0];
-  if (!branchId) throw new Error("No branch is available for your account");
-  await assertBranchAccess(user, branchId);
+
+  // An owner has every branch rather than a list of them, so branchIds is empty for the
+  // most common account there is — reading the first entry found nothing and refused the
+  // job. The branch is looked up instead, scoped to what this user may reach.
+  let branchId = body.branchId;
+  if (branchId) {
+    await assertBranchAccess(user, branchId);
+  } else {
+    const branch = await prisma.branch.findFirst({
+      where: { businessId: user.businessId, active: true, ...branchScope(user) },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    if (!branch) throw new ApiError(422, "This business has no branch set up yet.");
+    branchId = branch.id;
+  }
 
   const job = await prisma.$transaction((tx) =>
     createRepairJob(tx, {
