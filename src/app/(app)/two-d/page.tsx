@@ -11,7 +11,7 @@ import { useAuth } from "@/components/AppShell";
 import { useNewModal } from "@/lib/useNewModal";
 
 interface Session {
-  id: string; name: string; drawDate: string; drawTime?: string; status: string;
+  id: string; name: string; drawDate: string; drawTime?: string; cutoffTime?: string; status: string;
   resultNumber?: string; defaultOdds: string;
   totalBet: string;
   _count: { transactions: number };
@@ -25,6 +25,8 @@ export default function TwoDPage() {
   const [sessions, setSessions] = useState<Session[] | null>(null);
   const [results, setResults] = useState<OfficialResult[]>([]);
   const [showNew, setShowNew] = useNewModal();
+  // Yesterday's draws and today's finished ones are history, not something to act on.
+  const [showPast, setShowPast] = useState(false);
   // Only needed to fill a gap — a Thai holiday, or a day auto-open missed. The normal
   // path creates these by itself.
   // Only the draw and the date. Times come from the session name on the server, and the
@@ -63,6 +65,20 @@ export default function TwoDPage() {
 
   if (!sessions) return <Spinner />;
 
+  // In the evening the morning draw is over and only clutters the list; in the morning the
+  // evening one has not come round yet. Only what can still be acted on is shown, and the
+  // rest is a click away.
+  const today = todayBusinessDate();
+  const nowHhMm = new Date().toLocaleTimeString("en-GB", {
+    hour: "2-digit", minute: "2-digit", hour12: false,
+  });
+  const isCurrent = (session: Session) =>
+    session.drawDate > today ||
+    (session.drawDate === today && (!session.cutoffTime || nowHhMm < session.cutoffTime));
+  const current = sessions.filter(isCurrent);
+  const past = sessions.filter((session) => !isCurrent(session));
+  const visible = showPast ? sessions : current;
+
   return (
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -74,18 +90,35 @@ export default function TwoDPage() {
         )}
       </div>
 
-      <p className="text-sm text-gray-500 dark:text-gray-400">
-        Morning and evening sessions open by themselves every trading day and settle against
-        the official number once it is out. Nothing here needs to be created by hand.
-      </p>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm text-gray-500 dark:text-gray-400">
+          Morning and evening open by themselves every trading day and settle once the
+          official number is out. Nothing here needs creating by hand.
+        </p>
+        {past.length > 0 && (
+          <button
+            type="button"
+            onClick={() => setShowPast((current) => !current)}
+            className="shrink-0 text-sm font-medium text-blue-600 hover:text-blue-700"
+          >
+            {showPast ? "Hide finished draws" : `Show finished draws (${past.length})`}
+          </button>
+        )}
+      </div>
 
-      {sessions.length === 0 ? (
+      {visible.length === 0 ? (
         <Card>
-          <Empty message="No 2D sessions yet. They open automatically on the next trading day once 2D is switched on in Settings → Modules." />
+          <Empty
+            message={
+              past.length > 0
+                ? "No draw is open right now. The next one opens on its own."
+                : "No 2D sessions yet. They open automatically on the next trading day."
+            }
+          />
         </Card>
       ) : (
         <Table headers={["Session", "Draw date", "Status", "Result", "Records", "Total bet"]} rightAlign={[4, 5]}>
-          {sessions.map((s) => (
+          {visible.map((s) => (
             <tr
               key={s.id}
               className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50"
