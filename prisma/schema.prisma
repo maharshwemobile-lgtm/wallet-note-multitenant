@@ -124,6 +124,7 @@ model TelegramCustomer {
   updatedAt   DateTime @updatedAt
 
   orders LotteryOrder[]
+  exchangeOrders ExchangeOrder[]
 
   @@unique([ownerUserId, chatId])
   @@index([businessId])
@@ -208,6 +209,52 @@ model RepairJob {
   @@index([businessId, status])
   @@index([businessId, receivedAt])
   @@index([customerId])
+}
+
+/** A currency exchange a customer asked for over Telegram.
+ *
+ *  Held until a staff member has seen the payment slip, exactly like a bet order: nothing
+ *  moves between wallets until someone has checked the money arrived. The rate is written
+ *  down when the customer agrees to it, so a rate change afterwards cannot quietly alter
+ *  what they were promised.
+ */
+model ExchangeOrder {
+  id            String   @id @default(uuid())
+  orderNo       String
+  businessId    String
+  ownerUserId   String
+  customerId    String
+  customer      TelegramCustomer @relation(fields: [customerId], references: [id])
+
+  /** From the shop's side, matching ExchangeTransaction: BUY_THB means the shop takes THB. */
+  type          String
+  fromCurrency  String
+  toCurrency    String
+  /** What the customer hands over, and what they get back, in minor units. */
+  fromAmount    BigInt
+  toAmount      BigInt
+  /** Agreed at the moment of the quote, as a decimal string. */
+  rate          String
+
+  /** How the customer pays, and where they want the other currency sent. */
+  payMethod     String?
+  receiveMethod String?
+  receiveAccount String?
+
+  status        String    @default("AWAITING_SLIP") // AWAITING_SLIP REVIEW APPROVED REJECTED
+  slipFileId    String?
+  reviewedById  String?
+  reviewedAt    DateTime?
+  rejectReason  String?
+  /** Set once approved, so an order cannot be booked twice. */
+  exchangeId    String?
+
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@unique([businessId, orderNo])
+  @@index([businessId, status])
+  @@index([ownerUserId, status])
 }
 
 model UserBranch {

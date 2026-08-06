@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CUSTOMER_MENU, MENU_ABOUT, MENU_BET, MENU_HISTORY } from "@/lib/telegramCustomerBot";
+import { CUSTOMER_MENU, MENU_ABOUT, MENU_BET, MENU_EXCHANGE, MENU_HISTORY } from "@/lib/telegramCustomerBot";
 
 describe("customer menu", () => {
   it("stays under the text box between messages", () => {
@@ -9,22 +9,22 @@ describe("customer menu", () => {
     expect(CUSTOMER_MENU.resize_keyboard).toBe(true);
   });
 
-  it("offers exactly the three actions, betting on its own row", () => {
+  it("offers the four actions, the two money ones on top", () => {
     expect(CUSTOMER_MENU.keyboard).toEqual([
-      [{ text: MENU_BET }],
+      [{ text: MENU_BET }, { text: MENU_EXCHANGE }],
       [{ text: MENU_HISTORY }, { text: MENU_ABOUT }],
     ]);
   });
 
   it("keeps the labels distinct, since a tap is matched by its text", () => {
-    const labels = [MENU_BET, MENU_HISTORY, MENU_ABOUT];
+    const labels = [MENU_BET, MENU_EXCHANGE, MENU_HISTORY, MENU_ABOUT];
     expect(new Set(labels).size).toBe(labels.length);
     for (const label of labels) expect(label.trim()).toBe(label);
   });
 
   it("uses labels no bet line could be mistaken for", () => {
     // A label that parsed as "number=amount" would be booked instead of actioned.
-    for (const label of [MENU_BET, MENU_HISTORY, MENU_ABOUT]) {
+    for (const label of [MENU_BET, MENU_EXCHANGE, MENU_HISTORY, MENU_ABOUT]) {
       expect(label).not.toMatch(/^\d+\s*[=\-:\s]\s*[\d,]+$/);
     }
   });

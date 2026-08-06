@@ -4,10 +4,13 @@ import {
   customerCancel,
   customerChooseSession,
   customerConfirm,
+  customerClearStep,
   customerGetStep,
   customerNumbers,
+  customerSetStep,
   customerAbout,
   MENU_ABOUT,
+  MENU_EXCHANGE,
   MENU_BET,
   MENU_HISTORY,
   customerOrders,
@@ -17,6 +20,20 @@ import {
   rejectOrder,
   resolveCustomer,
 } from "./telegramCustomerBot";
+import {
+  approveExchangeOrder,
+  askAmount,
+  askPayMethod,
+  askReceiveMethod,
+  createExchangeOrder,
+  currentRate,
+  methodLabel,
+  notifyStaffOfExchange,
+  quote,
+  quoteText,
+  rejectExchangeOrder,
+  showRates,
+} from "./telegramExchange";
 import { branchScope } from "./auth";
 import type { AuthUser } from "./auth";
 import { toMinor, isValidDecimalString } from "./money";
@@ -931,6 +948,28 @@ async function handleCustomerUpdate(
     if (data === "c:bet") return customerChooseSession(customer);
     if (data === "c:orders") return customerOrders(customer);
     if (data === "c:about") return customerAbout(customer);
+
+    // Currency exchange: pick a direction, then how to pay, then where to receive.
+    if (data.startsWith("x:d:")) {
+      const direction = data.slice(4) === "SELL_THB" ? "SELL_THB" : "BUY_THB";
+      await customerSetStep(ownerUserId, chatId, "x.amount", { direction });
+      return askAmount(customer, direction);
+    }
+    if (data.startsWith("x:pay:")) {
+      const { step, data: stepData } = await customerGetStep(ownerUserId, chatId);
+      if (step !== "x.pay") return customerStart(customer);
+      await customerSetStep(ownerUserId, chatId, "x.get", { ...stepData, payMethod: data.slice(6) });
+      return askReceiveMethod(customer);
+    }
+    if (data.startsWith("x:get:")) {
+      const { step, data: stepData } = await customerGetStep(ownerUserId, chatId);
+      if (step !== "x.get") return customerStart(customer);
+      await customerSetStep(ownerUserId, chatId, "x.account", {
+        ...stepData,
+        receiveMethod: data.slice(6),
+      });
+      return sendMessage(chatId, "ငွေပြန်လက်ခံမည့် အကောင့်နံပါတ် / အမည် ရိုက်ထည့်ပါ။");
+    }
     if (data.startsWith("c:s:")) return customerSessionPicked(customer, data.slice(4));
     if (data === "c:ok") {
       const { step, data: stepData } = await customerGetStep(ownerUserId, chatId);
@@ -952,15 +991,72 @@ async function handleCustomerUpdate(
   if (text === MENU_BET) return customerChooseSession(customer);
   if (text === MENU_HISTORY) return customerOrders(customer);
   if (text === MENU_ABOUT) return customerAbout(customer);
+  if (text === MENU_EXCHANGE) return showRates(customer);
 
   const { step, data: stepData } = await customerGetStep(ownerUserId, chatId);
   if (message.photo?.length || message.document) {
+    if (step === "x.slip") {
+      const fileId =
+        message.photo?.[message.photo.length - 1]?.file_id ?? message.document?.file_id ?? null;
+      if (!fileId) return sendMessage(chatId, "ငွေလွှဲပြေစာ ဓာတ်ပုံကို ပို့ပေးပါ။");
+      const orderId = String(stepData.orderId ?? "");
+      const order = await prisma.exchangeOrder.findUnique({ where: { id: orderId } });
+      if (!order || order.status !== "AWAITING_SLIP") {
+        await customerClearStep(ownerUserId, chatId);
+        return sendMessage(chatId, "အော်ဒါ မတွေ့ပါ။ /start နှိပ်၍ ပြန်စပါ။");
+      }
+      await prisma.exchangeOrder.update({
+        where: { id: order.id },
+        data: { status: "REVIEW", slipFileId: fileId },
+      });
+      await customerClearStep(ownerUserId, chatId);
+      await sendMessage(chatId, `✅ ရရှိပါပြီ — ${order.orderNo}
+
+ဆိုင်မှ စစ်ဆေးပြီးပါက အကြောင်းပြန်ပါမည်။`);
+      return notifyStaffOfExchange(order.id, fileId);
+    }
     if (step !== "c.slip") {
       return sendMessage(chatId, "ပြေစာ ပို့ရန် အချိန် မဟုတ်သေးပါ။ /start နှိပ်၍ စတင်ပါ။");
     }
     return customerSlip(customer, stepData, message);
   }
   if (step === "c.numbers") return customerNumbers(customer, stepData, text);
+
+  if (step === "x.amount") {
+    const amount = toMinor(text.replace(/,/g, ""));
+    if (amount <= 0n) return sendMessage(chatId, "ပမာဏကို ဂဏန်းဖြင့် ရိုက်ပါ။ ဥပမာ — 10000");
+    const rate = await currentRate(businessId);
+    if (!rate) return sendMessage(chatId, "ငွေလဲနှုန်း မသတ်မှတ်ရသေးပါ။");
+    const direction = stepData.direction === "SELL_THB" ? "SELL_THB" : "BUY_THB";
+    const q = quote(direction, amount, rate.buyRate, rate.sellRate);
+    await customerSetStep(ownerUserId, chatId, "x.pay", {
+      ...stepData,
+      quote: { ...q, fromAmount: q.fromAmount.toString(), toAmount: q.toAmount.toString() },
+    });
+    await sendMessage(chatId, quoteText(q));
+    return askPayMethod(customer);
+  }
+
+  if (step === "x.account") {
+    const raw = stepData.quote as Record<string, string>;
+    const q = {
+      type: raw.type as "BUY_THB" | "SELL_THB",
+      fromCurrency: raw.fromCurrency as "THB" | "MMK",
+      toCurrency: raw.toCurrency as "THB" | "MMK",
+      fromAmount: BigInt(raw.fromAmount),
+      toAmount: BigInt(raw.toAmount),
+      rate: raw.rate,
+    };
+    const order = await createExchangeOrder(
+      customer,
+      q,
+      String(stepData.payMethod ?? ""),
+      (await methodLabel(businessId, String(stepData.receiveMethod ?? ""))) ?? "",
+      text
+    );
+    await customerSetStep(ownerUserId, chatId, "x.slip", { orderId: order.id });
+    return;
+  }
   if (step === "c.slip") {
     return sendMessage(chatId, "ငွေလွှဲပြေစာ ဓာတ်ပုံကို ပို့ပေးပါ။");
   }
@@ -1002,6 +1098,14 @@ async function handleMessage(ownerUserId: string, chatId: string, text: string) 
     if (flow === "cp") {
       if (step === "amount") return cpStepAmountText(chatId, user, session.data, trimmed);
     }
+    if (flow === "xord") {
+      if (step === "reject") {
+        const orderId = String(session.data.orderId ?? "");
+        await clearSession(ownerUserId, chatId);
+        const result = await rejectExchangeOrder(orderId, user.id, trimmed);
+        return sendMessage(chatId, result.ok ? `✅ ${result.message}` : `❌ ${result.message}`);
+      }
+    }
     if (flow === "ord") {
       if (step === "reject") {
         const orderId = String(session.data.orderId ?? "");
@@ -1037,6 +1141,33 @@ async function handleCallback(ownerUserId: string, cq: { id: string; message?: {
   if (data === "cancel") {
     await clearSession(ownerUserId, chatId);
     return showMenu(chatId, user, "Cancelled.");
+  }
+
+  // Exchange requests waiting on a slip check. Booking one moves money between two
+  // wallets, so the staff member is asked which pair before anything is written.
+  if (data.startsWith("x:ok:") || data.startsWith("x:no:")) {
+    if (!can(user, "exchange.create")) return sendMessage(chatId, "You don't have permission for that.");
+    const orderId = data.slice(5);
+    if (data.startsWith("x:no:")) {
+      await setSession(ownerUserId, chatId, "xord.reject", { orderId });
+      return sendMessage(chatId, "Why is it rejected? Send a short reason, or /cancel.", {
+        replyMarkup: keyboard([CANCEL_ROW]),
+      });
+    }
+    const order = await prisma.exchangeOrder.findUnique({ where: { id: orderId } });
+    if (!order) return sendMessage(chatId, "Order not found.");
+    const branchId = await defaultBranchId(user);
+    if (!branchId) return sendMessage(chatId, "No branch is available for your account.");
+    // The customer's money lands in a wallet of the currency they paid, and the shop pays
+    // out of one holding the other currency.
+    const { rows } = await walletButtons(user.businessId, branchId, order.fromCurrency);
+    if (rows.length === 0) return sendMessage(chatId, `No ${order.fromCurrency} wallet found.`);
+    await setSession(ownerUserId, chatId, "xord.source", { orderId, branchId });
+    return sendMessage(chatId, `${order.orderNo}
+
+Which wallet received the ${order.fromCurrency}?`, {
+      replyMarkup: keyboard([...rows, CANCEL_ROW]),
+    });
   }
 
   // Customer orders waiting on a slip check.
@@ -1080,6 +1211,41 @@ async function handleCallback(ownerUserId: string, cq: { id: string; message?: {
   const [flow, step] = session.step.split(".");
 
   try {
+    // Approving an exchange takes two wallets: the one the customer paid into, then the
+    // one the shop pays out of.
+    if (flow === "xord") {
+      if (step === "source" && data.startsWith("w:")) {
+        const order = await prisma.exchangeOrder.findUnique({
+          where: { id: String(session.data.orderId ?? "") },
+        });
+        if (!order) return sendMessage(chatId, "Order not found.");
+        const { rows } = await walletButtons(
+          user.businessId,
+          String(session.data.branchId ?? ""),
+          order.toCurrency
+        );
+        if (rows.length === 0) return sendMessage(chatId, `No ${order.toCurrency} wallet found.`);
+        await setSession(ownerUserId, chatId, "xord.dest", {
+          ...session.data,
+          sourceWalletId: data.slice(2),
+        });
+        return sendMessage(chatId, `Which wallet pays out the ${order.toCurrency}?`, {
+          replyMarkup: keyboard([...rows, CANCEL_ROW]),
+        });
+      }
+      if (step === "dest" && data.startsWith("w:")) {
+        const orderId = String(session.data.orderId ?? "");
+        await clearSession(ownerUserId, chatId);
+        const result = await approveExchangeOrder(
+          orderId,
+          user.id,
+          String(session.data.branchId ?? ""),
+          String(session.data.sourceWalletId ?? ""),
+          data.slice(2)
+        );
+        return sendMessage(chatId, result.ok ? `✅ ${result.message}` : `❌ ${result.message}`);
+      }
+    }
     if (flow === "ie") {
       if (step === "wallet" && data.startsWith("w:")) return ieStepWallet(chatId, user, session.data, data.slice(2));
       if (step === "category" && data.startsWith("cat:")) return ieStepCategoryPick(chatId, user, session.data, data.slice(4));

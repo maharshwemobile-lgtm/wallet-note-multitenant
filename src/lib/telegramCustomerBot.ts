@@ -31,9 +31,10 @@ const CANCEL = [[btn("✕ ပယ်ဖျက်", "c:cancel")]];
 export const MENU_BET = "🎯 ထီထိုးမည်";
 export const MENU_HISTORY = "🧾 ကျွန်ုပ်၏ မှတ်တမ်း";
 export const MENU_ABOUT = "ℹ️ လျော်ကြေး နှင့် ဆက်သွယ်ရန်";
+export const MENU_EXCHANGE = "💱 ငွေလဲမည်";
 
 export const CUSTOMER_MENU = persistentKeyboard([
-  [MENU_BET],
+  [MENU_BET, MENU_EXCHANGE],
   [MENU_HISTORY, MENU_ABOUT],
 ]);
 

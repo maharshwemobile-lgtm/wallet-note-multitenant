@@ -5,6 +5,7 @@ const DEFAULT_PREFIXES: Record<string, string> = {
   TWO_D: "2D",
   LOTTERY_ORDER: "ORD",
   REPAIR: "RPR",
+  EXCHANGE_ORDER: "EXO",
   EXCHANGE: "EXC",
   TRANSFER: "WTR",
   CREDIT: "CRD",
