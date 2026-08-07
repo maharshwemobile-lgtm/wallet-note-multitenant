@@ -13,7 +13,6 @@ import {
   parseModuleAccess,
   type FeatureVisibility,
 } from "@/lib/modules";
-import { DEFAULT_ABOUT, mergeAbout, type AboutContent } from "@/lib/about";
 import {
   parsePaymentMethods,
   PAYMENT_TYPES,
@@ -30,7 +29,6 @@ export default function SettingsPage() {
   const [data, setData] = useState<SettingsData | null>(null);
   const [biz, setBiz] = useState({ name: "", phone: "", address: "", telegram: "", website: "" });
   const [threeD, setThreeD] = useState({ defaultOdds: "500", defaultCommissionRate: "10", maxPerNumber: "", warnThreshold: "" });
-  const [about, setAbout] = useState<AboutContent>(DEFAULT_ABOUT);
   const [features, setFeatures] = useState<FeatureVisibility>(
     defaultFeaturesForMode("WALLET_ONLY")
   );
@@ -71,8 +69,6 @@ export default function SettingsPage() {
       });
       const t = d.settings.three_d as typeof threeD | undefined;
       if (t) setThreeD({ ...threeD, ...t });
-      const a = d.settings.about as Partial<AboutContent> | undefined;
-      setAbout(mergeAbout(a));
       setFeatures(parseModuleAccess(d.settings.modules ?? { miniMartEnabled: true }).features);
       const ex = d.settings.exchange as { autoRate?: boolean; buyAdjust?: number; sellAdjust?: number } | undefined;
       if (ex) {
@@ -370,50 +366,6 @@ export default function SettingsPage() {
           </Button>
         </div>
       </Card>}
-
-      <Card>
-        <h3 className="mb-3 text-sm font-semibold">About Us page content</h3>
-        <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input label="App name" value={about.appName} onChange={(e) => setAbout({ ...about, appName: e.target.value })} />
-            <Input label="Version" value={about.version} onChange={(e) => setAbout({ ...about, version: e.target.value })} />
-          </div>
-          <Input label="Description" value={about.description} onChange={(e) => setAbout({ ...about, description: e.target.value })} />
-          <Input label="Location" value={about.location} onChange={(e) => setAbout({ ...about, location: e.target.value })} />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input label="Developer / company" value={about.developer} onChange={(e) => setAbout({ ...about, developer: e.target.value })} />
-            <Input label="Contact phone" value={about.phone} onChange={(e) => setAbout({ ...about, phone: e.target.value })} />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input label="Developer photo path" value={about.developerPhoto} onChange={(e) => setAbout({ ...about, developerPhoto: e.target.value })} />
-            <Input label="Developer photo source" value={about.developerPhotoSource} onChange={(e) => setAbout({ ...about, developerPhotoSource: e.target.value })} />
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input label="Telegram" value={about.telegram} onChange={(e) => setAbout({ ...about, telegram: e.target.value })} />
-            <Input label="TikTok" value={about.tiktok} onChange={(e) => setAbout({ ...about, tiktok: e.target.value })} />
-          </div>
-          <Input label="Telegram community" value={about.community} onChange={(e) => setAbout({ ...about, community: e.target.value })} />
-          <Input label="Facebook page" value={about.facebook} onChange={(e) => setAbout({ ...about, facebook: e.target.value })} />
-          <div className="grid gap-3 sm:grid-cols-2">
-            <Input label="Website" value={about.website} onChange={(e) => setAbout({ ...about, website: e.target.value })} />
-            <Input label="Customer live URL" value={about.customerLiveUrl} onChange={(e) => setAbout({ ...about, customerLiveUrl: e.target.value })} />
-          </div>
-          <Input label="Copyright" value={about.copyright} onChange={(e) => setAbout({ ...about, copyright: e.target.value })} />
-          {!playEdition && <div className="border-t border-gray-200 pt-3 dark:border-gray-800">
-            <h4 className="mb-3 text-sm font-semibold">Donation QR details</h4>
-            <div className="space-y-3">
-              <Input label="KBZ Pay display name" value={about.kbzName} onChange={(e) => setAbout({ ...about, kbzName: e.target.value })} />
-              <Input label="KBZ Pay QR payload" value={about.kbzPayload} onChange={(e) => setAbout({ ...about, kbzPayload: e.target.value })} />
-              <Input label="USDT BEP20 address" value={about.cryptoName} onChange={(e) => setAbout({ ...about, cryptoName: e.target.value, cryptoPayload: e.target.value })} />
-              <Input label="PromptPay display name" value={about.promptPayName} onChange={(e) => setAbout({ ...about, promptPayName: e.target.value })} />
-              <Input label="PromptPay QR payload" value={about.promptPayPayload} onChange={(e) => setAbout({ ...about, promptPayPayload: e.target.value })} />
-            </div>
-          </div>}
-          <Button disabled={busy} onClick={() => save(() => api("/api/v1/settings", { method: "PUT", body: { key: "about", value: about } }))}>
-            Save About content
-          </Button>
-        </div>
-      </Card>
 
       <Card>
         <h3 className="text-sm font-semibold">Privacy and account</h3>

@@ -19,6 +19,12 @@ interface Txn {
 
 export default function ExchangePage() {
   const [rates, setRates] = useState<Rate[]>([]);
+  // What the shop actually quotes, which is the market feed plus its margin when that is
+  // switched on. The stored rate below is only the manual fallback.
+  const [quoted, setQuoted] = useState<{
+    buyRate: string; sellRate: string; source: "market" | "manual";
+    postedAt?: string; staleWarning?: string;
+  } | null>(null);
   const [txns, setTxns] = useState<Txn[] | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [showNew, setShowNew] = useNewModal();
@@ -37,6 +43,9 @@ export default function ExchangePage() {
 
   const load = useCallback(() => {
     api<Rate[]>("/api/v1/exchange/rates").then(setRates).catch(() => {});
+    api<{ effective: typeof quoted }>("/api/v1/exchange/market-rate")
+      .then((d) => setQuoted(d.effective))
+      .catch(() => setQuoted(null));
     api<{ transactions: Txn[] }>("/api/v1/exchange/transactions?pageSize=50")
       .then((d) => setTxns(d.transactions)).catch((e) => push(e.message, "error"));
     api<Wallet[]>("/api/v1/wallets").then(setWallets).catch(() => {});
@@ -147,12 +156,25 @@ export default function ExchangePage() {
         </div>
       </div>
 
-      {active && (
-        <Card className="flex flex-wrap items-center gap-6 py-3 text-sm">
-          <span className="font-semibold">{active.pair}</span>
-          <span>We buy THB @ <b className="text-green-600">{active.buyRate}</b></span>
-          <span>We sell THB @ <b className="text-blue-600">{active.sellRate}</b></span>
-          <span className="text-xs text-gray-500">since {fmtDateTime(active.effectiveAt)}</span>
+      {(quoted || active) && (
+        <Card className="py-3 text-sm">
+          <div className="flex flex-wrap items-center gap-6">
+            <span className="font-semibold">THB/MMK</span>
+            <span>We buy THB @ <b className="text-green-600">{quoted?.buyRate ?? active?.buyRate}</b></span>
+            <span>We sell THB @ <b className="text-blue-600">{quoted?.sellRate ?? active?.sellRate}</b></span>
+            {quoted?.source === "market" ? (
+              <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/40 dark:text-green-200">
+                market {quoted.postedAt ? fmtDateTime(quoted.postedAt) : ""}
+              </span>
+            ) : (
+              <span className="text-xs text-gray-500">
+                your rate{active ? ` · since ${fmtDateTime(active.effectiveAt)}` : ""}
+              </span>
+            )}
+          </div>
+          {quoted?.staleWarning && (
+            <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">{quoted.staleWarning}</p>
+          )}
         </Card>
       )}
 
