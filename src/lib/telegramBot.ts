@@ -964,11 +964,27 @@ async function handleCustomerUpdate(
     if (data.startsWith("x:get:")) {
       const { step, data: stepData } = await customerGetStep(ownerUserId, chatId);
       if (step !== "x.get") return customerStart(customer);
-      await customerSetStep(ownerUserId, chatId, "x.account", {
-        ...stepData,
-        receiveMethod: data.slice(6),
-      });
-      return sendMessage(chatId, "ငွေပြန်လက်ခံမည့် အကောင့်နံပါတ် / အမည် ရိုက်ထည့်ပါ။");
+      const raw = stepData.quote as Record<string, string>;
+      const agreed = {
+        type: raw.type as "BUY_THB" | "SELL_THB",
+        fromCurrency: raw.fromCurrency as "THB" | "MMK",
+        toCurrency: raw.toCurrency as "THB" | "MMK",
+        fromAmount: BigInt(raw.fromAmount),
+        toAmount: BigInt(raw.toAmount),
+        rate: raw.rate,
+      };
+      // No account number is asked for. The shop has the customer's Telegram and their
+      // slip already, and asking someone to type a payment number into a chat is a step
+      // they can get wrong for a detail nobody needs typed to settle up.
+      const order = await createExchangeOrder(
+        customer,
+        agreed,
+        String(stepData.payMethod ?? ""),
+        (await methodLabel(businessId, data.slice(6))) ?? "",
+        ""
+      );
+      await customerSetStep(ownerUserId, chatId, "x.slip", { orderId: order.id });
+      return;
     }
     if (data.startsWith("c:s:")) return customerSessionPicked(customer, data.slice(4));
     if (data === "c:ok") {
@@ -1037,26 +1053,6 @@ async function handleCustomerUpdate(
     return askPayMethod(customer);
   }
 
-  if (step === "x.account") {
-    const raw = stepData.quote as Record<string, string>;
-    const q = {
-      type: raw.type as "BUY_THB" | "SELL_THB",
-      fromCurrency: raw.fromCurrency as "THB" | "MMK",
-      toCurrency: raw.toCurrency as "THB" | "MMK",
-      fromAmount: BigInt(raw.fromAmount),
-      toAmount: BigInt(raw.toAmount),
-      rate: raw.rate,
-    };
-    const order = await createExchangeOrder(
-      customer,
-      q,
-      String(stepData.payMethod ?? ""),
-      (await methodLabel(businessId, String(stepData.receiveMethod ?? ""))) ?? "",
-      text
-    );
-    await customerSetStep(ownerUserId, chatId, "x.slip", { orderId: order.id });
-    return;
-  }
   if (step === "c.slip") {
     return sendMessage(chatId, "ငွေလွှဲပြေစာ ဓာတ်ပုံကို ပို့ပေးပါ။");
   }
