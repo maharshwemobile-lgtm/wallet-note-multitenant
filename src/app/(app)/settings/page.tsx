@@ -34,6 +34,8 @@ export default function SettingsPage() {
   const [features, setFeatures] = useState<FeatureVisibility>(
     defaultFeaturesForMode("WALLET_ONLY")
   );
+  const [exchange, setExchange] = useState({ autoRate: false, buyAdjust: "0", sellAdjust: "0" });
+  const [market, setMarket] = useState<{ buy: string; sell: string; postedAt: string } | null>(null);
   const [payMethods, setPayMethods] = useState<PaymentMethod[]>([]);
   const [customerBetting, setCustomerBetting] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -56,6 +58,11 @@ export default function SettingsPage() {
   }
 
   const load = useCallback(() => {
+    api<{ market: { buy: string; sell: string; postedAt: string; fresh: boolean } | null }>(
+      "/api/v1/exchange/market-rate"
+    )
+      .then((d) => setMarket(d.market))
+      .catch(() => setMarket(null));
     api<SettingsData>("/api/v1/settings").then((d) => {
       setData(d);
       setBiz({
@@ -67,6 +74,14 @@ export default function SettingsPage() {
       const a = d.settings.about as Partial<AboutContent> | undefined;
       setAbout(mergeAbout(a));
       setFeatures(parseModuleAccess(d.settings.modules ?? { miniMartEnabled: true }).features);
+      const ex = d.settings.exchange as { autoRate?: boolean; buyAdjust?: number; sellAdjust?: number } | undefined;
+      if (ex) {
+        setExchange({
+          autoRate: ex.autoRate === true,
+          buyAdjust: String(ex.buyAdjust ?? 0),
+          sellAdjust: String(ex.sellAdjust ?? 0),
+        });
+      }
       const pay = d.settings.payments;
       setPayMethods(parsePaymentMethods(pay));
       setCustomerBetting(pay?.customerBetting === true);
@@ -178,6 +193,87 @@ export default function SettingsPage() {
           Save 3D settings
         </Button>
       </Card>}
+
+      <Card>
+        <h3 className="text-sm font-semibold">Exchange rate</h3>
+        <p className="mb-3 mt-1 text-xs text-gray-500 dark:text-gray-400">
+          Take the published market rate each day and put your own margin on it, or leave it
+          off and quote the rate you set yourself.
+        </p>
+
+        {market && (
+          <div className="mb-3 rounded-lg bg-gray-50 px-3 py-2 text-sm dark:bg-gray-800/50">
+            <div className="flex flex-wrap justify-between gap-2">
+              <span className="text-gray-500 dark:text-gray-400">Market today</span>
+              <span className="tabular-nums font-medium">buy {market.buy} · sell {market.sell}</span>
+            </div>
+            <div className="mt-1 text-xs text-gray-500">Published {market.postedAt}</div>
+          </div>
+        )}
+
+        <label className="mb-3 flex items-start gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={exchange.autoRate}
+            onChange={(e) => setExchange({ ...exchange, autoRate: e.target.checked })}
+            className="mt-1 h-4 w-4"
+          />
+          <span>
+            Follow the market rate
+            <span className="block text-xs text-gray-500 dark:text-gray-400">
+              If the feed goes quiet, your own rate below is used instead — never another
+              source. Every other live feed reports the official rate, which is about half
+              the market.
+            </span>
+          </span>
+        </label>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Input
+            label="Buy adjustment (kyat)"
+            value={exchange.buyAdjust}
+            onChange={(e) => setExchange({ ...exchange, buyAdjust: e.target.value })}
+            placeholder="-2"
+          />
+          <Input
+            label="Sell adjustment (kyat)"
+            value={exchange.sellAdjust}
+            onChange={(e) => setExchange({ ...exchange, sellAdjust: e.target.value })}
+            placeholder="2"
+          />
+        </div>
+        <p className="mt-1 text-xs text-gray-500">
+          Added to the market rate. Buy under it and sell over it to keep your margin — a
+          buy of -2 and a sell of +2 on a market of 130 / 132.7 quotes 128 / 134.7.
+        </p>
+        {market && exchange.autoRate && (
+          <p className="mt-2 text-sm">
+            You would quote{" "}
+            <b className="tabular-nums">
+              {Math.max(0, Number(market.buy) + (Number(exchange.buyAdjust) || 0))} /{" "}
+              {Math.max(0, Number(market.sell) + (Number(exchange.sellAdjust) || 0))}
+            </b>
+          </p>
+        )}
+
+        <Button
+          className="mt-3"
+          disabled={busy}
+          onClick={() => save(() => api("/api/v1/settings", {
+            method: "PUT",
+            body: {
+              key: "exchange",
+              value: {
+                autoRate: exchange.autoRate,
+                buyAdjust: Number(exchange.buyAdjust) || 0,
+                sellAdjust: Number(exchange.sellAdjust) || 0,
+              },
+            },
+          }))}
+        >
+          Save exchange settings
+        </Button>
+      </Card>
 
       {!playEdition && <Card>
         <h3 className="text-sm font-semibold">Telegram orders &amp; payment methods</h3>

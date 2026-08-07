@@ -13,6 +13,7 @@ import { nextNumber } from "./sequence";
 import { toMinor } from "./money";
 import { audit } from "./audit";
 import { createExchange } from "@/services/exchangeService";
+import { resolveRate } from "@/services/marketRateService";
 
 const CANCEL = [[btn("✕ ပယ်ဖျက်", "c:cancel")]];
 
@@ -34,13 +35,10 @@ export interface Quote {
   rate: string;
 }
 
-/** The shop's live rate for THB against MMK. */
+/** The rate this shop quotes — the market feed plus its own margin when that is switched
+ *  on, otherwise the figure it set by hand. */
 export async function currentRate(businessId: string) {
-  return prisma.exchangeRate.findFirst({
-    where: { businessId, pair: "THB/MMK", active: true },
-    orderBy: { effectiveAt: "desc" },
-    select: { buyRate: true, sellRate: true, effectiveAt: true },
-  });
+  return resolveRate(businessId);
 }
 
 /** Work out both sides of the deal.

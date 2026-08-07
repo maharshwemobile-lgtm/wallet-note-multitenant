@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { syncMarketRates } from "@/services/marketRateService";
 import {
   autoSettleClosedSessions,
   closeExpiredThreeDSessions,
@@ -46,8 +47,17 @@ export async function POST(req: NextRequest) {
     twoD = { received: 0, stored: 0, warnings: [error instanceof Error ? error.message : "2D sync failed"] };
   }
 
+  // The market rate rides the same schedule: it is published once a day, so the three
+  // sync runs are more than enough and it needs no cron entry of its own.
+  let market;
+  try {
+    market = await syncMarketRates();
+  } catch (error) {
+    market = { stored: 0, warnings: [error instanceof Error ? error.message : "market sync failed"] };
+  }
+
   // Always after the fetch, so a number that just arrived settles on the same run.
   const settle = await autoSettleClosedSessions();
   const settleTwoD = await autoSettleTwoDSessions();
-  return NextResponse.json({ ok: true, opened, closed, history, twoD, settle, settleTwoD });
+  return NextResponse.json({ ok: true, opened, closed, history, twoD, market, settle, settleTwoD });
 }

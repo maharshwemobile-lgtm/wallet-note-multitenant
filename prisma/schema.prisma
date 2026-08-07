@@ -257,6 +257,25 @@ model ExchangeOrder {
   @@index([ownerUserId, status])
 }
 
+/** The daily market rate, as published rather than as decreed.
+ *
+ *  Shared by every tenant like the lottery results are: it is a fact about the market, not
+ *  about any one shop, so it is fetched once and read by all.
+ */
+model MarketRate {
+  id        String   @id @default(uuid())
+  source    String
+  currency  String
+  /** Decimal strings, so nothing is lost to floating point on the way in. */
+  buy       String
+  sell      String
+  postedAt  DateTime
+  fetchedAt DateTime @default(now())
+
+  @@unique([source, currency, postedAt])
+  @@index([currency, postedAt])
+}
+
 model UserBranch {
   userId   String
   user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
