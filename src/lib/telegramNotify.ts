@@ -85,6 +85,24 @@ export function saleNotice(opts: {
   );
 }
 
+export function billerNotice(opts: {
+  txnNo: string;
+  kind: string;
+  billerName: string;
+  faceAmount: bigint;
+  cashAmount: bigint;
+  profit: bigint;
+  balanceAfter: bigint;
+  createdByName: string;
+}) {
+  const what = opts.kind === "TOPUP" ? "float bought" : opts.kind === "SALE" ? "top-up sold" : "float adjusted";
+  return (
+    `📱 ${opts.billerName} — ${what} ${opts.txnNo}\n` +
+    `Credit: ${money(opts.faceAmount)} · Cash: ${money(opts.cashAmount)} · Margin: ${money(opts.profit)}\n` +
+    `Float now: ${money(opts.balanceAfter)} · By: ${opts.createdByName}`
+  );
+}
+
 export function threeDNotice(opts: { count: number; total: bigint; sessionName: string; createdByName: string; notes?: string | null }) {
   return `🔢 3D — ${opts.count} record(s), ${money(opts.total)}\nSession: ${opts.sessionName} · By: ${opts.createdByName}${noteLine(opts.notes)}`;
 }

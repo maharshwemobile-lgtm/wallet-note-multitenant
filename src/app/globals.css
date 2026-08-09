@@ -38,11 +38,19 @@ body {
   body.printing-receipt #sale-receipt * { visibility: visible !important; }
   body.printing-receipt #sale-receipt {
     display: block !important;
-    position: absolute;
+    /* Fixed rather than absolute: absolute anchors to the nearest positioned ancestor, so
+       a slip printed from inside the "Sale complete" dialog came out offset down the roll
+       instead of at the top of it. */
+    position: fixed;
     left: 0;
     top: 0;
     width: 100%;
   }
+  /* An invisible dialog still takes up a full screen of layout, which the printer honours
+     as a blank sheet before the slip. Taking it out of the flow is what stops that. */
+  body.printing-receipt [role="dialog"],
+  body.printing-receipt .fixed { display: none !important; }
+  body.printing-receipt #sale-receipt { display: block !important; }
   /* A till roll is a continuous strip; margins push the slip onto a second one. */
   @page { margin: 0; }
 }

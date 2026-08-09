@@ -45,9 +45,11 @@ import { createTransfer } from "@/services/walletService";
 import { createExchange } from "@/services/exchangeService";
 import { createThreeDBets, parseBulkLines } from "@/services/threeDService";
 import { collectReceivable, payPayable, createReceivable } from "@/services/creditService";
+import { recordBillerTxn } from "@/services/billerService";
 import { ApiError } from "./api";
 import {
   notifyAuditFeed, incomeExpenseNotice, transferNotice, exchangeNotice, threeDNotice, creditPayableNotice, newCreditNotice,
+  billerNotice,
 } from "./telegramNotify";
 import {
   sendMessage, answerCallbackQuery,
@@ -174,7 +176,9 @@ function mainMenu(user: AuthUser, features: FeatureVisibility) {
   if (features.credit && can(user, "credit.create")) row3.push(btn("🆕 New credit", "menu:newcredit"));
   if (features.credit && can(user, "credit.collect")) row3.push(btn("🤝 Collect credit", "menu:credit"));
   if (features.credit && can(user, "payable.pay")) row3.push(btn("📤 Pay payable", "menu:payable"));
-  const rows = [row1, row2, row3].filter((r) => r.length > 0);
+  const row4 = [];
+  if (features.biller && can(user, "biller.trade")) row4.push(btn("📱 Top-up", "menu:topup"));
+  const rows = [row1, row2, row3, row4].filter((r) => r.length > 0);
   return keyboard(rows);
 }
 
@@ -208,6 +212,143 @@ async function walletButtons(businessId: string, branchId: string, currency?: st
     wallets = await prisma.wallet.findMany({ where: base, orderBy: { name: "asc" } });
   }
   return { wallets, rows: wallets.map((w) => [btn(`${w.name} (${fmtMoney(w.currentBalance)} ${w.currency})`, `w:${w.id}`)]) };
+}
+
+// ---------------------------------------------------------------------------
+// Top-up biller flow — selling air-time off a float, or buying more of it.
+//
+// Both figures are asked for separately because they are rarely equal, and the
+// difference is the shop's whole margin on air-time. See billerService.
+// ---------------------------------------------------------------------------
+
+async function startBiller(chatId: string, user: AuthUser) {
+  const branchId = await defaultBranchId(user);
+  if (!branchId) return sendMessage(chatId, "No branch is available for your account.");
+  const billers = await prisma.biller.findMany({
+    where: { businessId: user.businessId, active: true, deletedAt: null },
+    orderBy: [{ type: "asc" }, { name: "asc" }],
+  });
+  if (billers.length === 0) {
+    return sendMessage(chatId, "No billers set up yet. Add them in Wallet Note under Top-up Billers.");
+  }
+  const rows = billers.map((b) => [btn(`${b.name} (${fmtMoney(b.currentBalance)})`, `b:${b.id}`)]);
+  await setSession(user.id, chatId, "bl.biller", { branchId });
+  await sendMessage(chatId, "📱 Top-up\n\nWhich operator?", { replyMarkup: keyboard([...rows, CANCEL_ROW]) });
+}
+
+async function blStepBiller(chatId: string, user: AuthUser, data: Record<string, unknown>, billerId: string) {
+  const biller = await prisma.biller.findFirst({
+    where: { id: billerId, businessId: user.businessId, deletedAt: null },
+  });
+  if (!biller) return sendMessage(chatId, "Biller not found. /menu to start over.");
+
+  const rows = [[btn("📤 Sell to customer", "k:SALE")]];
+  // Buying float moves money out of the shop, so it is offered only to whoever is
+  // trusted with that on the web side too.
+  if (can(user, "biller.manage")) rows.push([btn("📥 Buy float", "k:TOPUP")]);
+
+  await setSession(user.id, chatId, "bl.kind", {
+    ...data,
+    billerId,
+    billerName: biller.name,
+    billerBalance: biller.currentBalance.toString(),
+  });
+  await sendMessage(
+    chatId,
+    `${biller.name}\nFloat now: ${fmtMoney(biller.currentBalance)}\n\nWhat are you recording?`,
+    { replyMarkup: keyboard([...rows, CANCEL_ROW]) }
+  );
+}
+
+async function blStepKind(chatId: string, user: AuthUser, data: Record<string, unknown>, kind: string) {
+  await setSession(user.id, chatId, "bl.face", { ...data, kind });
+  const prompt = kind === "TOPUP"
+    ? "How much credit did the operator give you? (face value)"
+    : "How much credit did the customer get? (face value)";
+  await sendMessage(chatId, `${data.billerName}\n\n${prompt}`, { replyMarkup: keyboard([CANCEL_ROW]) });
+}
+
+async function blStepFaceText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  if (!isValidDecimalString(text)) return sendMessage(chatId, "Enter a number, e.g. 10000");
+  const face = toMinor(text);
+  if (face <= 0n) return sendMessage(chatId, "The amount must be more than zero.");
+  await setSession(user.id, chatId, "bl.cash", { ...data, face: face.toString() });
+  const prompt = data.kind === "TOPUP" ? "How much cash did you pay for it?" : "How much cash did the customer pay?";
+  await sendMessage(chatId, `${prompt}\n\nSend the same figure if there is no discount.`, {
+    replyMarkup: keyboard([CANCEL_ROW]),
+  });
+}
+
+async function blStepCashText(chatId: string, user: AuthUser, data: Record<string, unknown>, text: string) {
+  if (!isValidDecimalString(text)) return sendMessage(chatId, "Enter a number, e.g. 10000");
+  const cash = toMinor(text);
+  if (cash < 0n) return sendMessage(chatId, "Cash cannot be negative.");
+  const { rows } = await walletButtons(user.businessId, String(data.branchId ?? ""), "MMK");
+  if (rows.length === 0) return sendMessage(chatId, "No MMK wallet found. Create one in Wallet Note first.");
+  await setSession(user.id, chatId, "bl.wallet", { ...data, cash: cash.toString() });
+  const prompt = data.kind === "TOPUP" ? "Which wallet did the cash come out of?" : "Which wallet did the cash go into?";
+  await sendMessage(chatId, prompt, { replyMarkup: keyboard([...rows, CANCEL_ROW]) });
+}
+
+async function blStepWallet(chatId: string, user: AuthUser, data: Record<string, unknown>, walletId: string) {
+  const wallet = await prisma.wallet.findUnique({ where: { id: walletId } });
+  if (!wallet) return sendMessage(chatId, "Wallet not found. /menu to start over.");
+
+  const kind = String(data.kind);
+  const face = BigInt(String(data.face));
+  const cash = BigInt(String(data.cash));
+  const balance = BigInt(String(data.billerBalance));
+  const margin = kind === "TOPUP" ? face - cash : cash - face;
+  const after = kind === "TOPUP" ? balance + face : balance - face;
+
+  await setSession(user.id, chatId, "bl.confirm", { ...data, walletId, walletName: wallet.name });
+  const lines = [
+    kind === "TOPUP" ? "📥 Buy float" : "📤 Sell to customer",
+    `${data.billerName}`,
+    `Credit: ${fmtMoney(face)}`,
+    `Cash: ${fmtMoney(cash)} ${kind === "TOPUP" ? "out of" : "into"} ${wallet.name}`,
+    `Margin: ${fmtMoney(margin)}`,
+    `Float after: ${fmtMoney(after)}`,
+  ];
+  await sendMessage(chatId, lines.join("\n"), {
+    replyMarkup: keyboard([[btn("✅ Confirm", "confirm:yes"), btn("✕ Cancel", "confirm:no")]]),
+  });
+}
+
+async function blConfirm(chatId: string, user: AuthUser, data: Record<string, unknown>) {
+  try {
+    const txn = await prisma.$transaction((tx) =>
+      recordBillerTxn(tx, {
+        businessId: user.businessId,
+        userId: user.id,
+        branchId: String(data.branchId ?? "") || undefined,
+        billerId: String(data.billerId),
+        kind: String(data.kind) as "TOPUP" | "SALE",
+        faceAmount: BigInt(String(data.face)),
+        cashAmount: BigInt(String(data.cash)),
+        walletId: String(data.walletId),
+      })
+    );
+    await clearSession(user.id, chatId);
+    await sendMessage(chatId, `✅ Saved — ${txn.txnNo}`);
+    notifyAuditFeed(
+      user.businessId,
+      billerNotice({
+        txnNo: txn.txnNo,
+        kind: txn.kind,
+        billerName: String(data.billerName),
+        faceAmount: txn.faceAmount,
+        cashAmount: txn.cashAmount,
+        profit: txn.profit,
+        balanceAfter: txn.balanceAfter,
+        createdByName: user.name,
+      }),
+      chatId
+    );
+    await showMenu(chatId, user);
+  } catch (e) {
+    await sendMessage(chatId, `❌ ${e instanceof ApiError ? e.message : "Something went wrong."}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -867,6 +1008,7 @@ const FLOW_REQUIRED_PERM: Record<string, string> = {
   credit: "credit.collect",
   payable: "payable.pay",
   newcredit: "credit.create",
+  topup: "biller.trade",
 };
 
 const FLOW_FEATURE: Record<string, FeatureKey> = {
@@ -879,6 +1021,7 @@ const FLOW_FEATURE: Record<string, FeatureKey> = {
   credit: "credit",
   payable: "credit",
   newcredit: "credit",
+  topup: "biller",
 };
 
 /** ownerUserId identifies whose bot this webhook belongs to — resolved from
@@ -1074,6 +1217,10 @@ async function handleMessage(ownerUserId: string, chatId: string, text: string) 
 
   const [flow, step] = session.step.split(".");
   try {
+    if (flow === "bl") {
+      if (step === "face") return blStepFaceText(chatId, user, session.data, trimmed);
+      if (step === "cash") return blStepCashText(chatId, user, session.data, trimmed);
+    }
     if (flow === "ie") {
       if (step === "category_new") return ieStepCategoryNewText(chatId, user, session.data, trimmed);
       if (step === "amount") return ieStepAmountText(chatId, user, session.data, trimmed);
@@ -1199,6 +1346,7 @@ Which wallet received the ${order.fromCurrency}?`, {
     if (key === "credit") return startCreditPayable(chatId, user, "credit");
     if (key === "payable") return startCreditPayable(chatId, user, "payable");
     if (key === "newcredit") return startNewCredit(chatId, user);
+    if (key === "topup") return startBiller(chatId, user);
     return;
   }
 
@@ -1241,6 +1389,13 @@ Which wallet received the ${order.fromCurrency}?`, {
         );
         return sendMessage(chatId, result.ok ? `✅ ${result.message}` : `❌ ${result.message}`);
       }
+    }
+    if (flow === "bl") {
+      if (step === "biller" && data.startsWith("b:")) return blStepBiller(chatId, user, session.data, data.slice(2));
+      if (step === "kind" && data.startsWith("k:")) return blStepKind(chatId, user, session.data, data.slice(2));
+      if (step === "wallet" && data.startsWith("w:")) return blStepWallet(chatId, user, session.data, data.slice(2));
+      if (step === "confirm" && data === "confirm:yes") return blConfirm(chatId, user, session.data);
+      if (step === "confirm" && data === "confirm:no") return showMenu(chatId, user, "Cancelled.");
     }
     if (flow === "ie") {
       if (step === "wallet" && data.startsWith("w:")) return ieStepWallet(chatId, user, session.data, data.slice(2));
