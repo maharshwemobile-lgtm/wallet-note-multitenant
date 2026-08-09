@@ -218,6 +218,10 @@ export async function createSale(
   });
 
   let totalCost = 0n;
+  // Kept as the lines are written so a caller can say what was sold without going back to
+  // the database for it — the Telegram feed only reported a total, which told nobody what
+  // had actually left the shelf.
+  const soldItems: { name: string; quantity: number }[] = [];
   for (const l of opts.lines) {
     const { item } = await moveStock(tx, {
       businessId: opts.businessId,
@@ -229,6 +233,7 @@ export async function createSale(
       refId: sale.id,
       createdById: opts.userId,
     });
+    soldItems.push({ name: item.name, quantity: l.quantity });
     totalCost += BigInt(l.quantity) * item.costPrice;
     await tx.saleLine.create({
       data: {
@@ -285,7 +290,7 @@ export async function createSale(
     after: { txnNo, total, paidAmount: opts.paidAmount, profit, lines: opts.lines.length },
   });
 
-  return { ...sale, totalCost, profit, receivableId };
+  return { ...sale, totalCost, profit, receivableId, soldItems };
 }
 
 /** Cancel a sale or purchase: reverse stock and wallet movements. Linked

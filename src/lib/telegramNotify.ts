@@ -51,8 +51,38 @@ function noteLine(note?: string | null) {
   return note?.trim() ? `\nNote: ${note.trim()}` : "";
 }
 
-export function saleNotice(opts: { txnNo: string; total: bigint; profit: bigint; createdByName: string; notes?: string | null }) {
-  return `🧾 Sale ${opts.txnNo}\nBy: ${opts.createdByName} · Total: ${money(opts.total)} · Profit: ${money(opts.profit)}${noteLine(opts.notes)}`;
+/** How many lines are named before the rest are summed up.
+ *
+ *  A basket of thirty items would make the feed unreadable and Telegram would split the
+ *  message, so a long sale is named down to a point and then counted. */
+const ITEMS_SHOWN = 8;
+
+/** What was sold, one line each.
+ *
+ *  A total on its own tells nobody what left the shelf, which is the first thing an owner
+ *  reading the feed on their phone wants to know. */
+export function itemLines(items: { name: string; quantity: number }[]): string {
+  if (items.length === 0) return "";
+  const shown = items.slice(0, ITEMS_SHOWN).map((i) => `• ${i.name} × ${i.quantity}`);
+  const rest = items.length - ITEMS_SHOWN;
+  if (rest > 0) shown.push(`• …and ${rest} more`);
+  return `\n${shown.join("\n")}`;
+}
+
+export function saleNotice(opts: {
+  txnNo: string;
+  total: bigint;
+  profit: bigint;
+  createdByName: string;
+  items?: { name: string; quantity: number }[];
+  notes?: string | null;
+}) {
+  return (
+    `🧾 Sale ${opts.txnNo}` +
+    itemLines(opts.items ?? []) +
+    `\nBy: ${opts.createdByName} · Total: ${money(opts.total)} · Profit: ${money(opts.profit)}` +
+    noteLine(opts.notes)
+  );
 }
 
 export function threeDNotice(opts: { count: number; total: bigint; sessionName: string; createdByName: string; notes?: string | null }) {
