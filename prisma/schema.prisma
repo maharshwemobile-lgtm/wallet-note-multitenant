@@ -27,10 +27,10 @@ model Business {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  branches  Branch[]
-  users     User[]
-  roles     Role[]
-  settings  SystemSetting[]
+  branches Branch[]
+  users    User[]
+  roles    Role[]
+  settings SystemSetting[]
 }
 
 model Branch {
@@ -51,48 +51,48 @@ model Branch {
 }
 
 model Role {
-  id          String  @id @default(uuid())
+  id          String   @id @default(uuid())
   businessId  String
   business    Business @relation(fields: [businessId], references: [id])
   name        String
   description String?
   // JSON array of permission keys, e.g. ["three_d.view","wallet.transfer"]
   permissions String
-  isSystem    Boolean @default(false)
+  isSystem    Boolean  @default(false)
   users       User[]
 
   @@unique([businessId, name])
 }
 
 model User {
-  id           String    @id @default(uuid())
-  businessId   String
-  business     Business  @relation(fields: [businessId], references: [id])
-  name         String
-  username     String    @unique
-  email        String?   @unique
-  phone        String?
-  passwordHash String
-  roleId       String
-  role         Role      @relation(fields: [roleId], references: [id])
-  allBranches  Boolean   @default(false)
-  active       Boolean   @default(true)
+  id             String    @id @default(uuid())
+  businessId     String
+  business       Business  @relation(fields: [businessId], references: [id])
+  name           String
+  username       String    @unique
+  email          String?   @unique
+  phone          String?
+  passwordHash   String
+  roleId         String
+  role           Role      @relation(fields: [roleId], references: [id])
+  allBranches    Boolean   @default(false)
+  active         Boolean   @default(true)
   // 3D commission rate as decimal string percent, e.g. "10" = 10%
-  commissionRate String  @default("0")
-  failedLogins Int       @default(0)
-  lockedUntil  DateTime?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  commissionRate String    @default("0")
+  failedLogins   Int       @default(0)
+  lockedUntil    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
 
-  telegramBotToken       String? @unique
-  telegramBotUsername    String?
-  telegramWebhookSecret  String? @unique
-  telegramChatId         String?
+  telegramBotToken      String? @unique
+  telegramBotUsername   String?
+  telegramWebhookSecret String? @unique
+  telegramChatId        String?
 
-  branches     UserBranch[]
-  sessions     AuthSession[]
-  auditLogs    AuditLog[]
+  branches      UserBranch[]
+  sessions      AuthSession[]
+  auditLogs     AuditLog[]
   notifications Notification[]
 }
 
@@ -106,36 +106,42 @@ model TelegramSession {
   @@id([ownerUserId, chatId])
 }
 
-/** A Telegram chat that places bets with a shop's bot but has no Wallet Note account.
- *  Scoped to the bot it talks to (ownerUserId), which is what decides the business —
- *  each staff user runs their own bot, so a customer chat can never reach another shop. */
+/**
+ * A Telegram chat that places bets with a shop's bot but has no Wallet Note account.
+ * Scoped to the bot it talks to (ownerUserId), which is what decides the business —
+ * each staff user runs their own bot, so a customer chat can never reach another shop.
+ */
 model TelegramCustomer {
   id          String   @id @default(uuid())
   businessId  String
   ownerUserId String
   chatId      String
   name        String?
-  /** Telegram @handle, if they have one. Kept so staff can recognise a customer whose
-   *  display name changes, and because a chat id alone is unreadable. */
+  /**
+   * Telegram @handle, if they have one. Kept so staff can recognise a customer whose
+   * display name changes, and because a chat id alone is unreadable.
+   */
   username    String?
   phone       String?
   blocked     Boolean  @default(false)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  orders LotteryOrder[]
+  orders         LotteryOrder[]
   exchangeOrders ExchangeOrder[]
 
   @@unique([ownerUserId, chatId])
   @@index([businessId])
 }
 
-/** A bet a customer asked for over Telegram, held until a staff member checks the payment
- *  slip. Nothing is booked and no money moves until it is approved — the records are
- *  created at that point, which is why the numbers are kept here rather than as pending
- *  transactions. */
+/**
+ * A bet a customer asked for over Telegram, held until a staff member checks the payment
+ * slip. Nothing is booked and no money moves until it is approved — the records are
+ * created at that point, which is why the numbers are kept here rather than as pending
+ * transactions.
+ */
 model LotteryOrder {
-  id            String    @id @default(uuid())
+  id            String           @id @default(uuid())
   orderNo       String
   businessId    String
   ownerUserId   String
@@ -144,14 +150,14 @@ model LotteryOrder {
   sessionId     String
   rows          String // JSON [{ number, amount }]
   totalAmount   BigInt
-  status        String    @default("AWAITING_SLIP") // AWAITING_SLIP REVIEW APPROVED REJECTED EXPIRED
+  status        String           @default("AWAITING_SLIP") // AWAITING_SLIP REVIEW APPROVED REJECTED EXPIRED
   paymentMethod String?
   slipFileId    String? // Telegram file_id; the image stays on Telegram, not on our disk
   reviewedById  String?
   reviewedAt    DateTime?
   rejectReason  String?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
 
   @@unique([businessId, orderNo])
   @@index([businessId, status])
@@ -159,51 +165,59 @@ model LotteryOrder {
   @@index([sessionId])
 }
 
-/** A device left in for repair.
- *
- *  The shop's promise to a customer: what was handed over, what is wrong with it, what it
- *  will cost and when it will be ready. Money only moves when the phone goes back out, so
- *  a deposit and the final charge are held here until then.
+/**
+ * A device left in for repair.
+ * The shop's promise to a customer: what was handed over, what is wrong with it, what it
+ * will cost and when it will be ready. Money only moves when the phone goes back out, so
+ * a deposit and the final charge are held here until then.
  */
 model RepairJob {
-  id           String    @id @default(uuid())
-  jobNo        String
-  businessId   String
-  branchId     String
+  id         String @id @default(uuid())
+  jobNo      String
+  businessId String
+  branchId   String
 
-  customerId   String?
-  customerName String?
+  customerId    String?
+  customerName  String?
   customerPhone String?
 
-  deviceBrand  String
-  deviceModel  String
-  /** Serial or IMEI, as read off the device. */
-  imei         String?
-  /** What came in with it — case, SIM, memory card — so a dispute has an answer. */
-  accessories  String?
-  problem      String
+  deviceBrand String
+  deviceModel String
+  /**
+   * Serial or IMEI, as read off the device.
+   */
+  imei        String?
+  /**
+   * What came in with it — case, SIM, memory card — so a dispute has an answer.
+   */
+  accessories String?
+  problem     String
 
-  status       String    @default("RECEIVED") // RECEIVED IN_PROGRESS WAITING_PARTS DONE DELIVERED CANCELLED
-  /** Quoted up front; the final charge may differ once it is opened up. */
-  estimatedCost BigInt   @default(0)
-  partsCost    BigInt    @default(0)
-  finalCost    BigInt    @default(0)
-  /** Taken at drop-off and set against the final charge. */
-  depositAmount BigInt   @default(0)
-  paidAmount   BigInt    @default(0)
+  status        String @default("RECEIVED") // RECEIVED IN_PROGRESS WAITING_PARTS DONE DELIVERED CANCELLED
+  /**
+   * Quoted up front; the final charge may differ once it is opened up.
+   */
+  estimatedCost BigInt @default(0)
+  partsCost     BigInt @default(0)
+  finalCost     BigInt @default(0)
+  /**
+   * Taken at drop-off and set against the final charge.
+   */
+  depositAmount BigInt @default(0)
+  paidAmount    BigInt @default(0)
 
   technicianId String?
   notes        String?
 
-  receivedAt   DateTime  @default(now())
-  promisedAt   DateTime?
-  completedAt  DateTime?
-  deliveredAt  DateTime?
+  receivedAt  DateTime  @default(now())
+  promisedAt  DateTime?
+  completedAt DateTime?
+  deliveredAt DateTime?
 
-  createdById  String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  deletedAt    DateTime?
+  createdById String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
   @@unique([businessId, jobNo])
   @@index([businessId, status])
@@ -211,62 +225,147 @@ model RepairJob {
   @@index([customerId])
 }
 
-/** A currency exchange a customer asked for over Telegram.
- *
- *  Held until a staff member has seen the payment slip, exactly like a bet order: nothing
- *  moves between wallets until someone has checked the money arrived. The rate is written
- *  down when the customer agrees to it, so a rate change afterwards cannot quietly alter
- *  what they were promised.
+/**
+ * A top-up biller — the float a phone shop holds with an operator.
+ * Deliberately not a wallet. A wallet holds the shop's own money and can be transferred,
+ * withdrawn and reconciled against a drawer; a float is stock bought from an operator that
+ * can only be sold on as air-time. Modelling it as a wallet made every transfer screen
+ * offer to move kyat into Mytel, which is not a thing a shop can do.
+ * The balance is allowed to go negative: an operator that lets the shop sell on credit
+ * leaves the float below zero until it is settled, and the shop's own records show that.
+ */
+model Biller {
+  id             String    @id @default(uuid())
+  businessId     String
+  branchId       String?
+  name           String
+  /**
+   * TOPUP_CARD sells pin-code cards; ELOAD sends credit straight to a number.
+   */
+  type           String    @default("TOPUP_CARD")
+  currency       String    @default("MMK")
+  openingBalance BigInt    @default(0)
+  currentBalance BigInt    @default(0)
+  active         Boolean   @default(true)
+  notes          String?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  deletedAt      DateTime?
+
+  transactions BillerTxn[]
+
+  @@unique([businessId, name])
+  @@index([businessId, active])
+}
+
+/**
+ * One movement of a float: buying more of it, selling some of it, or correcting it.
+ * `faceAmount` is what the float moves by and `cashAmount` is what the drawer moves by.
+ * They are separate because the two are rarely equal — an operator sells 100,000 of credit
+ * for 98,000, and that 2,000 is the shop's whole margin on the trade. Recording only one
+ * figure loses it.
+ */
+model BillerTxn {
+  id            String   @id @default(uuid())
+  txnNo         String
+  businessId    String
+  branchId      String?
+  billerId      String
+  /**
+   * TOPUP buys float, SALE sells it on, ADJUST corrects it after a count.
+   */
+  kind          String
+  faceAmount    BigInt   @default(0)
+  cashAmount    BigInt   @default(0)
+  /**
+   * Worked out once, at the point of sale, so a report never has to re-derive the sign.
+   */
+  profit        BigInt   @default(0)
+  /**
+   * The wallet the cash moved through; absent for an adjustment.
+   */
+  walletId      String?
+  balanceAfter  BigInt   @default(0)
+  customerPhone String?
+  note          String?
+  createdById   String?
+  createdAt     DateTime @default(now())
+
+  biller Biller @relation(fields: [billerId], references: [id], onDelete: Cascade)
+
+  @@unique([businessId, txnNo])
+  @@index([billerId, createdAt])
+  @@index([businessId, createdAt])
+}
+
+/**
+ * A currency exchange a customer asked for over Telegram.
+ * Held until a staff member has seen the payment slip, exactly like a bet order: nothing
+ * moves between wallets until someone has checked the money arrived. The rate is written
+ * down when the customer agrees to it, so a rate change afterwards cannot quietly alter
+ * what they were promised.
  */
 model ExchangeOrder {
-  id            String   @id @default(uuid())
-  orderNo       String
-  businessId    String
-  ownerUserId   String
-  customerId    String
-  customer      TelegramCustomer @relation(fields: [customerId], references: [id])
+  id          String           @id @default(uuid())
+  orderNo     String
+  businessId  String
+  ownerUserId String
+  customerId  String
+  customer    TelegramCustomer @relation(fields: [customerId], references: [id])
 
-  /** From the shop's side, matching ExchangeTransaction: BUY_THB means the shop takes THB. */
-  type          String
-  fromCurrency  String
-  toCurrency    String
-  /** What the customer hands over, and what they get back, in minor units. */
-  fromAmount    BigInt
-  toAmount      BigInt
-  /** Agreed at the moment of the quote, as a decimal string. */
-  rate          String
+  /**
+   * From the shop's side, matching ExchangeTransaction: BUY_THB means the shop takes THB.
+   */
+  type         String
+  fromCurrency String
+  toCurrency   String
+  /**
+   * What the customer hands over, and what they get back, in minor units.
+   */
+  fromAmount   BigInt
+  toAmount     BigInt
+  /**
+   * Agreed at the moment of the quote, as a decimal string.
+   */
+  rate         String
 
-  /** How the customer pays, and where they want the other currency sent. */
-  payMethod     String?
-  receiveMethod String?
+  /**
+   * How the customer pays, and where they want the other currency sent.
+   */
+  payMethod      String?
+  receiveMethod  String?
   receiveAccount String?
 
-  status        String    @default("AWAITING_SLIP") // AWAITING_SLIP REVIEW APPROVED REJECTED
-  slipFileId    String?
-  reviewedById  String?
-  reviewedAt    DateTime?
-  rejectReason  String?
-  /** Set once approved, so an order cannot be booked twice. */
-  exchangeId    String?
+  status       String    @default("AWAITING_SLIP") // AWAITING_SLIP REVIEW APPROVED REJECTED
+  slipFileId   String?
+  reviewedById String?
+  reviewedAt   DateTime?
+  rejectReason String?
+  /**
+   * Set once approved, so an order cannot be booked twice.
+   */
+  exchangeId   String?
 
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@unique([businessId, orderNo])
   @@index([businessId, status])
   @@index([ownerUserId, status])
 }
 
-/** The daily market rate, as published rather than as decreed.
- *
- *  Shared by every tenant like the lottery results are: it is a fact about the market, not
- *  about any one shop, so it is fetched once and read by all.
+/**
+ * The daily market rate, as published rather than as decreed.
+ * Shared by every tenant like the lottery results are: it is a fact about the market, not
+ * about any one shop, so it is fetched once and read by all.
  */
 model MarketRate {
   id        String   @id @default(uuid())
   source    String
   currency  String
-  /** Decimal strings, so nothing is lost to floating point on the way in. */
+  /**
+   * Decimal strings, so nothing is lost to floating point on the way in.
+   */
   buy       String
   sell      String
   postedAt  DateTime
@@ -286,125 +385,127 @@ model UserBranch {
 }
 
 model AuthSession {
-  id         String   @id @default(uuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash  String   @unique
-  userAgent  String?
-  ip         String?
-  createdAt  DateTime @default(now())
-  expiresAt  DateTime
-  revokedAt  DateTime?
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  userAgent String?
+  ip        String?
+  createdAt DateTime  @default(now())
+  expiresAt DateTime
+  revokedAt DateTime?
 
   @@index([userId])
 }
 
 // Shared contact directory: customers, suppliers, agents, creditors, debtors
 model Contact {
-  id            String    @id @default(uuid())
-  businessId    String
-  branchId      String?
-  name          String
-  phone         String?
-  telegram      String?
-  address       String?
-  type          String    @default("CUSTOMER") // CUSTOMER SUPPLIER AGENT CREDITOR DEBTOR OTHER
-  currency      String    @default("MMK")
-  creditLimit   BigInt    @default(0)
-  notes         String?
-  active        Boolean   @default(true)
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
-  deletedAt     DateTime?
+  id          String    @id @default(uuid())
+  businessId  String
+  branchId    String?
+  name        String
+  phone       String?
+  telegram    String?
+  address     String?
+  type        String    @default("CUSTOMER") // CUSTOMER SUPPLIER AGENT CREDITOR DEBTOR OTHER
+  currency    String    @default("MMK")
+  creditLimit BigInt    @default(0)
+  notes       String?
+  active      Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
 
-  threeD        ThreeDTransaction[]
-  exchanges     ExchangeTransaction[]
-  receivables   Receivable[]
-  payables      Payable[]
+  threeD      ThreeDTransaction[]
+  exchanges   ExchangeTransaction[]
+  receivables Receivable[]
+  payables    Payable[]
 
   @@index([businessId, type])
   @@index([businessId, name])
 }
 
 model ThreeDSession {
-  id           String    @id @default(uuid())
+  id           String   @id @default(uuid())
   businessId   String
   branchId     String?
-  gameType     String    @default("THREE_D") // THREE_D | TWO_D
-  name         String    // Morning / Evening / custom
-  drawDate     String    // YYYY-MM-DD (business date)
-  drawTime     String?   // HH:mm
-  cutoffTime   String?   // HH:mm
-  status       String    @default("OPEN") // DRAFT OPEN CLOSED RESULT_ENTERED SETTLED CANCELLED
-  resultNumber String?   // "000".."999"
-  defaultOdds  String    @default("500") // payout multiplier as decimal string
+  gameType     String   @default("THREE_D") // THREE_D | TWO_D
+  name         String // Morning / Evening / custom
+  drawDate     String // YYYY-MM-DD (business date)
+  drawTime     String? // HH:mm
+  cutoffTime   String? // HH:mm
+  status       String   @default("OPEN") // DRAFT OPEN CLOSED RESULT_ENTERED SETTLED CANCELLED
+  resultNumber String? // "000".."999"
+  defaultOdds  String   @default("500") // payout multiplier as decimal string
   notes        String?
   createdById  String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   transactions ThreeDTransaction[]
   settlement   ThreeDSettlement?
-
-  @@index([businessId, drawDate])
-  @@index([businessId, gameType, drawDate])
   // A unique index guards one session per 2D draw. It is partial (2D only), which Prisma
   // cannot express, so it lives in the migration rather than here — see
   // 20260803160000_unique_session_per_draw. 3D sessions are created by hand and a shop
   // may legitimately have two with the same name on a date.
+
+  @@index([businessId, drawDate])
+  @@index([businessId, gameType, drawDate])
 }
 
 model ThreeDTransaction {
-  id               String    @id @default(uuid())
+  id               String        @id @default(uuid())
   txnNo            String
   businessId       String
   branchId         String
   sessionId        String
   session          ThreeDSession @relation(fields: [sessionId], references: [id])
-  /** Set when the bet came from an approved Telegram order, so a customer can be shown
-   *  exactly what they bet and what it won. */
+  /**
+   * Set when the bet came from an approved Telegram order, so a customer can be shown
+   * exactly what they bet and what it won.
+   */
   telegramOrderId  String?
   agentId          String?
   customerId       String?
-  customer         Contact?  @relation(fields: [customerId], references: [id])
+  customer         Contact?      @relation(fields: [customerId], references: [id])
   customerName     String?
   customerPhone    String?
-  number           String    // "000".."999", leading zeros preserved
-  betAmount        BigInt    // minor units
-  odds             String    // decimal string multiplier
+  number           String // "000".."999", leading zeros preserved
+  betAmount        BigInt // minor units
+  odds             String // decimal string multiplier
   potentialPayout  BigInt
-  commissionRate   String    @default("0") // percent decimal string
-  commissionAmount BigInt    @default(0)
-  netAmount        BigInt    // betAmount - commission
-  currency         String    @default("MMK")
-  isWinner         Boolean   @default(false)
-  winAmount        BigInt    @default(0)
-  paymentStatus    String    @default("PAID")     // PAID UNPAID
-  settlementStatus String    @default("PENDING")  // PENDING SETTLED CANCELLED
+  commissionRate   String        @default("0") // percent decimal string
+  commissionAmount BigInt        @default(0)
+  netAmount        BigInt // betAmount - commission
+  currency         String        @default("MMK")
+  isWinner         Boolean       @default(false)
+  winAmount        BigInt        @default(0)
+  paymentStatus    String        @default("PAID") // PAID UNPAID
+  settlementStatus String        @default("PENDING") // PENDING SETTLED CANCELLED
   notes            String?
   createdById      String
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
   deletedAt        DateTime?
 
+  @@unique([businessId, txnNo])
   @@index([sessionId, number])
   @@index([businessId, branchId, createdAt])
   @@index([customerId])
-  @@unique([businessId, txnNo])
 }
 
 model ThreeDSettlement {
-  id              String   @id @default(uuid())
-  sessionId       String   @unique
+  id              String        @id @default(uuid())
+  sessionId       String        @unique
   session         ThreeDSession @relation(fields: [sessionId], references: [id])
   resultNumber    String
   grossCollected  BigInt
   totalCommission BigInt
   totalPayout     BigInt
-  netProfit       BigInt   // grossCollected - commission - payout (can be negative)
-  walletId        String?  // wallet used for payout/collection movement
+  netProfit       BigInt // grossCollected - commission - payout (can be negative)
+  walletId        String? // wallet used for payout/collection movement
   settledById     String
-  settledAt       DateTime @default(now())
+  settledAt       DateTime      @default(now())
   reopenedById    String?
   reopenedAt      DateTime?
   reopenReason    String?
@@ -446,8 +547,8 @@ model ExchangeRate {
   id          String   @id @default(uuid())
   businessId  String
   branchId    String?
-  pair        String   // "THB/MMK"
-  buyRate     String   // decimal string, MMK per 1 THB when business buys THB
+  pair        String // "THB/MMK"
+  buyRate     String // decimal string, MMK per 1 THB when business buys THB
   sellRate    String
   effectiveAt DateTime @default(now())
   setById     String
@@ -461,12 +562,12 @@ model ExchangeTransaction {
   txnNo          String
   businessId     String
   branchId       String
-  type           String    // BUY_THB SELL_THB BUY_MMK SELL_MMK CONVERT ADJUSTMENT
+  type           String // BUY_THB SELL_THB BUY_MMK SELL_MMK CONVERT ADJUSTMENT
   fromCurrency   String
   toCurrency     String
-  fromAmount     BigInt    // minor units of fromCurrency (paid out of source wallet)
-  toAmount       BigInt    // minor units of toCurrency (into destination wallet)
-  rate           String    // decimal string applied
+  fromAmount     BigInt // minor units of fromCurrency (paid out of source wallet)
+  toAmount       BigInt // minor units of toCurrency (into destination wallet)
+  rate           String // decimal string applied
   serviceFee     BigInt    @default(0) // in business default currency
   additionalCost BigInt    @default(0)
   profit         BigInt    @default(0)
@@ -488,8 +589,8 @@ model ExchangeTransaction {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  @@index([businessId, branchId, createdAt])
   @@unique([businessId, txnNo])
+  @@index([businessId, branchId, createdAt])
 }
 
 model Wallet {
@@ -510,7 +611,7 @@ model Wallet {
   updatedAt      DateTime  @updatedAt
   deletedAt      DateTime?
 
-  ledger         WalletLedgerEntry[]
+  ledger WalletLedgerEntry[]
 
   @@unique([businessId, code])
 }
@@ -521,10 +622,10 @@ model WalletLedgerEntry {
   wallet       Wallet   @relation(fields: [walletId], references: [id])
   businessId   String
   branchId     String?
-  direction    String   // DEBIT (money in) | CREDIT (money out)
-  amount       BigInt   // always positive, minor units of wallet currency
+  direction    String // DEBIT (money in) | CREDIT (money out)
+  amount       BigInt // always positive, minor units of wallet currency
   balanceAfter BigInt
-  refType      String   // OPENING CASH_IN CASH_OUT TRANSFER_IN TRANSFER_OUT EXCHANGE_IN EXCHANGE_OUT THREE_D_SETTLE CREDIT_COLLECT PAYABLE_PAY INCOME EXPENSE ADJUSTMENT REVERSAL
+  refType      String // OPENING CASH_IN CASH_OUT TRANSFER_IN TRANSFER_OUT EXCHANGE_IN EXCHANGE_OUT THREE_D_SETTLE CREDIT_COLLECT PAYABLE_PAY INCOME EXPENSE ADJUSTMENT REVERSAL
   refId        String?
   description  String?
   createdById  String
@@ -543,7 +644,7 @@ model WalletTransfer {
   destWalletId   String
   sourceAmount   BigInt
   destAmount     BigInt
-  rate           String?  // required when currencies differ
+  rate           String? // required when currencies differ
   fee            BigInt   @default(0)
   reference      String?
   notes          String?
@@ -561,7 +662,7 @@ model WalletReconciliation {
   systemBalance  BigInt
   countedBalance BigInt
   difference     BigInt
-  date           String   // YYYY-MM-DD
+  date           String // YYYY-MM-DD
   notes          String?
   reconciledById String
   createdAt      DateTime @default(now())
@@ -579,7 +680,7 @@ model Receivable {
   paidAmount      BigInt    @default(0)
   remainingAmount BigInt
   currency        String    @default("MMK")
-  creditDate      String    // YYYY-MM-DD
+  creditDate      String // YYYY-MM-DD
   dueDate         String?
   agentId         String?
   status          String    @default("UNPAID") // UNPAID PARTIAL PAID OVERDUE WRITTEN_OFF CANCELLED
@@ -589,10 +690,10 @@ model Receivable {
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
 
-  payments        ReceivablePayment[]
+  payments ReceivablePayment[]
 
-  @@index([businessId, status])
   @@unique([businessId, txnNo])
+  @@index([businessId, status])
 }
 
 model ReceivablePayment {
@@ -629,10 +730,10 @@ model Payable {
   updatedAt       DateTime  @updatedAt
   deletedAt       DateTime?
 
-  payments        PayablePayment[]
+  payments PayablePayment[]
 
-  @@index([businessId, status])
   @@unique([businessId, txnNo])
+  @@index([businessId, status])
 }
 
 model PayablePayment {
@@ -650,7 +751,7 @@ model PayablePayment {
 model Category {
   id         String  @id @default(uuid())
   businessId String
-  type       String  // INCOME | EXPENSE
+  type       String // INCOME | EXPENSE
   name       String
   active     Boolean @default(true)
 
@@ -658,46 +759,46 @@ model Category {
 }
 
 model IncomeExpense {
-  id          String    @id @default(uuid())
-  txnNo       String
-  businessId  String
-  branchId    String
-  type        String    // INCOME | EXPENSE | WITHDRAW
-  categoryId  String?
+  id           String    @id @default(uuid())
+  txnNo        String
+  businessId   String
+  branchId     String
+  type         String // INCOME | EXPENSE | WITHDRAW
+  categoryId   String?
   categoryName String?
-  amount      BigInt
-  currency    String    @default("MMK")
-  walletId    String
-  date        String    // YYYY-MM-DD
-  reference   String?
-  description String?
-  status      String    @default("COMPLETED") // COMPLETED REVERSED
-  createdById String
+  amount       BigInt
+  currency     String    @default("MMK")
+  walletId     String
+  date         String // YYYY-MM-DD
+  reference    String?
+  description  String?
+  status       String    @default("COMPLETED") // COMPLETED REVERSED
+  createdById  String
   approvedById String?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  deletedAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
 
-  @@index([businessId, type, date])
   @@unique([businessId, txnNo])
+  @@index([businessId, type, date])
 }
 
 model DailyClose {
-  id           String    @id @default(uuid())
-  businessId   String
-  branchId     String
-  date         String    // YYYY-MM-DD
-  status       String    @default("OPEN") // OPEN SUBMITTED APPROVED CLOSED REOPENED
-  summary      String    // JSON snapshot of all computed totals
-  countedNotes String?
+  id            String    @id @default(uuid())
+  businessId    String
+  branchId      String
+  date          String // YYYY-MM-DD
+  status        String    @default("OPEN") // OPEN SUBMITTED APPROVED CLOSED REOPENED
+  summary       String // JSON snapshot of all computed totals
+  countedNotes  String?
   submittedById String?
-  approvedById String?
-  closedAt     DateTime?
-  reopenedById String?
-  reopenedAt   DateTime?
-  reopenReason String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  approvedById  String?
+  closedAt      DateTime?
+  reopenedById  String?
+  reopenedAt    DateTime?
+  reopenReason  String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   @@unique([branchId, date])
 }
@@ -708,12 +809,12 @@ model AuditLog {
   userId       String?
   user         User?    @relation(fields: [userId], references: [id])
   branchId     String?
-  action       String   // LOGIN LOGIN_FAILED CREATE UPDATE DELETE RESTORE APPROVE SETTLE REOPEN REVERSE ADJUST PERMISSION_CHANGE RATE_CHANGE DAILY_CLOSE
+  action       String // LOGIN LOGIN_FAILED CREATE UPDATE DELETE RESTORE APPROVE SETTLE REOPEN REVERSE ADJUST PERMISSION_CHANGE RATE_CHANGE DAILY_CLOSE
   module       String
   resourceType String?
   resourceId   String?
-  before       String?  // JSON
-  after        String?  // JSON
+  before       String? // JSON
+  after        String? // JSON
   ip           String?
   userAgent    String?
   reason       String?
@@ -728,7 +829,7 @@ model SystemSetting {
   businessId String
   business   Business @relation(fields: [businessId], references: [id])
   key        String
-  value      String   // JSON
+  value      String // JSON
   updatedAt  DateTime @updatedAt
 
   @@unique([businessId, key])
@@ -768,7 +869,7 @@ model ItemCategory {
   parentId   String? // set for sub-categories
   active     Boolean @default(true)
 
-  items      Item[]
+  items Item[]
 
   @@unique([businessId, name, parentId])
 }
@@ -776,16 +877,16 @@ model ItemCategory {
 model Unit {
   id         String  @id @default(uuid())
   businessId String
-  name       String  // pcs, kg, box…
+  name       String // pcs, kg, box…
   active     Boolean @default(true)
 
-  items      Item[]
+  items Item[]
 
   @@unique([businessId, name])
 }
 
 model Item {
-  id           String    @id @default(uuid())
+  id           String        @id @default(uuid())
   businessId   String
   name         String
   sku          String
@@ -793,21 +894,21 @@ model Item {
   categoryId   String?
   category     ItemCategory? @relation(fields: [categoryId], references: [id])
   unitId       String?
-  unit         Unit?     @relation(fields: [unitId], references: [id])
-  costPrice    BigInt    @default(0) // minor units
-  sellingPrice BigInt    @default(0)
-  currency     String    @default("MMK")
-  minStock     Int       @default(0)
-  active       Boolean   @default(true)
+  unit         Unit?         @relation(fields: [unitId], references: [id])
+  costPrice    BigInt        @default(0) // minor units
+  sellingPrice BigInt        @default(0)
+  currency     String        @default("MMK")
+  minStock     Int           @default(0)
+  active       Boolean       @default(true)
   description  String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
   deletedAt    DateTime?
 
-  stockLevels  StockLevel[]
-  movements    StockMovement[]
+  stockLevels   StockLevel[]
+  movements     StockMovement[]
   purchaseLines PurchaseLine[]
-  saleLines    SaleLine[]
+  saleLines     SaleLine[]
 
   @@unique([businessId, sku])
   @@index([businessId, name])
@@ -829,8 +930,8 @@ model StockMovement {
   itemId      String
   item        Item     @relation(fields: [itemId], references: [id])
   branchId    String
-  type        String   // PURCHASE SALE ADJUSTMENT PURCHASE_RETURN SALE_RETURN TRANSFER_IN TRANSFER_OUT
-  quantity    Int      // signed: positive = stock in, negative = stock out
+  type        String // PURCHASE SALE ADJUSTMENT PURCHASE_RETURN SALE_RETURN TRANSFER_IN TRANSFER_OUT
+  quantity    Int // signed: positive = stock in, negative = stock out
   qtyAfter    Int
   refType     String?
   refId       String?
@@ -856,7 +957,7 @@ model Purchase {
   status        String    @default("COMPLETED") // COMPLETED CANCELLED
   walletId      String?
   payableId     String?
-  date          String    // YYYY-MM-DD
+  date          String // YYYY-MM-DD
   reference     String?
   notes         String?
   createdById   String
@@ -864,10 +965,10 @@ model Purchase {
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
 
-  lines         PurchaseLine[]
+  lines PurchaseLine[]
 
-  @@index([businessId, branchId, date])
   @@unique([businessId, txnNo])
+  @@index([businessId, branchId, date])
 }
 
 model PurchaseLine {
@@ -905,10 +1006,10 @@ model Sale {
   updatedAt     DateTime  @updatedAt
   deletedAt     DateTime?
 
-  lines         SaleLine[]
+  lines SaleLine[]
 
-  @@index([businessId, branchId, date])
   @@unique([businessId, txnNo])
+  @@index([businessId, branchId, date])
 }
 
 model SaleLine {

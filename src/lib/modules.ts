@@ -17,6 +17,7 @@ export const FEATURE_KEYS = [
   "items",
   "stock",
   "repair",
+  "biller",
   "threeD",
   "twoD",
   "exchange",
@@ -46,6 +47,7 @@ export const FEATURE_DEFINITIONS: {
   { key: "items", label: "Items", group: "Mini Mart" },
   { key: "stock", label: "Stock", group: "Mini Mart" },
   { key: "repair", label: "Repair Jobs", group: "Mobile Shop" },
+  { key: "biller", label: "Top-up Billers", group: "Mobile Shop" },
   { key: "suppliers", label: "Suppliers", group: "Mini Mart" },
   { key: "threeD", label: "3D Records", group: "Wallet Note" },
   { key: "twoD", label: "2D Records", group: "Wallet Note" },
@@ -74,7 +76,7 @@ export const BUSINESS_CATEGORY_LABELS: Record<BusinessCategory, string> = {
   ALL_IN_ONE: "All-in-one business",
 };
 
-const MINI_MART_FEATURES: FeatureKey[] = ["pos", "purchases", "items", "stock", "suppliers", "repair"];
+const MINI_MART_FEATURES: FeatureKey[] = ["pos", "purchases", "items", "stock", "suppliers", "repair", "biller"];
 const WALLET_FEATURES: FeatureKey[] = [
   "exchange",
   "wallets",
@@ -115,8 +117,9 @@ export function categoryPreset(category: BusinessCategory): FeatureVisibility {
       // A phone shop sells handsets and accessories and repairs them, so it wants the
       // whole retail side plus repair jobs.
       return visibility([
-        "pos", "purchases", "items", "stock", "repair", "wallets", "transfers", "withdraw",
-        "credit", "incomeExpense", "reports", "customers", "suppliers", "telegram", "about",
+        "pos", "purchases", "items", "stock", "repair", "biller", "wallets", "transfers",
+        "withdraw", "credit", "incomeExpense", "reports", "customers", "suppliers", "telegram",
+        "about",
       ]);
     case "THREE_D":
       return visibility([

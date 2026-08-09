@@ -21,6 +21,7 @@ export const ALL_PERMISSIONS = [
   "purchase.view", "purchase.create", "purchase.cancel",
   "sale.view", "sale.create", "sale.cancel",
   "repair.view", "repair.create", "repair.update",
+  "biller.view", "biller.trade", "biller.manage",
 ] as const;
 
 export type Permission = (typeof ALL_PERMISSIONS)[number];
@@ -38,6 +39,7 @@ const CASHIER_PERMS: Permission[] = [
   "dashboard.view",
   "item.view", "stock.view", "sale.view", "sale.create",
   "repair.view", "repair.create", "repair.update",
+  "biller.view", "biller.trade",
   "wallet.view", "wallet.transfer", "wallet.withdraw",
   "income_expense.view", "income_expense.create",
   "credit.view", "credit.collect",
@@ -49,6 +51,7 @@ const ACCOUNTANT_PERMS: Permission[] = [
   "dashboard.view",
   "item.view", "stock.view", "purchase.view", "sale.view",
   "repair.view",
+  "biller.view",
   "three_d.view", "three_d.view_profit",
   "exchange.view",
   "wallet.view", "wallet.reconcile", "wallet.withdraw",
