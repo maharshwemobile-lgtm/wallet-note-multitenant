@@ -56,6 +56,9 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
+  const [passcode, setPasscode] = useState("");
+  const [unlockError, setUnlockError] = useState("");
+  const [unlocking, setUnlocking] = useState(false);
   const [userScope, setUserScope] = useState<"all" | "today">("all");
   const [activityQuery, setActivityQuery] = useState("");
   const [activityAction, setActivityAction] = useState("");
@@ -78,6 +81,27 @@ export default function AdminPage() {
       setLoadedOnce(true);
     }
   }, []);
+
+  const unlock = useCallback(async () => {
+    setUnlocking(true);
+    setUnlockError("");
+    try {
+      const response = await fetch("/api/admin/unlock", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ passcode }),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok || !body?.ok) throw new Error(body?.error || "Wrong passcode.");
+      setPasscode("");
+      // The cookie is set; the same endpoint now answers with the names filled in.
+      await load();
+    } catch (unlockFailure) {
+      setUnlockError(unlockFailure instanceof Error ? unlockFailure.message : "Wrong passcode.");
+    } finally {
+      setUnlocking(false);
+    }
+  }, [passcode, load]);
 
   // Load on mount and keep it fresh. Deferred so the fetch does not set state during the
   // effect body.
@@ -129,6 +153,45 @@ export default function AdminPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-950">
         <Spinner />
+      </main>
+    );
+  }
+
+  // The figures are open to anyone; the names behind them are not. Whoever runs the
+  // platform types the passcode once and the page fills in.
+  if (!named) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-950">
+        <Card className="w-full max-w-sm space-y-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg bg-blue-600 p-2 text-white"><Wallet size={20} /></div>
+            <div>
+              <h1 className="font-bold">Grand Admin Portal</h1>
+              <p className="text-xs text-gray-500">Enter the passcode to continue</p>
+            </div>
+          </div>
+          <form
+            className="space-y-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              unlock();
+            }}
+          >
+            <input
+              type="password"
+              value={passcode}
+              onChange={(e) => setPasscode(e.target.value)}
+              autoFocus
+              autoComplete="current-password"
+              placeholder="Passcode"
+              className="min-h-11 w-full rounded-lg border border-gray-300 bg-white px-3 text-sm dark:border-gray-700 dark:bg-gray-800"
+            />
+            {unlockError && <p className="text-sm text-red-600">{unlockError}</p>}
+            <Button type="submit" className="w-full" disabled={unlocking || !passcode}>
+              {unlocking ? "Checking…" : "Unlock"}
+            </Button>
+          </form>
+        </Card>
       </main>
     );
   }
