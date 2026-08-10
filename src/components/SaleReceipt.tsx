@@ -34,7 +34,9 @@ function money(value: number): string {
 export function SaleReceipt({ data }: { data: ReceiptData }) {
   return (
     <div id="sale-receipt" className="hidden print:block">
-      <div className="mx-auto w-[58mm] px-1 font-mono text-[10px] leading-tight text-black">
+      {/* The sheet itself is 58mm (see @page receipt), so the slip fills it rather than
+          sitting as a narrow column in the middle of a larger page. */}
+      <div className="w-full max-w-[58mm] px-1 font-mono text-[10px] leading-tight text-black">
         <div className="text-center">
           <div className="text-[13px] font-bold">{data.shopName}</div>
           {data.shopPhone && <div>{data.shopPhone}</div>}

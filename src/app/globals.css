@@ -53,4 +53,10 @@ body {
   body.printing-receipt #sale-receipt { display: block !important; }
   /* A till roll is a continuous strip; margins push the slip onto a second one. */
   @page { margin: 0; }
+
+  /* The slip was coming out at A4 width because nothing told the printer otherwise — the
+     58mm was only the width of a box on a full-size sheet. A named page sets the sheet
+     itself, and "auto" height keeps the roll continuous however long the basket is. */
+  @page receipt { size: 58mm auto; margin: 0; }
+  body.printing-receipt #sale-receipt { page: receipt; }
 }
