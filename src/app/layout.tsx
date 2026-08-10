@@ -6,12 +6,46 @@ import { LanguageProvider } from "@/components/LanguageProvider";
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
+/** Where the site actually lives, used to make every canonical and social URL absolute.
+ *  Search engines treat a relative canonical as no canonical at all. */
+export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://walletnote.online";
+
 export const metadata: Metadata = {
-  title: "Wallet Note",
-  description: "Business management and accounting application",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: "Wallet Note — 2D 3D မှတ်တမ်းနှင့် ပိုက်ဆံအိတ် စာရင်းကိုင်",
+    // Every other page reads "<its title> · Wallet Note", so a search result says which
+    // page it is without each page repeating the brand itself.
+    template: "%s · Wallet Note",
+  },
+  description:
+    "2D 3D ထီမှတ်တမ်း၊ ပိုက်ဆံအိတ်၊ ရောင်းအား၊ ကုန်ပစ္စည်း၊ အကြွေး၊ ငွေလဲနှုန်းနှင့် ဖုန်းပြင်ဆင်ခ — " +
+    "မြန်မာဆိုင်ငယ်များအတွက် အခမဲ့ စာရင်းကိုင် app။ ဖုန်းပေါ်မှာပဲ သုံးလို့ရပြီး Telegram နဲ့လည်း ချိတ်လို့ရပါတယ်။",
+  keywords: [
+    "2D မှတ်တမ်း", "3D မှတ်တမ်း", "ထီမှတ်တမ်း", "ပိုက်ဆံအိတ်", "ငွေစာရင်း",
+    "Wallet Note", "2D 3D Note", "မြန်မာ POS", "ဆိုင်စာရင်း", "အကြွေးစာရင်း",
+    "ငွေလဲနှုန်း", "ဖုန်းဆိုင် စာရင်း", "Myanmar accounting app",
+  ],
   manifest: "/manifest.webmanifest",
   applicationName: "Wallet Note",
   appleWebApp: { capable: true, title: "Wallet Note", statusBarStyle: "default" },
+  alternates: { canonical: "/" },
+  openGraph: {
+    type: "website",
+    siteName: "Wallet Note",
+    locale: "my_MM",
+    url: SITE_URL,
+    title: "Wallet Note — 2D 3D မှတ်တမ်းနှင့် ပိုက်ဆံအိတ်",
+    description:
+      "2D 3D ထီမှတ်တမ်း၊ ပိုက်ဆံအိတ်၊ ရောင်းအားနှင့် အကြွေးစာရင်း — မြန်မာဆိုင်ငယ်များအတွက် အခမဲ့ စာရင်းကိုင် app။",
+    images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "Wallet Note" }],
+  },
+  twitter: {
+    card: "summary",
+    title: "Wallet Note — 2D 3D မှတ်တမ်းနှင့် ပိုက်ဆံအိတ်",
+    description: "မြန်မာဆိုင်ငယ်များအတွက် အခမဲ့ စာရင်းကိုင် app။",
+    images: ["/icon-512.png"],
+  },
   icons: {
     icon: [
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },

@@ -5,10 +5,41 @@ import {
 } from "lucide-react";
 import { LanguageSwitch } from "@/components/LanguageProvider";
 
+/** This is the page search engines actually land on, so it carries the description a
+ *  Myanmar shop owner would recognise — the words they would type — rather than the
+ *  English product blurb the page itself opens with. */
 export const metadata = {
-  title: "What is Wallet Note?",
+  title: "2D 3D မှတ်တမ်း၊ ပိုက်ဆံအိတ်နှင့် ဆိုင်စာရင်း — Wallet Note ဆိုတာဘာလဲ",
   description:
-    "Wallet Note keeps a small business's money, stock and records in one private workspace.",
+    "2D 3D ထီမှတ်တမ်း၊ ပိုက်ဆံအိတ်၊ ရောင်းအား၊ ကုန်ပစ္စည်း၊ အကြွေး၊ ငွေလဲနှုန်း၊ ဖုန်းပြင်ဆင်ခနှင့် " +
+    "ဖုန်းဖြည့်ကဒ် — မြန်မာဆိုင်ငယ်များအတွက် အခမဲ့ စာရင်းကိုင် app။ စာအုပ်မလို၊ ဖုန်းပေါ်မှာပဲ ပြီးပါတယ်။",
+  alternates: { canonical: "/features" },
+  openGraph: {
+    title: "2D 3D မှတ်တမ်း၊ ပိုက်ဆံအိတ်နှင့် ဆိုင်စာရင်း — Wallet Note",
+    description: "မြန်မာဆိုင်ငယ်များအတွက် အခမဲ့ စာရင်းကိုင် app။ 2D 3D မှတ်တမ်း၊ ပိုက်ဆံအိတ်၊ ရောင်းအား၊ အကြွေး။",
+    url: "/features",
+  },
+};
+
+/** Told to Google as data rather than left for it to infer from the prose: what the thing
+ *  is, who it is for, and that it costs nothing. This is what produces the rich result. */
+const APP_SCHEMA = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Wallet Note",
+  alternateName: ["2D 3D Note", "ပိုက်ဆံအိတ်", "Wallet Note ပိုက်ဆံအိတ်"],
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web, Android, iOS",
+  inLanguage: ["my", "en"],
+  url: "https://walletnote.online/",
+  description:
+    "2D 3D ထီမှတ်တမ်း၊ ပိုက်ဆံအိတ်၊ ရောင်းအား၊ ကုန်ပစ္စည်း၊ အကြွေးနှင့် ငွေလဲနှုန်း — " +
+    "မြန်မာဆိုင်ငယ်များအတွက် စာရင်းကိုင် app။",
+  offers: { "@type": "Offer", price: "0", priceCurrency: "MMK" },
+  featureList: [
+    "2D မှတ်တမ်း", "3D မှတ်တမ်း", "ပိုက်ဆံအိတ်", "ငွေလွှဲ", "အကြွေးစာရင်း",
+    "ရောင်းအား POS", "ကုန်ပစ္စည်းစာရင်း", "ငွေလဲနှုန်း", "ဖုန်းပြင်ဆင်ခ", "ဖုန်းဖြည့်ကဒ်", "Telegram bot",
+  ],
 };
 
 /** The public description of the app, for someone deciding whether to sign up.
@@ -76,6 +107,10 @@ const POINTS = [
 export default function FeaturesPage() {
   return (
     <main className="mx-auto w-full max-w-4xl px-4 py-10 text-gray-800 dark:text-gray-200 sm:py-14">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(APP_SCHEMA) }}
+      />
       <LanguageSwitch className="absolute right-4 top-4" />
 
       <div className="flex flex-col items-center text-center">
