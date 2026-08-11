@@ -25,6 +25,10 @@ export default function ExchangePage() {
     buyRate: string; sellRate: string; source: "market" | "manual";
     postedAt?: string; staleWarning?: string;
   } | null>(null);
+  // The published figure, kept as a last resort for the rate box: a shop that has not set
+  // its own board rate yet had an empty field and nothing worked out, which reads as the
+  // feature being broken rather than unconfigured.
+  const [market, setMarket] = useState<{ buy: string; sell: string; fresh: boolean } | null>(null);
   const [txns, setTxns] = useState<Txn[] | null>(null);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [showNew, setShowNew] = useNewModal();
@@ -43,9 +47,9 @@ export default function ExchangePage() {
 
   const load = useCallback(() => {
     api<Rate[]>("/api/v1/exchange/rates").then(setRates).catch(() => {});
-    api<{ effective: typeof quoted }>("/api/v1/exchange/market-rate")
-      .then((d) => setQuoted(d.effective))
-      .catch(() => setQuoted(null));
+    api<{ effective: typeof quoted; market: typeof market }>("/api/v1/exchange/market-rate")
+      .then((d) => { setQuoted(d.effective); setMarket(d.market); })
+      .catch(() => { setQuoted(null); setMarket(null); });
     api<{ transactions: Txn[] }>("/api/v1/exchange/transactions?pageSize=50")
       .then((d) => setTxns(d.transactions)).catch((e) => push(e.message, "error"));
     api<Wallet[]>("/api/v1/wallets").then(setWallets).catch(() => {});
@@ -69,13 +73,25 @@ export default function ExchangePage() {
     return to.toLocaleString("en-US", { maximumFractionDigits: 2 });
   }, [form.amount, form.rate, fromCurrency]);
 
+  /** The figure to start the form with, best source first.
+   *
+   *  The shop's own board rate is what it has decided to trade at, so it wins. Failing
+   *  that, whatever it currently quotes, then the published market figure — a teller with
+   *  no rate set at all is better served by today's market number to correct than by an
+   *  empty box that computes nothing.
+   */
   function defaultRate(type: string) {
-    if (!active) return "";
-    return type === "BUY_THB" ? active.buyRate : active.sellRate;
+    const buying = type === "BUY_THB";
+    if (active) return buying ? active.buyRate : active.sellRate;
+    if (quoted) return buying ? quoted.buyRate : quoted.sellRate;
+    if (market) return buying ? market.buy : market.sell;
+    return "";
   }
 
-  /** The shop's own board figure for the direction currently selected. */
+  /** The starting figure for the direction currently selected, and where it came from —
+   *  a teller should be able to tell the shop's own rate from today's market number. */
   const boardRate = defaultRate(form.type);
+  const boardRateSource = active ? "your rate" : quoted ? "your quote" : market ? "market" : "";
 
   function openNewExchange() {
     setForm((current) => ({ ...current, rate: current.rate || defaultRate(current.type) }));
@@ -95,7 +111,7 @@ export default function ExchangePage() {
     }, 0);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showNew, active]);
+  }, [showNew, active, quoted, market]);
 
   function changeExchangeType(type: string) {
     setForm((current) => ({
@@ -247,8 +263,13 @@ export default function ExchangePage() {
                   onClick={() => setForm({ ...form, rate: boardRate })}
                   className="mt-1 text-xs text-blue-600 underline dark:text-blue-400"
                 >
-                  Board rate is {boardRate} — use it
+                  {boardRateSource} is {boardRate} — use it
                 </button>
+              )}
+              {!boardRate && (
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                  No rate set yet. Type one, or set your board rate above.
+                </p>
               )}
             </div>
           </div>

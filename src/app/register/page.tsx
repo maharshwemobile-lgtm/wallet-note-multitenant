@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Wallet } from "lucide-react";
@@ -10,6 +10,19 @@ import { GoogleSignIn } from "@/components/GoogleSignIn";
 import { BUSINESS_CATEGORIES, BUSINESS_CATEGORY_LABELS } from "@/lib/modules";
 import { LanguageSwitch } from "@/components/LanguageProvider";
 import { api } from "@/lib/client";
+
+/** A category named in the link, for sending people here from somewhere that already knows
+ *  what kind of shop they run.
+ *
+ *  Read straight off the URL rather than through useSearchParams, which would force this
+ *  page to render dynamically for the sake of one optional parameter. Anything unrecognised
+ *  is ignored, so a mistyped link is an ordinary sign-up rather than an error.
+ */
+function categoryFromUrl(): string {
+  if (typeof window === "undefined") return "";
+  const raw = new URLSearchParams(window.location.search).get("type")?.toUpperCase() ?? "";
+  return (BUSINESS_CATEGORIES as readonly string[]).includes(raw) ? raw : "";
+}
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -23,8 +36,20 @@ export default function RegisterPage() {
     password: "",
     confirmPassword: "",
   });
+  const [presetCategory, setPresetCategory] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Deferred a tick so this is an ordinary update rather than one during mount.
+    const timer = window.setTimeout(() => {
+      const category = categoryFromUrl();
+      if (!category) return;
+      setForm((current) => ({ ...current, businessCategory: category }));
+      setPresetCategory(true);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   function update(name: keyof typeof form, value: string) {
     setForm((current) => ({ ...current, [name]: value }));
@@ -107,6 +132,13 @@ export default function RegisterPage() {
               </option>
             ))}
           </Select>
+          {/* Chosen for them by the link they followed. Said out loud, and still editable,
+              so nobody signs up as the wrong kind of shop without noticing. */}
+          {presetCategory && (
+            <p className="-mt-2 text-xs text-gray-500 dark:text-gray-400">
+              Chosen for you from the link you followed. Change it if it is not right.
+            </p>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
             <Input
               label="Username"

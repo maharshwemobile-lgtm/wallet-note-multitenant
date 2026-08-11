@@ -30,6 +30,10 @@ interface DashData {
     salesTotal: string;
     salesProfit: string;
     lowStock: { id: string; name: string; minStock: number; qty: number }[];
+    /** What the shelf cost, and what it is priced at. */
+    stockCost: string;
+    stockRetail: string;
+    stockItems: number;
   };
 }
 
@@ -88,6 +92,26 @@ export default function DashboardPage() {
           <>
             <StatCard label="Today's Sales" value={fmtMoney(data.pos.salesTotal, "MMK")} sub={`${data.pos.salesCount} sale(s)`} onClick={() => router.push("/sales")} />
             <StatCard label="Sales Profit" value={fmtMoney(data.pos.salesProfit, "MMK")} tone={BigInt(data.pos.salesProfit) >= 0n ? "green" : "red"} onClick={() => router.push("/sales")} />
+          </>
+        )}
+        {featureEnabled("stock") && data.pos && (
+          <>
+            {/* What the shelf cost is the figure that matters to an owner: it is money
+                already spent and sitting there. The retail figure sits underneath it
+                rather than in its own card, because the two are only meaningful together. */}
+            <StatCard
+              label="Stock Value (cost)"
+              value={fmtMoney(data.pos.stockCost, "MMK")}
+              sub={`${data.pos.stockItems} item(s) in stock`}
+              onClick={() => router.push("/stock")}
+            />
+            <StatCard
+              label="Stock Value (retail)"
+              value={fmtMoney(data.pos.stockRetail, "MMK")}
+              sub={`${fmtMoney(String(BigInt(data.pos.stockRetail) - BigInt(data.pos.stockCost)), "MMK")} if it all sells`}
+              tone="green"
+              onClick={() => router.push("/stock")}
+            />
           </>
         )}
         {!playEdition && featureEnabled("threeD") && <StatCard label="3D Total Today" value={fmtMoney(s.threeD.totalBet, "MMK")} sub={`${s.threeD.totalRecords} records`} onClick={() => router.push("/three-d")} />}
