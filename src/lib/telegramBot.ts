@@ -1070,8 +1070,13 @@ async function handleCustomerUpdate(
   chatId: string
 ) {
   if (!(await customerBettingOn(businessId))) {
-    // Unchanged message for the case this used to be: someone else's chat.
-    return sendMessage(chatId, "This bot is already linked to a different Telegram account. Unlink it in Wallet Note first if this is you.");
+    // Whoever reaches this is a customer, and the reply used to tell them the bot was
+    // "linked to a different Telegram account" — true of the code path, meaningless to
+    // them, and it read as the bot being broken. Customers only ever see Myanmar.
+    return sendMessage(
+      chatId,
+      "မင်္ဂလာပါ 🙏\n\nဤ bot မှတစ်ဆင့် ဝန်ဆောင်မှု မဖွင့်ရသေးပါ။ ဆိုင်သို့ တိုက်ရိုက် ဆက်သွယ်ပါ။"
+    );
   }
 
   const from = update.message?.from ?? update.callback_query?.from;
