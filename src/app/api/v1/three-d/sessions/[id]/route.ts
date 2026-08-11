@@ -3,8 +3,13 @@ import { withAuth, json, parseBody, ApiError } from "@/lib/api";
 import { prisma } from "@/lib/prisma";
 import { audit } from "@/lib/audit";
 import { sessionExposure } from "@/services/threeDService";
+import { closeExpiredThreeDSessions } from "@/services/thaiLottoService";
 
 export const GET = withAuth("three_d.view", async ({ user, params }) => {
+  // The list page closes expired sessions on the way in; opening a session directly did
+  // not, so a morning draw reached in the evening still read OPEN and still offered its
+  // entry form. The status a page is shown should be the status as of now.
+  await closeExpiredThreeDSessions();
   const session = await prisma.threeDSession.findUnique({
     where: { id: params.id },
     include: { settlement: true },

@@ -6,6 +6,7 @@ import { postLedger, reverseLedgerEntries } from "./walletService";
 import { audit } from "@/lib/audit";
 import { nextNumber } from "@/lib/sequence";
 import { assertDateOpen } from "./closeGuard";
+import { isSessionCutoffPassed } from "./thaiLottoService";
 
 // 3D record calculations and settlement. All money in BigInt minor units.
 
@@ -86,6 +87,22 @@ export async function createThreeDBets(
   if (!session) throw new ApiError(404, "Session not found");
   if (session.status !== "OPEN")
     throw new ApiError(422, `Session is ${session.status.toLowerCase()} - records can only be added to open sessions`);
+
+  // The status alone was not enough. It is set to CLOSED by a job that runs once a minute,
+  // so between the cut-off and the next run the morning draw was still OPEN and a bet on a
+  // number that may already be known could be booked into it. The clock is checked here,
+  // in the shop's own timezone, because this is the last point before the money is
+  // recorded and no screen can talk its way past it.
+  const business = await tx.business.findUnique({
+    where: { id: opts.businessId },
+    select: { timezone: true },
+  });
+  if (isSessionCutoffPassed(session, new Date(), business?.timezone || "Asia/Yangon")) {
+    throw new ApiError(
+      422,
+      `Entry for ${session.name} closed at ${session.cutoffTime ?? session.drawTime}. Use the next draw.`
+    );
+  }
   if (session.branchId && session.branchId !== opts.branchId)
     throw new ApiError(422, "Session belongs to a different branch");
 
