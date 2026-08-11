@@ -10,6 +10,21 @@ import { useNewModal } from "@/lib/useNewModal";
 
 interface Contact { id: string; name: string; phone?: string; type: string; active: boolean; notes?: string }
 
+/** The value has to be written out.
+ *
+ *  An <option> with no value attribute submits its own text, and this app translates the
+ *  text in the page — so in Myanmar the select posted "ကုန်သွင်းသူ" where the API expects
+ *  "SUPPLIER", and saving a supplier failed with a validation error nobody could act on.
+ */
+const CONTACT_TYPES = [
+  { value: "CUSTOMER", label: "Customer" },
+  { value: "SUPPLIER", label: "Supplier" },
+  { value: "AGENT", label: "Agent" },
+  { value: "CREDITOR", label: "Creditor" },
+  { value: "DEBTOR", label: "Debtor" },
+  { value: "OTHER", label: "Other" },
+];
+
 export default function CustomersPage() {
   const [contacts, setContacts] = useState<Contact[] | null>(null);
   const [q, setQ] = useState("");
@@ -63,7 +78,7 @@ export default function CustomersPage() {
         <Input placeholder="Search name or phone…" value={q} onChange={(e) => setQ(e.target.value)} className="max-w-xs" />
         <Select value={type} onChange={(e) => setType(e.target.value)}>
           <option value="">All types</option>
-          {["CUSTOMER", "SUPPLIER", "AGENT", "CREDITOR", "DEBTOR", "OTHER"].map((t) => <option key={t}>{t}</option>)}
+          {CONTACT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
         </Select>
       </div>
 
@@ -88,7 +103,7 @@ export default function CustomersPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
             <Select label="Type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-              {["CUSTOMER", "SUPPLIER", "AGENT", "CREDITOR", "DEBTOR", "OTHER"].map((t) => <option key={t}>{t}</option>)}
+              {CONTACT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </Select>
           </div>
           <Input label="Telegram" value={form.telegram} onChange={(e) => setForm({ ...form, telegram: e.target.value })} />

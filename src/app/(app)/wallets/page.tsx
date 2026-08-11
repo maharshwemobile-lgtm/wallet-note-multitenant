@@ -157,12 +157,14 @@ export default function WalletsPage() {
           <div className="grid gap-3 sm:grid-cols-2">
             <Input label="Code" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="MMK-CASH-2" />
             <Select label="Type" value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-              {["CASH", "BANK", "MOBILE", "AGENT", "CUSTOMER", "EXPENSE", "CLEARING", "CUSTOM"].map((t) => <option key={t}>{t}</option>)}
+              {/* Written-out values: an option with none submits its own text, which this
+                  app translates, so in Myanmar the wallet type posted was a Burmese word. */}
+              {["CASH", "BANK", "MOBILE", "AGENT", "CUSTOMER", "EXPENSE", "CLEARING", "CUSTOM"].map((t) => <option key={t} value={t}>{t}</option>)}
             </Select>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Select label="Currency" value={form.currency} onChange={(e) => setForm({ ...form, currency: e.target.value })}>
-              <option>MMK</option><option>THB</option>
+              <option value="MMK">MMK</option><option value="THB">THB</option>
             </Select>
             <Select label="Branch" value={form.branchId} onChange={(e) => setForm({ ...form, branchId: e.target.value })}>
               {branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}

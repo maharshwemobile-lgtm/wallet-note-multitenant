@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { Plus, Trash2 } from "lucide-react";
 import { api } from "@/lib/client";
 import { fmtMoney, fmtDateTime } from "@/lib/format";
@@ -131,6 +132,18 @@ export default function PurchasesPage() {
             <option value="">— (required if not fully paid)</option>
             {suppliers.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
           </Select>
+          {/* A shop recording its first purchase has no supplier yet, and the select was an
+              empty dead end with no hint of where one comes from. The link opens the add
+              form on arrival rather than dropping them on a list to work it out. */}
+          {suppliers.length === 0 && (
+            <p className="-mt-2 text-xs text-amber-700 dark:text-amber-400">
+              No suppliers yet.{" "}
+              <Link href="/suppliers?new=1" className="font-semibold underline">
+                Add one first
+              </Link>{" "}
+              — you need one unless the purchase is paid in full.
+            </p>
+          )}
 
           <div>
             <div className="mb-1 flex items-center justify-between">
