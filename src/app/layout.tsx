@@ -12,19 +12,26 @@ export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://walletnote.
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
+  /** No lottery wording anywhere a link preview can reach it.
+   *
+   *  Facebook blocks links whose page describes betting, and it reads the title and
+   *  description to decide — so naming the module in them got the whole site blocked from
+   *  being shared, which costs far more than the search traffic those words brought in.
+   *  The module is still in the app; it is simply not the shop window.
+   */
   title: {
-    default: "Wallet Note — 2D 3D မှတ်တမ်းနှင့် ပိုက်ဆံအိတ် စာရင်းကိုင်",
+    default: "Wallet Note — ဆိုင်စာရင်းနှင့် ပိုက်ဆံအိတ် စီမံခန့်ခွဲမှု",
     // Every other page reads "<its title> · Wallet Note", so a search result says which
     // page it is without each page repeating the brand itself.
     template: "%s · Wallet Note",
   },
   description:
-    "2D 3D ထီမှတ်တမ်း၊ ပိုက်ဆံအိတ်၊ ရောင်းအား၊ ကုန်ပစ္စည်း၊ အကြွေး၊ ငွေလဲနှုန်းနှင့် ဖုန်းပြင်ဆင်ခ — " +
+    "ပိုက်ဆံအိတ်၊ ရောင်းအား၊ ကုန်ပစ္စည်း၊ ဝင်ငွေထွက်ငွေ၊ အကြွေး၊ ငွေလဲနှုန်းနှင့် ဖုန်းပြင်ဆင်ခ — " +
     "မြန်မာဆိုင်ငယ်များအတွက် အခမဲ့ စာရင်းကိုင် app။ ဖုန်းပေါ်မှာပဲ သုံးလို့ရပြီး Telegram နဲ့လည်း ချိတ်လို့ရပါတယ်။",
   keywords: [
-    "2D မှတ်တမ်း", "3D မှတ်တမ်း", "ထီမှတ်တမ်း", "ပိုက်ဆံအိတ်", "ငွေစာရင်း",
-    "Wallet Note", "2D 3D Note", "မြန်မာ POS", "ဆိုင်စာရင်း", "အကြွေးစာရင်း",
-    "ငွေလဲနှုန်း", "ဖုန်းဆိုင် စာရင်း", "Myanmar accounting app",
+    "ပိုက်ဆံအိတ်", "ငွေစာရင်း", "ဆိုင်စာရင်း", "အကြွေးစာရင်း", "ဝင်ငွေ ထွက်ငွေ",
+    "Wallet Note", "မြန်မာ POS", "ငွေလဲနှုန်း", "ဖုန်းဆိုင် စာရင်း",
+    "ကုန်ပစ္စည်းစာရင်း", "Myanmar accounting app", "small business app Myanmar",
   ],
   manifest: "/manifest.webmanifest",
   applicationName: "Wallet Note",
@@ -35,14 +42,14 @@ export const metadata: Metadata = {
     siteName: "Wallet Note",
     locale: "my_MM",
     url: SITE_URL,
-    title: "Wallet Note — 2D 3D မှတ်တမ်းနှင့် ပိုက်ဆံအိတ်",
+    title: "Wallet Note — ဆိုင်စာရင်းနှင့် ပိုက်ဆံအိတ်",
     description:
-      "2D 3D ထီမှတ်တမ်း၊ ပိုက်ဆံအိတ်၊ ရောင်းအားနှင့် အကြွေးစာရင်း — မြန်မာဆိုင်ငယ်များအတွက် အခမဲ့ စာရင်းကိုင် app။",
+      "ပိုက်ဆံအိတ်၊ ရောင်းအား၊ ကုန်ပစ္စည်းနှင့် အကြွေးစာရင်း — မြန်မာဆိုင်ငယ်များအတွက် အခမဲ့ စာရင်းကိုင် app။",
     images: [{ url: "/icon-512.png", width: 512, height: 512, alt: "Wallet Note" }],
   },
   twitter: {
     card: "summary",
-    title: "Wallet Note — 2D 3D မှတ်တမ်းနှင့် ပိုက်ဆံအိတ်",
+    title: "Wallet Note — ဆိုင်စာရင်းနှင့် ပိုက်ဆံအိတ်",
     description: "မြန်မာဆိုင်ငယ်များအတွက် အခမဲ့ စာရင်းကိုင် app။",
     images: ["/icon-512.png"],
   },

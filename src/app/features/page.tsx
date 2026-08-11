@@ -9,14 +9,14 @@ import { LanguageSwitch } from "@/components/LanguageProvider";
  *  Myanmar shop owner would recognise — the words they would type — rather than the
  *  English product blurb the page itself opens with. */
 export const metadata = {
-  title: "2D 3D မှတ်တမ်း၊ ပိုက်ဆံအိတ်နှင့် ဆိုင်စာရင်း — Wallet Note ဆိုတာဘာလဲ",
+  title: "ဆိုင်စာရင်း၊ ပိုက်ဆံအိတ်နှင့် ရောင်းအား — Wallet Note ဆိုတာဘာလဲ",
   description:
-    "2D 3D ထီမှတ်တမ်း၊ ပိုက်ဆံအိတ်၊ ရောင်းအား၊ ကုန်ပစ္စည်း၊ အကြွေး၊ ငွေလဲနှုန်း၊ ဖုန်းပြင်ဆင်ခနှင့် " +
+    "ပိုက်ဆံအိတ်၊ ရောင်းအား၊ ကုန်ပစ္စည်း၊ ဝင်ငွေထွက်ငွေ၊ အကြွေး၊ ငွေလဲနှုန်း၊ ဖုန်းပြင်ဆင်ခနှင့် " +
     "ဖုန်းဖြည့်ကဒ် — မြန်မာဆိုင်ငယ်များအတွက် အခမဲ့ စာရင်းကိုင် app။ စာအုပ်မလို၊ ဖုန်းပေါ်မှာပဲ ပြီးပါတယ်။",
   alternates: { canonical: "/features" },
   openGraph: {
-    title: "2D 3D မှတ်တမ်း၊ ပိုက်ဆံအိတ်နှင့် ဆိုင်စာရင်း — Wallet Note",
-    description: "မြန်မာဆိုင်ငယ်များအတွက် အခမဲ့ စာရင်းကိုင် app။ 2D 3D မှတ်တမ်း၊ ပိုက်ဆံအိတ်၊ ရောင်းအား၊ အကြွေး။",
+    title: "ဆိုင်စာရင်း၊ ပိုက်ဆံအိတ်နှင့် ရောင်းအား — Wallet Note",
+    description: "မြန်မာဆိုင်ငယ်များအတွက် အခမဲ့ စာရင်းကိုင် app။ ပိုက်ဆံအိတ်၊ ရောင်းအား၊ ကုန်ပစ္စည်း၊ အကြွေး။",
     url: "/features",
   },
 };
@@ -27,17 +27,17 @@ const APP_SCHEMA = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
   name: "Wallet Note",
-  alternateName: ["2D 3D Note", "ပိုက်ဆံအိတ်", "Wallet Note ပိုက်ဆံအိတ်"],
+  alternateName: ["ပိုက်ဆံအိတ်", "Wallet Note ပိုက်ဆံအိတ်", "ဆိုင်စာရင်း app"],
   applicationCategory: "BusinessApplication",
   operatingSystem: "Web, Android, iOS",
   inLanguage: ["my", "en"],
   url: "https://walletnote.online/",
   description:
-    "2D 3D ထီမှတ်တမ်း၊ ပိုက်ဆံအိတ်၊ ရောင်းအား၊ ကုန်ပစ္စည်း၊ အကြွေးနှင့် ငွေလဲနှုန်း — " +
+    "ပိုက်ဆံအိတ်၊ ရောင်းအား၊ ကုန်ပစ္စည်း၊ ဝင်ငွေထွက်ငွေ၊ အကြွေးနှင့် ငွေလဲနှုန်း — " +
     "မြန်မာဆိုင်ငယ်များအတွက် စာရင်းကိုင် app။",
   offers: { "@type": "Offer", price: "0", priceCurrency: "MMK" },
   featureList: [
-    "2D မှတ်တမ်း", "3D မှတ်တမ်း", "ပိုက်ဆံအိတ်", "ငွေလွှဲ", "အကြွေးစာရင်း",
+    "ပိုက်ဆံအိတ်", "ငွေလွှဲ", "အကြွေးစာရင်း", "ဝင်ငွေ ထွက်ငွေ",
     "ရောင်းအား POS", "ကုန်ပစ္စည်းစာရင်း", "ငွေလဲနှုန်း", "ဖုန်းပြင်ဆင်ခ", "ဖုန်းဖြည့်ကဒ်", "Telegram bot",
   ],
 };
@@ -75,12 +75,15 @@ const GROUPS: { title: string; blurb: string; items: { icon: typeof Wallet; labe
     ],
   },
   {
-    title: "2D & 3D",
-    blurb: "The lottery book, kept without the paperwork.",
+    // Named for what it does rather than what it is used for. Facebook blocks links whose
+    // page reads as betting, and it blocked this one — a shop cannot share a link to its
+    // own bookkeeping app, which costs more than the words were ever worth.
+    title: "Number records",
+    blurb: "A daily numbered book, kept without the paperwork.",
     items: [
       { icon: Hash, label: "Daily sessions", text: "Morning and evening open by themselves every trading day." },
-      { icon: Hash, label: "Official results", text: "Numbers arrive on their own and settle the session against them." },
-      { icon: MessageCircle, label: "Orders on Telegram", text: "Customers send numbers and a payment slip; you approve before anything is recorded." },
+      { icon: Hash, label: "Official figures", text: "The day's numbers arrive on their own and close the session against them." },
+      { icon: MessageCircle, label: "Orders on Telegram", text: "Customers send entries and a payment slip; you approve before anything is recorded." },
     ],
   },
   {

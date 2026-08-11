@@ -9,6 +9,8 @@ import { useEffect, useState } from "react";
  *  useSearchParams keeps every page statically rendered — useSearchParams would force a
  *  Suspense boundary and dynamic rendering on a dozen pages that otherwise need neither.
  */
+export const NEW_EVENT = "wn-new";
+
 export function useNewModal(): [boolean, (open: boolean) => void] {
   const [open, setOpen] = useState(false);
 
@@ -17,7 +19,17 @@ export function useNewModal(): [boolean, (open: boolean) => void] {
     const timer = window.setTimeout(() => {
       if (new URLSearchParams(window.location.search).get("new") === "1") setOpen(true);
     }, 0);
-    return () => window.clearTimeout(timer);
+
+    // Reading the URL on mount alone missed the commonest case there is: tapping "+" while
+    // already on the page it creates for. That is a client-side navigation, the component
+    // never remounts, and the form simply did not open. The button says so directly.
+    const onNew = () => setOpen(true);
+    window.addEventListener(NEW_EVENT, onNew);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener(NEW_EVENT, onNew);
+    };
   }, []);
 
   return [open, setOpen];

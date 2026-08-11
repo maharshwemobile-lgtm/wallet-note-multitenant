@@ -16,6 +16,7 @@ import { SoundToggle } from "./SoundToggle";
 import { LanguageSwitch } from "./LanguageProvider";
 import type { FeatureKey, FeatureVisibility, ModuleMode } from "@/lib/modules";
 import { isThreeDPath } from "@/lib/edition";
+import { NEW_EVENT } from "@/lib/useNewModal";
 
 interface Me {
   user: {
@@ -318,8 +319,12 @@ export function AppShell({ children }: { children: ReactNode }) {
 
             {/* Floating create button (mobile) — acts on the section being viewed */}
             {createAction && (
+              /* Still a link, so tapping "+" from another section navigates there and the
+                 form opens on arrival. The event covers the other half: on the page it
+                 already creates for, nothing remounts and the URL alone opened nothing. */
               <Link
                 href={`${createAction.section}?new=1`}
+                onClick={() => window.dispatchEvent(new Event(NEW_EVENT))}
                 className="no-print fixed bottom-16 right-4 z-30 rounded-full bg-blue-600 p-3.5 text-white shadow-lg lg:hidden"
                 title={createAction.label}
                 aria-label={createAction.label}

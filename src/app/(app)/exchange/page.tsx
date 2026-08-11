@@ -74,10 +74,28 @@ export default function ExchangePage() {
     return type === "BUY_THB" ? active.buyRate : active.sellRate;
   }
 
+  /** The shop's own board figure for the direction currently selected. */
+  const boardRate = defaultRate(form.type);
+
   function openNewExchange() {
     setForm((current) => ({ ...current, rate: current.rate || defaultRate(current.type) }));
     setShowNew(true);
   }
+
+  // The form can also be opened by the floating "+", which does not go through
+  // openNewExchange — so the rate was blank there and nothing was worked out until the
+  // teller typed one in by hand. Filling it whenever the form opens covers both doors.
+  useEffect(() => {
+    if (!showNew) return;
+    // Deferred a tick, as elsewhere in the app, so this is an ordinary update rather than
+    // one made during the effect. `active` is a dependency because it arrives with the
+    // rates: a form opened before that fetch landed would otherwise sit there empty.
+    const timer = window.setTimeout(() => {
+      setForm((current) => (current.rate ? current : { ...current, rate: defaultRate(current.type) }));
+    }, 0);
+    return () => window.clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showNew, active]);
 
   function changeExchangeType(type: string) {
     setForm((current) => ({
@@ -217,12 +235,37 @@ export default function ExchangePage() {
             </p>
           )}
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input label={`Amount (${fromCurrency})`} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} inputMode="decimal" />
-            <Input label="Rate (MMK per 1 THB)" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} inputMode="decimal" />
+            <Input label={`Amount (${fromCurrency})`} value={form.amount} onChange={(e) => setForm({ ...form, amount: e.target.value })} inputMode="decimal" autoFocus />
+            <div>
+              <Input label="Rate (MMK per 1 THB)" value={form.rate} onChange={(e) => setForm({ ...form, rate: e.target.value })} inputMode="decimal" />
+              {/* The board rate is the starting point, not a rule: a teller settles a deal
+                  at whatever was agreed. Typing over it is expected, so the way back to the
+                  board figure is one tap rather than remembering what it was. */}
+              {boardRate && form.rate !== boardRate && (
+                <button
+                  type="button"
+                  onClick={() => setForm({ ...form, rate: boardRate })}
+                  className="mt-1 text-xs text-blue-600 underline dark:text-blue-400"
+                >
+                  Board rate is {boardRate} — use it
+                </button>
+              )}
+            </div>
           </div>
-          {computed && (
-            <p className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
-              Receives ≈ <b>{computed} {toCurrency}</b>
+          {computed ? (
+            <div className="rounded-lg bg-blue-50 px-3 py-2 text-sm dark:bg-blue-900/30">
+              <div className="flex justify-between text-blue-700 dark:text-blue-300">
+                <span>Customer gives</span>
+                <b className="tabular-nums">{form.amount} {fromCurrency}</b>
+              </div>
+              <div className="mt-0.5 flex justify-between text-blue-700 dark:text-blue-300">
+                <span>Customer receives</span>
+                <b className="tabular-nums">≈ {computed} {toCurrency}</b>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500">
+              Enter the amount and the rest is worked out at the rate above.
             </p>
           )}
           <Select label={`Source wallet (${fromCurrency} out)`} value={form.sourceWalletId} onChange={(e) => setForm({ ...form, sourceWalletId: e.target.value })}>
