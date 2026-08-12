@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { CheckCircle2, Minus, Plus, Printer, Search, Trash2 } from "lucide-react";
+import { Camera, CheckCircle2, Minus, Plus, Printer, Search, Trash2 } from "lucide-react";
 import { api } from "@/lib/client";
 import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Modal, Select, Spinner, cn, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
 import { playBeep, playSuccess } from "@/lib/sound";
 import { SaleReceipt, type ReceiptData } from "@/components/SaleReceipt";
+import { BarcodeScannerModal, scanningSupported } from "@/components/BarcodeScanner";
 import { printReceipt } from "@/lib/printReceipt";
 
 interface Item {
@@ -64,6 +65,8 @@ export default function PosPage() {
   const [receipt, setReceipt] = useState<ReceiptData | null>(null);
   const [draftReady, setDraftReady] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
+  const [scanning, setScanning] = useState(false);
+  const [canScan, setCanScan] = useState(false);
   const { push } = useToast();
   const { defaultBranchId, me } = useAuth();
   const draftKey = `wallet-note:pos-draft:${me?.user.id ?? "anonymous"}`;
@@ -82,6 +85,12 @@ export default function PosPage() {
   }, [push]);
 
   useEffect(load, [load]);
+
+  useEffect(() => {
+    // Asked after mount: there is no window on the server to ask whether it can decode.
+    const timer = window.setTimeout(() => setCanScan(scanningSupported()), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     if (!items || draftReady) return;
@@ -194,15 +203,24 @@ export default function PosPage() {
     ));
   }
 
-  function scan(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (event.key !== "Enter" || !items) return;
-    const needle = q.trim().toLowerCase();
-    const exact = items.find((item) =>
-      item.sku.toLowerCase() === needle || item.barcode?.toLowerCase() === needle
+  /** Put the item with this code in the cart. Shared by the three ways a code arrives:
+   *  typed, sent by a USB or Bluetooth scanner (they type and press Enter), or read by
+   *  the camera. */
+  function addByCode(code: string): boolean {
+    const needle = code.trim().toLowerCase();
+    if (!needle || !items) return false;
+    const exact = items.find(
+      (item) => item.sku.toLowerCase() === needle || item.barcode?.toLowerCase() === needle
     );
-    if (exact) {
+    if (!exact) return false;
+    addToCart(exact);
+    return true;
+  }
+
+  function scan(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (event.key !== "Enter") return;
+    if (addByCode(q)) {
       event.preventDefault();
-      addToCart(exact);
       setQ("");
     }
   }
@@ -306,6 +324,17 @@ export default function PosPage() {
                 className="min-h-10 w-full rounded-lg border border-gray-300 bg-white py-2 pl-9 pr-3 text-sm dark:border-gray-700 dark:bg-gray-800"
                 autoFocus
               />
+              {canScan && (
+                <button
+                  type="button"
+                  onClick={() => setScanning(true)}
+                  aria-label="Scan with the camera"
+                  title="Scan with the camera"
+                  className="absolute right-1.5 top-1.5 rounded-md p-1.5 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  <Camera size={17} />
+                </button>
+              )}
             </div>
             <Select value={category} onChange={(event) => setCategory(event.target.value)}>
               <option value="ALL">All categories</option>
@@ -473,6 +502,19 @@ export default function PosPage() {
           </div>
         )}
       </Modal>
+      {/* The camera stays open across scans: a basket is many items, and closing it after
+          each one would mean re-opening it for every single line. */}
+      <BarcodeScannerModal
+        open={scanning}
+        onClose={() => setScanning(false)}
+        title="Scan items into the sale"
+        onScan={(code) => {
+          if (!addByCode(code)) {
+            push(`No item with code ${code}`, "error");
+          }
+          return true;
+        }}
+      />
       {receipt && <SaleReceipt data={receipt} />}
     </div>
   );

@@ -30,27 +30,16 @@ body {
   .no-print { display: none !important; }
   body { background: white; }
 
-  /* Printing a sale slip prints the slip and nothing else. Everything is hidden, then the
-     receipt and the ancestors it hangs from are put back — hiding the app screen by screen
-     would miss whichever one was added next. */
-  body.printing-receipt * { visibility: hidden !important; }
-  body.printing-receipt #sale-receipt,
-  body.printing-receipt #sale-receipt * { visibility: visible !important; }
-  body.printing-receipt #sale-receipt {
-    display: block !important;
-    /* Fixed rather than absolute: absolute anchors to the nearest positioned ancestor, so
-       a slip printed from inside the "Sale complete" dialog came out offset down the roll
-       instead of at the top of it. */
-    position: fixed;
-    left: 0;
-    top: 0;
-    width: 100%;
-  }
-  /* An invisible dialog still takes up a full screen of layout, which the printer honours
-     as a blank sheet before the slip. Taking it out of the flow is what stops that. */
-  body.printing-receipt [role="dialog"],
-  body.printing-receipt .fixed { display: none !important; }
+  /* Printing a sale slip prints the slip and nothing else.
+     The slip is portalled to be a direct child of <body>, so hiding its siblings leaves it
+     alone in the document. Nothing is positioned: earlier attempts moved it out of flow
+     with position:absolute and then fixed, and a fixed box is laid out against a single
+     page box — with an auto-height page that clipped the slip after the header, so a
+     basket of items printed a shop name and nothing else. In normal flow the content
+     sizes the page itself and a long basket simply runs on. */
+  body.printing-receipt > *:not(#sale-receipt) { display: none !important; }
   body.printing-receipt #sale-receipt { display: block !important; }
+
   /* A till roll is a continuous strip; margins push the slip onto a second one. */
   @page { margin: 0; }
 

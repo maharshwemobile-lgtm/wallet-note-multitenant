@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { fmtDateTime } from "@/lib/format";
 
 /** What a slip needs, captured at the moment of sale.
@@ -32,7 +34,19 @@ function money(value: number): string {
  *  browser: no driver to install, and it works from a phone over Bluetooth just as well as
  *  from a desktop. */
 export function SaleReceipt({ data }: { data: ReceiptData }) {
-  return (
+  // Portalled to <body> so the print stylesheet can hide the slip's siblings and leave it
+  // alone in the document. Rendered in place it sat several layers deep inside the page,
+  // and the only ways to isolate it took it out of normal flow — which is what clipped it.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    // Deferred a tick, as elsewhere in the app, so this is an ordinary update rather than
+    // one made during the effect. There is no document.body to portal into on the server.
+    const timer = window.setTimeout(() => setMounted(true), 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+  if (!mounted) return null;
+
+  return createPortal(
     <div id="sale-receipt" className="hidden print:block">
       {/* The sheet itself is 58mm (see @page receipt), so the slip fills it rather than
           sitting as a narrow column in the middle of a larger page. */}
@@ -81,6 +95,7 @@ export function SaleReceipt({ data }: { data: ReceiptData }) {
         <div className="my-1 border-t border-dashed border-black" />
         <div className="text-center">Thank you</div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

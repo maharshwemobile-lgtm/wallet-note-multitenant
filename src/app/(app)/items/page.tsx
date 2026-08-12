@@ -7,6 +7,8 @@ import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Select, Modal, Spinner, Table, Empty, cn, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
 import { useNewModal } from "@/lib/useNewModal";
+import { BarcodeInput } from "@/components/BarcodeScanner";
+import { ProductImport } from "@/components/ProductImport";
 
 interface Item {
   id: string; name: string; sku: string; barcode?: string; active: boolean;
@@ -99,6 +101,7 @@ export default function ItemsPage() {
           {hasPerm("item.manage") && (
             <>
               <Button variant="secondary" onClick={() => setShowMeta(true)}>Categories & Units</Button>
+              <ProductImport onDone={load} />
               <Button onClick={() => { setForm(empty); setEditItem(null); setShowNew(true); }}>
                 <Plus size={16} className="mr-1 inline" />New item
               </Button>
@@ -151,8 +154,18 @@ export default function ItemsPage() {
         <div className="space-y-3">
           <Input label="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
           <div className="grid gap-3 sm:grid-cols-2">
-            <Input label="SKU" value={form.sku} disabled={!!editItem} onChange={(e) => setForm({ ...form, sku: e.target.value })} />
-            <Input label="Barcode" value={form.barcode} onChange={(e) => setForm({ ...form, barcode: e.target.value })} />
+            <Input
+              label="SKU"
+              value={form.sku}
+              disabled={!!editItem}
+              onChange={(e) => setForm({ ...form, sku: e.target.value })}
+              placeholder={editItem ? "" : "Left empty, one is made from the name"}
+            />
+            <BarcodeInput
+              label="Barcode"
+              value={form.barcode}
+              onChange={(barcode) => setForm({ ...form, barcode })}
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <Select label="Category" value={form.categoryId} onChange={(e) => setForm({ ...form, categoryId: e.target.value })}>
@@ -171,7 +184,7 @@ export default function ItemsPage() {
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => { setShowNew(false); setEditItem(null); }}>Cancel</Button>
-            <Button onClick={save} disabled={busy || !form.name || !form.sku}>{editItem ? "Save changes" : "Create item"}</Button>
+            <Button onClick={save} disabled={busy || !form.name}>{editItem ? "Save changes" : "Create item"}</Button>
           </div>
         </div>
       </Modal>
