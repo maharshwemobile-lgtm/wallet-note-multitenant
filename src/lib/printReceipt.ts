@@ -1,27 +1,18 @@
 "use client";
 
-/** Print the sale slip and nothing else.
+/** Print the sale slip.
  *
- *  A class on the body drives the print stylesheet, which hides the app and shows the
- *  slip. It is taken off again afterwards so the screen returns to normal — including
- *  when the print dialog is cancelled, which fires the same event.
+ *  There is nothing to set up and nothing to undo. The print stylesheet keys off the slip
+ *  being in the document at all — see globals.css — so this only has to ask for the print.
+ *
+ *  It used to add a class to <body> first and take it off a second later. That is what
+ *  printed the Sale Complete screen on a phone: on Android, window.print() hands over to a
+ *  system sheet and returns straight away, and the page is not rendered for the printer
+ *  until a printer has been chosen, which is well over a second. The class was gone by
+ *  then, so the printer was handed the ordinary app screen. Every variant of that fix is a
+ *  race against how long someone takes to tap; not having any state to unwind is not.
  */
 export function printReceipt() {
   if (typeof window === "undefined") return;
-  const body = document.body;
-  body.classList.add("printing-receipt");
-
-  const done = () => {
-    body.classList.remove("printing-receipt");
-    window.removeEventListener("afterprint", done);
-  };
-  window.addEventListener("afterprint", done);
-
-  try {
-    window.print();
-  } finally {
-    // Safari never fires afterprint from a dialog dismissed with the keyboard, which would
-    // otherwise leave the app invisible.
-    window.setTimeout(done, 1000);
-  }
+  window.print();
 }

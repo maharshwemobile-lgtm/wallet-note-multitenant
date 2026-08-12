@@ -31,14 +31,18 @@ body {
   body { background: white; }
 
   /* Printing a sale slip prints the slip and nothing else.
+     Keyed off the slip simply being in the document, not off a class switched on for the
+     duration of the print. A phone renders the page for the printer only after a printer
+     has been chosen, so anything switched on for "the print" was a race against how long
+     someone takes to tap — and it lost, printing the app screen instead.
      The slip is portalled to be a direct child of <body>, so hiding its siblings leaves it
-     alone in the document. Nothing is positioned: earlier attempts moved it out of flow
-     with position:absolute and then fixed, and a fixed box is laid out against a single
-     page box — with an auto-height page that clipped the slip after the header, so a
-     basket of items printed a shop name and nothing else. In normal flow the content
-     sizes the page itself and a long basket simply runs on. */
-  body.printing-receipt > *:not(#sale-receipt) { display: none !important; }
-  body.printing-receipt #sale-receipt { display: block !important; }
+     alone. Nothing is positioned: earlier attempts moved it out of flow with absolute and
+     then fixed, and a fixed box is laid out against a single page box — with an
+     auto-height sheet that clipped the slip after the header, so a basket of items printed
+     a shop name and nothing else. In normal flow the content sizes the page itself and a
+     long basket runs on. */
+  body:has(#sale-receipt) > *:not(#sale-receipt) { display: none !important; }
+  #sale-receipt { display: block !important; }
 
   /* A till roll is a continuous strip; margins push the slip onto a second one. */
   @page { margin: 0; }
@@ -47,5 +51,5 @@ body {
      58mm was only the width of a box on a full-size sheet. A named page sets the sheet
      itself, and "auto" height keeps the roll continuous however long the basket is. */
   @page receipt { size: 58mm auto; margin: 0; }
-  body.printing-receipt #sale-receipt { page: receipt; }
+  #sale-receipt { page: receipt; }
 }

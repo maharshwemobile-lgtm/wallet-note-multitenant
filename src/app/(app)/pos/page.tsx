@@ -217,6 +217,11 @@ export default function PosPage() {
     return true;
   }
 
+  function closeSaleComplete() {
+    setLastSale(null);
+    setReceipt(null);
+  }
+
   function scan(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key !== "Enter") return;
     if (addByCode(q)) {
@@ -485,7 +490,10 @@ export default function PosPage() {
         </div>
       </Modal>
 
-      <Modal open={Boolean(lastSale)} onClose={() => setLastSale(null)} title="Sale complete">
+      {/* Closing this clears the slip too. It is kept in the document for the print
+          stylesheet to find, so leaving it behind would mean a later print of any other
+          page quietly produced the last customer's receipt. */}
+      <Modal open={Boolean(lastSale)} onClose={closeSaleComplete} title="Sale complete">
         {lastSale && (
           <div className="space-y-4 text-center">
             <CheckCircle2 className="mx-auto text-green-600" size={48} />
@@ -497,7 +505,7 @@ export default function PosPage() {
               <Button variant="secondary" onClick={() => receipt && printReceipt()} disabled={!receipt}>
                 <Printer size={16} className="mr-1 inline" />Print slip
               </Button>
-              <Button onClick={() => { setLastSale(null); searchRef.current?.focus(); }}>New sale</Button>
+              <Button onClick={() => { closeSaleComplete(); searchRef.current?.focus(); }}>New sale</Button>
             </div>
           </div>
         )}
