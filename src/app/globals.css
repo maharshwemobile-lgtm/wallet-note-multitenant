@@ -47,9 +47,15 @@ body {
   /* A till roll is a continuous strip; margins push the slip onto a second one. */
   @page { margin: 0; }
 
-  /* The slip was coming out at A4 width because nothing told the printer otherwise — the
-     58mm was only the width of a box on a full-size sheet. A named page sets the sheet
-     itself, and "auto" height keeps the roll continuous however long the basket is. */
-  @page receipt { size: 58mm auto; margin: 0; }
-  #sale-receipt { page: receipt; }
+  /* No named page, and no size.
+     There was a `@page receipt { size: 58mm auto }` here with `page: receipt` on the slip,
+     meant to make the sheet the width of the roll. Chrome drops `size` when the second
+     value is `auto` — checked by parsing it and reading the rule back, which returns
+     `@page receipt { margin: 0px }` with the size gone, while `58mm 200mm` survives. So
+     the slip was being assigned to a named page carrying nothing, and what came out was
+     two blank sheets: no fonts, no text operators, nothing.
+     Fixing the size is not worth it either. A fixed height would feed that much paper on
+     every print, and the printers this was for are Bluetooth roll printers that a browser
+     cannot drive at all — those go through RawBT. What is left is what actually works:
+     hide everything else, print the slip, let the dialog pick the paper. */
 }
