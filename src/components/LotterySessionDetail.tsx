@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState, use } from "react";
 import { api } from "@/lib/client";
+import { ExposureChart } from "@/components/ExposureChart";
 import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Select, Modal, Spinner, Badge, Table, Empty, StatCard, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
@@ -9,7 +10,7 @@ import { autoInsertThreeDEquals } from "@/lib/threeDEntry";
 import { gameRules, numberRangeLabel } from "@/lib/lotteryGame";
 
 interface Detail {
-  session: { id: string; name: string; drawDate: string; status: string; gameType: string; resultNumber?: string; defaultOdds: string; settlement?: { id: string; netProfit: string; totalPayout: string; grossCollected: string; totalCommission: string } };
+  session: { id: string; name: string; drawDate: string; status: string; gameType: string; resultNumber?: string; defaultOdds: string; numberLimit?: string | null; settlement?: { id: string; netProfit: string; totalPayout: string; grossCollected: string; totalCommission: string } };
   exposure: { number: string; totalStake: string; potentialPayout: string; count: number }[];
   totals: { count: number; totalBet: string; totalCommission: string };
 }
@@ -31,6 +32,8 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
   const [showEntry, setShowEntry] = useState(false);
   const [showSettle, setShowSettle] = useState(false);
   const [showReopen, setShowReopen] = useState(false);
+  const [showLimit, setShowLimit] = useState(false);
+  const [limitInput, setLimitInput] = useState("");
   const [entry, setEntry] = useState({ bulkText: "", customerName: "", customerPhone: "", odds: "", commissionRate: "" });
   const [settle, setSettle] = useState({ resultNumber: "", walletId: "" });
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -39,6 +42,21 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
   const { push } = useToast();
   const { hasPerm, defaultBranchId, branches } = useAuth();
   const [branchId, setBranchId] = useState("");
+
+  /** The cap is a decision the shop revisits, so it is edited here rather than buried in
+   *  settings. Clearing the box removes it and the chart goes back to plain ranking. */
+  async function saveLimit() {
+    try {
+      await api(`/api/v1/three-d/sessions/${id}`, {
+        method: "PATCH",
+        body: { numberLimit: limitInput.trim() === "" ? null : limitInput.trim() },
+      });
+      setShowLimit(false);
+      load();
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Failed", "error");
+    }
+  }
 
   const load = useCallback(() => {
     api<Detail>(`/api/v1/three-d/sessions/${id}`).then(setDetail).catch((e) => push(e.message, "error"));
@@ -186,6 +204,24 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
         </Card>
       )}
 
+      <Card>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-sm font-semibold">Money on each number</h3>
+          {hasPerm("three_d.edit") && (
+            <button
+              onClick={() => { setLimitInput(s.numberLimit ? String(Number(s.numberLimit) / 100) : ""); setShowLimit(true); }}
+              className="text-xs font-medium text-blue-600 underline dark:text-blue-400"
+            >
+              {s.numberLimit ? `Limit ${fmtMoney(s.numberLimit)} — change` : "Set a limit per number"}
+            </button>
+          )}
+        </div>
+        <ExposureChart
+          rows={detail.exposure.map((e) => ({ number: e.number, totalStake: BigInt(e.totalStake) }))}
+          limit={s.numberLimit ? BigInt(s.numberLimit) : null}
+        />
+      </Card>
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
           <h3 className="mb-3 text-sm font-semibold">
@@ -315,6 +351,27 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
           <div className="flex justify-end gap-2">
             <Button variant="secondary" onClick={() => setShowReopen(false)}>Cancel</Button>
             <Button variant="danger" onClick={reopen} disabled={busy || reopenReason.trim().length < 3}>Reopen</Button>
+          </div>
+        </div>
+      </Modal>
+
+      <Modal open={showLimit} onClose={() => setShowLimit(false)} title="Limit per number">
+        <div className="space-y-3">
+          <p className="text-sm text-gray-600 dark:text-gray-300">
+            The most you are willing to carry on any one number in this draw. Anything taken
+            past it is shown separately, so you can see what to lay off elsewhere.
+          </p>
+          <Input
+            label="Limit (MMK)"
+            value={limitInput}
+            onChange={(e) => setLimitInput(e.target.value)}
+            inputMode="decimal"
+            placeholder="60000"
+          />
+          <p className="text-xs text-gray-500">Leave it empty for no limit.</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" onClick={() => setShowLimit(false)}>Cancel</Button>
+            <Button onClick={saveLimit}>Save</Button>
           </div>
         </div>
       </Modal>

@@ -437,6 +437,13 @@ model ThreeDSession {
   status       String   @default("OPEN") // DRAFT OPEN CLOSED RESULT_ENTERED SETTLED CANCELLED
   resultNumber String? // "000".."999"
   defaultOdds  String   @default("500") // payout multiplier as decimal string
+  /**
+   * How much this shop is willing to carry on any one number, in minor units.
+   * Per session rather than per shop: a draw before a holiday is not the same risk as an
+   * ordinary Tuesday, and the cap is the thing a shop actually moves. Null means it has
+   * not decided, and the exposure chart simply ranks the numbers without judging them.
+   */
+  numberLimit  BigInt?
   notes        String?
   createdById  String?
   createdAt    DateTime @default(now())

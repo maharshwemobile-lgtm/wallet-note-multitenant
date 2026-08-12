@@ -1,5 +1,6 @@
 "use client";
 
+import { ExposureChart } from "@/components/ExposureChart";
 import { SaleReceipt, type ReceiptData } from "@/components/SaleReceipt";
 import { printReceipt } from "@/lib/printReceipt";
 import { buildTextReceipt, rawbtUrl } from "@/lib/thermalReceipt";
@@ -89,6 +90,26 @@ export default function PrintTestPage() {
           {buildTextReceipt(SAMPLE)}
         </pre>
       </details>
+
+      {/* Shown here so the exposure chart can be checked without a real draw. */}
+      <div className="pt-6">
+        <h2 className="mb-2 text-sm font-semibold">Exposure chart preview</h2>
+        <ExposureChart
+          rows={[
+            { number: "684", totalStake: 73_000_00n },
+            { number: "081", totalStake: 69_500_00n },
+            { number: "391", totalStake: 69_000_00n },
+            { number: "415", totalStake: 55_000_00n },
+            { number: "942", totalStake: 50_500_00n },
+            { number: "920", totalStake: 38_500_00n },
+            { number: "500", totalStake: 38_000_00n },
+            { number: "202", totalStake: 33_000_00n },
+            { number: "141", totalStake: 32_000_00n },
+            { number: "538", totalStake: 30_000_00n },
+          ]}
+          limit={60_000_00n}
+        />
+      </div>
 
       {/* The real thing: hidden on screen, printed by the stylesheet. */}
       <SaleReceipt data={SAMPLE} />
