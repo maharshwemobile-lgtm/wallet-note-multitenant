@@ -450,6 +450,7 @@ model ThreeDSession {
   updatedAt    DateTime @updatedAt
 
   transactions ThreeDTransaction[]
+  layoffs      LotteryLayoff[]
   settlement   ThreeDSettlement?
   // A unique index guards one session per 2D draw. It is partial (2D only), which Prisma
   // cannot express, so it lives in the migration rather than here — see
@@ -1029,4 +1030,44 @@ model SaleLine {
   unitPrice BigInt
   unitCost  BigInt
   lineTotal BigInt
+}
+
+/**
+ * Part of a number passed on to another bookmaker.
+ * When too much money lands on one number, a shop hands some of it to a bigger house so it
+ * is not carrying the whole risk itself. The bet with the customer is untouched — the shop
+ * still owes them if it comes out — so this is recorded alongside rather than deducted
+ * from the takings: it lowers what the shop stands to lose, not what it took.
+ * Odds are stored per record because the receiving house sets its own, and it is usually
+ * a little worse than what the shop pays its own customers. That difference is the price
+ * of laying the risk off, and it only shows up if both numbers are kept.
+ */
+model LotteryLayoff {
+  id         String        @id @default(uuid())
+  businessId String
+  branchId   String?
+  sessionId  String
+  session    ThreeDSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  number    String
+  /**
+   * Face amount handed over, in minor units.
+   */
+  amount    BigInt
+  /**
+   * What the receiving house pays back per unit if the number comes out.
+   */
+  odds      String
+  /**
+   * Who took it. A plain name: the other house is rarely a contact in this system.
+   */
+  bookmaker String
+  note      String?
+
+  createdById String?
+  createdAt   DateTime  @default(now())
+  deletedAt   DateTime?
+
+  @@index([sessionId, number])
+  @@index([businessId, createdAt])
 }

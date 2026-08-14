@@ -22,9 +22,21 @@ export const GET = withAuth("three_d.view", async ({ user, params }) => {
     _sum: { betAmount: true, commissionAmount: true },
     _count: true,
   });
+  // Netted into the exposure by the chart, and listed on their own below it, so the shop
+  // can see both what it took and what it is still carrying.
+  const layoffs = await prisma.lotteryLayoff.findMany({
+    where: { sessionId: session.id, deletedAt: null },
+    orderBy: { createdAt: "desc" },
+  });
+  const laidOffByNumber = new Map<string, bigint>();
+  for (const layoff of layoffs) {
+    laidOffByNumber.set(layoff.number, (laidOffByNumber.get(layoff.number) ?? 0n) + layoff.amount);
+  }
+
   return json({
     session,
-    exposure,
+    layoffs,
+    exposure: exposure.map((e) => ({ ...e, laidOff: laidOffByNumber.get(e.number) ?? 0n })),
     totals: {
       count: agg._count,
       totalBet: agg._sum.betAmount ?? 0n,

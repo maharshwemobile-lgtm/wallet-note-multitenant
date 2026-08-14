@@ -84,3 +84,48 @@ describe("totalOverLimit", () => {
     expect(totalOverLimit(buildExposureBars(rows, K(100_000)))).toBe(0n);
   });
 });
+
+describe("laying part of a number off", () => {
+  const limit = K(60_000);
+
+  it("stops flagging a number once the excess has been passed on", () => {
+    // 73,000 taken, 13,000 handed to another house: the shop carries 60,000, which is the
+    // most it said it wanted. It should stop being drawn as a problem.
+    const [bar] = buildExposureBars([{ number: "684", totalStake: K(73_000), laidOff: K(13_000) }], limit);
+    expect(bar.net).toBe(K(60_000));
+    expect(bar.overLimit).toBe(0n);
+    expect(bar.tone).toBe("near");
+  });
+
+  it("still shows the whole amount taken, with the passed-on part beside it", () => {
+    const [bar] = buildExposureBars([{ number: "684", totalStake: K(73_000), laidOff: K(13_000) }], limit);
+    expect(bar.total).toBe(K(73_000));
+    expect(bar.laidOff).toBe(K(13_000));
+    // The three segments tile the full bar.
+    expect(bar.withinPercent + bar.overPercent + bar.laidOffPercent).toBeCloseTo(100, 5);
+  });
+
+  it("keeps flagging what is still over after a partial lay-off", () => {
+    const [bar] = buildExposureBars([{ number: "684", totalStake: K(90_000), laidOff: K(10_000) }], limit);
+    expect(bar.net).toBe(K(80_000));
+    expect(bar.overLimit).toBe(K(20_000));
+    expect(bar.tone).toBe("over");
+  });
+
+  it("does not go negative if more was laid off than taken", () => {
+    const [bar] = buildExposureBars([{ number: "684", totalStake: K(10_000), laidOff: K(15_000) }], limit);
+    expect(bar.net).toBe(0n);
+    expect(bar.overLimit).toBe(0n);
+  });
+
+  it("leaves the total to collect at nothing once everything is laid off", () => {
+    const bars = buildExposureBars(
+      [
+        { number: "684", totalStake: K(73_000), laidOff: K(13_000) },
+        { number: "081", totalStake: K(69_500), laidOff: K(9_500) },
+      ],
+      limit
+    );
+    expect(totalOverLimit(bars)).toBe(0n);
+  });
+});

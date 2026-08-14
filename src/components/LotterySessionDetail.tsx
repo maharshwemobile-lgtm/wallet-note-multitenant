@@ -11,7 +11,8 @@ import { gameRules, numberRangeLabel } from "@/lib/lotteryGame";
 
 interface Detail {
   session: { id: string; name: string; drawDate: string; status: string; gameType: string; resultNumber?: string; defaultOdds: string; numberLimit?: string | null; settlement?: { id: string; netProfit: string; totalPayout: string; grossCollected: string; totalCommission: string } };
-  exposure: { number: string; totalStake: string; potentialPayout: string; count: number }[];
+  exposure: { number: string; totalStake: string; potentialPayout: string; count: number; laidOff: string }[];
+  layoffs: { id: string; number: string; amount: string; odds: string; bookmaker: string; note?: string; createdAt: string }[];
   totals: { count: number; totalBet: string; totalCommission: string };
 }
 interface Txn {
@@ -34,6 +35,7 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
   const [showReopen, setShowReopen] = useState(false);
   const [showLimit, setShowLimit] = useState(false);
   const [limitInput, setLimitInput] = useState("");
+  const [layoff, setLayoff] = useState<{ number: string; amount: string; odds: string; bookmaker: string; note: string } | null>(null);
   const [entry, setEntry] = useState({ bulkText: "", customerName: "", customerPhone: "", odds: "", commissionRate: "" });
   const [settle, setSettle] = useState({ resultNumber: "", walletId: "" });
   const [preview, setPreview] = useState<Preview | null>(null);
@@ -52,6 +54,36 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
         body: { numberLimit: limitInput.trim() === "" ? null : limitInput.trim() },
       });
       setShowLimit(false);
+      load();
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Failed", "error");
+    }
+  }
+
+  async function saveLayoff() {
+    if (!layoff) return;
+    try {
+      await api("/api/v1/three-d/layoffs", {
+        method: "POST",
+        body: {
+          sessionId: id,
+          number: layoff.number,
+          amount: layoff.amount,
+          odds: layoff.odds,
+          bookmaker: layoff.bookmaker,
+          note: layoff.note || undefined,
+        },
+      });
+      setLayoff(null);
+      load();
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Failed", "error");
+    }
+  }
+
+  async function removeLayoff(layoffId: string) {
+    try {
+      await api(`/api/v1/three-d/layoffs?id=${layoffId}`, { method: "DELETE" });
       load();
     } catch (e) {
       push(e instanceof Error ? e.message : "Failed", "error");
@@ -217,9 +249,53 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
           )}
         </div>
         <ExposureChart
-          rows={detail.exposure.map((e) => ({ number: e.number, totalStake: BigInt(e.totalStake) }))}
+          rows={detail.exposure.map((e) => ({
+            number: e.number,
+            totalStake: BigInt(e.totalStake),
+            laidOff: BigInt(e.laidOff ?? "0"),
+          }))}
           limit={s.numberLimit ? BigInt(s.numberLimit) : null}
+          onLayOff={
+            s.status === "SETTLED" || !hasPerm("three_d.create")
+              ? undefined
+              : (number, suggested) =>
+                  setLayoff({
+                    number,
+                    // Prefilled with exactly what is over the line, which is the amount a
+                    // shop passing a number on almost always wants to hand over.
+                    amount: suggested > 0n ? String(Number(suggested) / 100) : "",
+                    odds: s.defaultOdds,
+                    bookmaker: detail.layoffs[0]?.bookmaker ?? "",
+                    note: "",
+                  })
+          }
         />
+
+        {detail.layoffs.length > 0 && (
+          <div className="mt-4">
+            <h4 className="mb-1 text-xs font-semibold text-gray-500">Passed to other bookmakers</h4>
+            <Table headers={["Number", "Amount", "Odds", "Bookmaker", "Back if it wins", ""]} rightAlign={[1, 2, 4]}>
+              {detail.layoffs.map((l) => (
+                <tr key={l.id}>
+                  <td className="px-3 py-1.5 font-mono font-bold">{l.number}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums">{fmtMoney(l.amount)}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-gray-500">{l.odds}</td>
+                  <td className="px-3 py-1.5">{l.bookmaker}</td>
+                  <td className="px-3 py-1.5 text-right tabular-nums text-green-600">
+                    {fmtMoney(String(BigInt(l.amount) * BigInt(Math.round(Number(l.odds)))))}
+                  </td>
+                  <td className="px-3 py-1.5 text-right">
+                    {s.status !== "SETTLED" && hasPerm("three_d.edit") && (
+                      <button onClick={() => removeLayoff(l.id)} className="text-xs text-red-600 underline">
+                        Remove
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </Table>
+          </div>
+        )}
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -353,6 +429,58 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
             <Button variant="danger" onClick={reopen} disabled={busy || reopenReason.trim().length < 3}>Reopen</Button>
           </div>
         </div>
+      </Modal>
+
+      <Modal open={layoff !== null} onClose={() => setLayoff(null)} title={layoff ? `Pass on ${layoff.number}` : ""}>
+        {layoff && (
+          <div className="space-y-3">
+            <p className="text-sm text-gray-600 dark:text-gray-300">
+              Hand part of this number to another bookmaker. The bet with your customer does
+              not change — you still owe them if it comes out — but you carry less of it.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Input
+                label="Amount to pass on"
+                value={layoff.amount}
+                onChange={(e) => setLayoff({ ...layoff, amount: e.target.value })}
+                inputMode="decimal"
+                autoFocus
+              />
+              <Input
+                label="Their odds"
+                value={layoff.odds}
+                onChange={(e) => setLayoff({ ...layoff, odds: e.target.value })}
+                inputMode="decimal"
+              />
+            </div>
+            <Input
+              label="Bookmaker"
+              value={layoff.bookmaker}
+              onChange={(e) => setLayoff({ ...layoff, bookmaker: e.target.value })}
+              placeholder="Who is taking it"
+            />
+            {Number(layoff.amount) > 0 && Number(layoff.odds) > 0 && (
+              <p className="rounded-lg bg-green-50 px-3 py-2 text-sm text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                If {layoff.number} comes out you collect{" "}
+                <b>{(Number(layoff.amount) * Number(layoff.odds)).toLocaleString()}</b> from them.
+              </p>
+            )}
+            <Input
+              label="Note"
+              value={layoff.note}
+              onChange={(e) => setLayoff({ ...layoff, note: e.target.value })}
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" onClick={() => setLayoff(null)}>Cancel</Button>
+              <Button
+                onClick={saveLayoff}
+                disabled={!layoff.amount || !layoff.odds || !layoff.bookmaker.trim()}
+              >
+                Save
+              </Button>
+            </div>
+          </div>
+        )}
       </Modal>
 
       <Modal open={showLimit} onClose={() => setShowLimit(false)} title="Limit per number">

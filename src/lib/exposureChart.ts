@@ -13,13 +13,20 @@
 export interface ExposureRow {
   number: string;
   totalStake: bigint;
+  /** Already passed to another house, so no longer the shop's risk. */
+  laidOff?: bigint;
 }
 
 export type BarTone = "over" | "near" | "normal";
 
 export interface ExposureBar {
   number: string;
+  /** Everything taken on this number, laid off or not. */
   total: bigint;
+  /** What the shop is still carrying: total less anything passed on. */
+  net: bigint;
+  laidOff: bigint;
+  laidOffPercent: number;
   /** The part within the limit, and the part past it. Both in minor units. */
   withinLimit: bigint;
   overLimit: bigint;
@@ -56,8 +63,13 @@ export function buildExposureBars(
 
   return sorted.map((row) => {
     const total = row.totalStake;
-    const within = limit !== null && total > limit ? limit : total;
-    const over = limit !== null && total > limit ? total - limit : 0n;
+    // The limit is about what the shop stands to lose, so it is judged on what is left
+    // after laying off — a number that was over the line and has been passed on is no
+    // longer a problem, and should stop being drawn as one.
+    const laidOff = row.laidOff ?? 0n;
+    const net = total > laidOff ? total - laidOff : 0n;
+    const within = limit !== null && net > limit ? limit : net;
+    const over = limit !== null && net > limit ? net - limit : 0n;
 
     const percent = (value: bigint) =>
       widest === 0n ? 0 : Number((value * 10000n) / widest) / 100;
@@ -65,20 +77,25 @@ export function buildExposureBars(
     // The two segments are drawn end to end, so the second is measured as the remainder of
     // the whole rather than on its own. Rounding each independently left a hairline gap
     // between them — 82.19 + 17.80 is 99.99, and at a glance that reads as a broken bar.
-    const totalPercent = percent(total);
+    const netPercent = percent(net);
     const withinPercent = percent(within);
-    const overPercent = over > 0n ? totalPercent - withinPercent : 0;
+    const overPercent = over > 0n ? netPercent - withinPercent : 0;
+    // Drawn after the shop's own share, so the whole bar still shows everything taken.
+    const laidOffPercent = laidOff > 0n ? percent(total) - netPercent : 0;
 
     let tone: BarTone = "normal";
     if (limit !== null) {
       if (over > 0n) tone = "over";
       // BigInt has no fractions, so the comparison is scaled up rather than divided down.
-      else if (total * 100n >= limit * BigInt(Math.round(NEAR_LIMIT * 100))) tone = "near";
+      else if (net * 100n >= limit * BigInt(Math.round(NEAR_LIMIT * 100))) tone = "near";
     }
 
     return {
       number: row.number,
       total,
+      net,
+      laidOff,
+      laidOffPercent,
       withinLimit: within,
       overLimit: over,
       withinPercent,
