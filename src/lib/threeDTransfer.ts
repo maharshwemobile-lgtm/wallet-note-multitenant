@@ -71,12 +71,18 @@ export function parseCsv(text: string): string[][] {
   return rows;
 }
 
-function normalizeNumber(value: string): string {
-  const cleaned = value.trim().replace(/^'/, "").replace(/^="(\d{1,3})"$/, "$1");
-  return /^\d{1,3}$/.test(cleaned) ? cleaned.padStart(3, "0") : cleaned;
+/** Spreadsheets strip leading zeros and dress numbers up to stop themselves doing it, so
+ *  "7", "'007" and ="007" all have to come back as the same number. Padded to the game's
+ *  own width: 2D's "07" is not a short 3D number. */
+function normalizeNumber(value: string, digits: number): string {
+  const cleaned = value
+    .trim()
+    .replace(/^'/, "")
+    .replace(new RegExp(`^="(\\d{1,${digits}})"$`), "$1");
+  return new RegExp(`^\\d{1,${digits}}$`).test(cleaned) ? cleaned.padStart(digits, "0") : cleaned;
 }
 
-export function parseThreeDImportCsv(text: string): {
+export function parseThreeDImportCsv(text: string, digits: number = 3): {
   rows: ThreeDImportRow[];
   errors: string[];
 } {
@@ -100,12 +106,15 @@ export function parseThreeDImportCsv(text: string): {
   parsed.slice(1).forEach((cells, index) => {
     if (cells.every((cell) => !cell.trim())) return;
     const line = index + 2;
-    const number = normalizeNumber(value(cells, "number"));
+    const number = normalizeNumber(value(cells, "number"), digits);
     const amount = value(cells, "amount").replace(/,/g, "");
     const odds = value(cells, "odds");
     const commissionRate = value(cells, "commission_rate");
 
-    if (!/^\d{3}$/.test(number)) errors.push(`Line ${line}: number must be between 000 and 999.`);
+    if (!new RegExp(`^\\d{${digits}}$`).test(number)) {
+      const highest = "9".repeat(digits);
+      errors.push(`Line ${line}: number must be between ${"0".repeat(digits)} and ${highest}.`);
+    }
     if (!/^\d+(\.\d{1,2})?$/.test(amount) || Number(amount) <= 0) {
       errors.push(`Line ${line}: amount must be greater than zero.`);
     }

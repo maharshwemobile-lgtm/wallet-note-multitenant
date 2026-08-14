@@ -9,6 +9,7 @@ import { fmtMoney } from "@/lib/format";
 import { Button, Card, Input, Modal, Select, Spinner, Badge, Table, Empty, useToast } from "@/components/ui";
 import { useAuth } from "@/components/AppShell";
 import { useNewModal } from "@/lib/useNewModal";
+import { LotteryTransfer } from "@/components/LotteryTransfer";
 
 interface Session {
   id: string; name: string; drawDate: string; drawTime?: string; cutoffTime?: string; status: string;
@@ -83,11 +84,16 @@ export default function TwoDPage() {
     <div className="mx-auto max-w-6xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-xl font-bold">2D Sessions</h1>
-        {hasPerm("three_d.create") && (
-          <Button variant="secondary" onClick={() => setShowNew(true)}>
-            <Plus size={16} className="mr-1 inline" />Add a missed session
-          </Button>
-        )}
+        <div className="flex flex-wrap gap-2">
+          {/* 2D had no way to take records in at all, so a shop being handed what another
+              laid off had nowhere to put it. */}
+          <LotteryTransfer gameType="TWO_D" sessions={sessions} onImported={load} />
+          {hasPerm("three_d.create") && (
+            <Button variant="secondary" onClick={() => setShowNew(true)}>
+              <Plus size={16} className="mr-1 inline" />Add a missed session
+            </Button>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-2">

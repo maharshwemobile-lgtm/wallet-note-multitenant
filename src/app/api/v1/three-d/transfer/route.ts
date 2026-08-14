@@ -10,6 +10,7 @@ import { nextNumber } from "@/lib/sequence";
 import { audit } from "@/lib/audit";
 import { assertDateOpen } from "@/services/closeGuard";
 import { encodeCsv, THREE_D_IMPORT_HEADERS } from "@/lib/threeDTransfer";
+import { gameRules, isValidNumber, numberRangeLabel } from "@/lib/lotteryGame";
 
 export const GET = withAuth("three_d.view", async ({ req, user }) => {
   const sessionId = req.nextUrl.searchParams.get("sessionId");
@@ -57,7 +58,9 @@ export const GET = withAuth("three_d.view", async ({ req, user }) => {
 });
 
 const importRowSchema = z.object({
-  number: z.string().regex(/^\d{3}$/),
+  // Checked against the session's own game below, not here: a 2D session's "07" is a
+  // valid number, and this schema cannot see which game the session is.
+  number: z.string().regex(/^\d{2,3}$/),
   amount: z.string().regex(/^\d+(\.\d{1,2})?$/),
   customerName: z.string().max(200).optional(),
   customerPhone: z.string().max(50).optional(),
@@ -85,6 +88,15 @@ export const POST = withAuth("three_d.create", async ({ req, user }) => {
     throw new ApiError(422, "Session belongs to a different branch");
   }
 
+  // Checked before anything is written, so a file with one bad line imports nothing
+  // rather than half of itself.
+  const { label } = gameRules(session.gameType);
+  for (const row of body.rows) {
+    if (!isValidNumber(row.number, session.gameType)) {
+      throw new ApiError(422, `"${row.number}" is not a ${label} number (${numberRangeLabel(session.gameType)})`);
+    }
+  }
+
   const created = await prisma.$transaction(async (tx) => {
     await assertDateOpen(tx, body.branchId, session.drawDate);
     for (const row of body.rows) {
@@ -93,7 +105,7 @@ export const POST = withAuth("three_d.create", async ({ req, user }) => {
       const odds = row.odds ?? session.defaultOdds;
       const commissionRate = row.commissionRate ?? user.commissionRate ?? "0";
       const calculation = computeThreeD(betAmount, odds, commissionRate);
-      const txnNo = await nextNumber(tx, user.businessId, "THREE_D");
+      const txnNo = await nextNumber(tx, user.businessId, session.gameType);
       await tx.threeDTransaction.create({
         data: {
           txnNo,

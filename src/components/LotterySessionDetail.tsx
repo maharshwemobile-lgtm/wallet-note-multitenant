@@ -8,6 +8,7 @@ import { Button, Card, Input, Select, Modal, Spinner, Badge, Table, Empty, StatC
 import { useAuth } from "@/components/AppShell";
 import { autoInsertThreeDEquals } from "@/lib/threeDEntry";
 import { gameRules, numberRangeLabel } from "@/lib/lotteryGame";
+import { encodeCsv, THREE_D_IMPORT_HEADERS } from "@/lib/threeDTransfer";
 
 interface Detail {
   session: { id: string; name: string; drawDate: string; status: string; gameType: string; resultNumber?: string; defaultOdds: string; numberLimit?: string | null; settlement?: { id: string; netProfit: string; totalPayout: string; grossCollected: string; totalCommission: string } };
@@ -42,7 +43,7 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
   const [reopenReason, setReopenReason] = useState("");
   const [busy, setBusy] = useState(false);
   const { push } = useToast();
-  const { hasPerm, defaultBranchId, branches } = useAuth();
+  const { hasPerm, defaultBranchId, branches, me } = useAuth();
   const [branchId, setBranchId] = useState("");
 
   /** The cap is a decision the shop revisits, so it is edited here rather than buried in
@@ -58,6 +59,38 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
     } catch (e) {
       push(e instanceof Error ? e.message : "Failed", "error");
     }
+  }
+
+  /** The rows the receiving shop imports, in the format its own Import already expects.
+   *
+   *  Handed over as a file rather than written into the other shop's records directly.
+   *  Every query in this app is fenced by businessId, and letting one shop write into
+   *  another's books would open exactly the hole that fence exists to close — anyone who
+   *  learned a shop's id could push liabilities into it. This way the receiving shop
+   *  imports it themselves, into their own session, at their own odds, and a bookmaker who
+   *  does not use Wallet Note is unaffected: the written record still stands on its own.
+   */
+  function exportLayoffs() {
+    if (!detail) return;
+    const session = detail.session;
+    const rows = detail.layoffs.map((l) => [
+      // Quoted so a spreadsheet cannot eat the leading zero on 007 or 07.
+      `="${l.number}"`,
+      (Number(l.amount) / 100).toFixed(2),
+      me?.business?.name ?? "",
+      "",
+      l.odds,
+      "0",
+      `${gameRules(session.gameType).label} ${session.name} ${session.drawDate}${l.note ? ` — ${l.note}` : ""}`,
+    ]);
+    const csv = "﻿" + encodeCsv([[...THREE_D_IMPORT_HEADERS], ...rows]);
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `layoffs-${session.drawDate}-${session.name}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   }
 
   async function saveLayoff() {
@@ -273,7 +306,12 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
 
         {detail.layoffs.length > 0 && (
           <div className="mt-4">
-            <h4 className="mb-1 text-xs font-semibold text-gray-500">Passed to other bookmakers</h4>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <h4 className="text-xs font-semibold text-gray-500">Passed to other bookmakers</h4>
+              <button onClick={exportLayoffs} className="text-xs font-medium text-blue-600 underline dark:text-blue-400">
+                Export for the other shop
+              </button>
+            </div>
             <Table headers={["Number", "Amount", "Odds", "Bookmaker", "Back if it wins", ""]} rightAlign={[1, 2, 4]}>
               {detail.layoffs.map((l) => (
                 <tr key={l.id}>
