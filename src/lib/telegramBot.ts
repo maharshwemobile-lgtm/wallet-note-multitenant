@@ -712,10 +712,14 @@ async function tdStepSession(chatId: string, user: AuthUser, data: Record<string
   if (!session) return sendMessage(chatId, "Session not found.");
   // Carried into the next step so the lines are checked against this session's own game.
   await setSession(user.id, chatId, "3d.lines", { ...data, sessionId, sessionName: session.name, gameType: session.gameType });
-  const example = gameRules(session.gameType).digits === 2 ? "07=5000\n42=3000" : "123=5000\n456=3000";
+  // The second line shows the name form, because nobody would guess it otherwise.
+  const example = gameRules(session.gameType).digits === 2
+    ? "07=5000\n42=3000 Ko Aung"
+    : "123=5000\n456=3000 Ko Aung";
   await sendMessage(
     chatId,
-    `Session: ${session.name}\n\nSend the numbers, one per line:\n${example}`,
+    `Session: ${session.name}\n\nSend the numbers, one per line:\n${example}\n\n` +
+      `Put the customer's name after the amount if you want it recorded.`,
     { replyMarkup: keyboard([CANCEL_ROW]) }
   );
 }

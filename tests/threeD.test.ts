@@ -128,3 +128,47 @@ describe("bulk entry follows the session's game", () => {
     expect(autoInsertThreeDEquals("123", "TWO_D")).toBe("123");
   });
 });
+
+describe("a customer name on the line", () => {
+  it("takes the name after the amount", () => {
+    const { rows, errors } = parseBulkLines("234=4000 Khun Myint Aung");
+    expect(errors).toEqual([]);
+    expect(rows[0]).toEqual({ number: "234", amount: "4000", customerName: "Khun Myint Aung" });
+  });
+
+  it("reads a different name on each line", () => {
+    const { rows } = parseBulkLines("234=4000 Ko Aung\n567=2000 Ma Hla\n890=1000");
+    expect(rows.map((r) => r.customerName)).toEqual(["Ko Aung", "Ma Hla", undefined]);
+  });
+
+  it("takes a Myanmar name as readily as a latin one", () => {
+    const { rows, errors } = parseBulkLines("234=4000 ကိုအောင်");
+    expect(errors).toEqual([]);
+    expect(rows[0].customerName).toBe("ကိုအောင်");
+  });
+
+  it("leaves the name out when there is none", () => {
+    const { rows } = parseBulkLines("234=4000");
+    expect(rows[0].customerName).toBeUndefined();
+    expect(rows[0]).toEqual({ number: "234", amount: "4000" });
+  });
+
+  it("still keeps thousands separators out of the amount", () => {
+    const { rows } = parseBulkLines("234=4,000 Ko Aung");
+    expect(rows[0]).toEqual({ number: "234", amount: "4000", customerName: "Ko Aung" });
+  });
+
+  it("does not read a broken amount as a name", () => {
+    // "40x0" is a typo in the amount, not a customer called "x0". Accepting it would book
+    // a bet of 40 and silently lose the rest of what was meant.
+    const { rows, errors } = parseBulkLines("234=40x0");
+    expect(rows).toEqual([]);
+    expect(errors).toHaveLength(1);
+  });
+
+  it("works the same for 2D", () => {
+    const { rows, errors } = parseBulkLines("07=5000 Ma Hla", "TWO_D");
+    expect(errors).toEqual([]);
+    expect(rows[0]).toEqual({ number: "07", amount: "5000", customerName: "Ma Hla" });
+  });
+});

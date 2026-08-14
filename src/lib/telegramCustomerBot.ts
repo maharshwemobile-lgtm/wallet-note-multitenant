@@ -228,7 +228,11 @@ export async function customerNumbers(customer: CustomerRow, data: Record<string
   await setStep(customer.ownerUserId, customer.chatId, "c.confirm", {
     sessionId,
     gameType,
-    rows: parsed.rows,
+    // Only the number and the amount. A line may now carry a customer name, which is for
+    // a shop writing up its own counter — here the customer is betting for themselves and
+    // is already known, so accepting a name would let anyone book a bet against somebody
+    // else's name.
+    rows: parsed.rows.map((r) => ({ number: r.number, amount: r.amount })),
     total: total.toString(),
   });
 

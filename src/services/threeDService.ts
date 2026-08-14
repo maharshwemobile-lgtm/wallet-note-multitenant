@@ -17,16 +17,29 @@ export function computeThreeD(betAmount: bigint, odds: string, commissionRate: s
   return { potentialPayout, commissionAmount, netAmount };
 }
 
-/** Parse bulk entry lines like "123=5000". Returns rows or per-line errors.
- *  The digit count follows the game: a 2D session's "07=5000" is not a malformed 3D line. */
+/** Parse bulk entry lines like "123=5000", optionally naming whose bet it is.
+ *
+ *  The digit count follows the game: a 2D session's "07=5000" is not a malformed 3D line.
+ *
+ *  Anything after the amount is the customer's name — "234=4000 Khun Myint Aung". That is
+ *  how a counter writes its book by hand, one line per bet with the name beside it, and
+ *  people were already typing it that way and having the line rejected. The alternative,
+ *  entering each customer's bets as a separate batch, means going back to the menu for
+ *  every customer in the queue.
+ */
 export function parseBulkLines(text: string, gameType: string = "THREE_D"): {
-  rows: { number: string; amount: string }[];
+  rows: { number: string; amount: string; customerName?: string }[];
   errors: { line: number; text: string; message: string }[];
 } {
   const { digits, label } = gameRules(gameType);
-  const lineFormat = new RegExp(`^(\\d{${digits}})\\s*[=\\-:\\s]\\s*([\\d,]+(?:\\.\\d+)?)$`);
+  // The name must be separated by a space, not merely follow the digits. Without that,
+  // "234=40x0" — a typo in the amount — parsed as a bet of 40 for a customer called "x0",
+  // booking the wrong money and saying nothing. It has to stay an error.
+  const lineFormat = new RegExp(
+    `^(\\d{${digits}})\\s*[=\\-:\\s]\\s*([\\d,]+(?:\\.\\d+)?)(?:\\s+(.*))?$`
+  );
   const example = digits === 2 ? "07=5000" : "123=5000";
-  const rows: { number: string; amount: string }[] = [];
+  const rows: { number: string; amount: string; customerName?: string }[] = [];
   const errors: { line: number; text: string; message: string }[] = [];
   const lines = text.split(/\r?\n/);
   lines.forEach((raw, i) => {
@@ -41,7 +54,12 @@ export function parseBulkLines(text: string, gameType: string = "THREE_D"): {
       errors.push({ line: i + 1, text: line, message: `${label} number must be ${numberRangeLabel(gameType)}` });
       return;
     }
-    rows.push({ number: m[1], amount: m[2].replace(/,/g, "") });
+    const name = m[3]?.trim();
+    rows.push({
+      number: m[1],
+      amount: m[2].replace(/,/g, ""),
+      ...(name ? { customerName: name.slice(0, 120) } : {}),
+    });
   });
   return { rows, errors };
 }
@@ -53,7 +71,7 @@ export async function createThreeDBets(
     branchId: string;
     userId: string;
     sessionId: string;
-    rows: { number: string; amount: string }[];
+    rows: { number: string; amount: string; customerName?: string }[];
     commissionRate: string;
     customerId?: string;
     customerName?: string;
@@ -130,7 +148,9 @@ export async function createThreeDBets(
         sessionId: session.id,
         agentId: opts.userId,
         customerId: opts.customerId,
-        customerName: opts.customerName,
+        // A name written on the line wins. The batch name is only a default for the lines
+        // that did not carry one, so a queue of customers can be typed in one go.
+        customerName: row.customerName ?? opts.customerName,
         customerPhone: opts.customerPhone,
         number: row.number,
         betAmount,

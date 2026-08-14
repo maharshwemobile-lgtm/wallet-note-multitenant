@@ -357,12 +357,18 @@ export default function LotterySessionDetail({ params }: { params: Promise<{ id:
             <Input label="Commission % (optional)" value={entry.commissionRate} onChange={(e) => setEntry({ ...entry, commissionRate: e.target.value })} placeholder="10" />
           </div>
           <label className="block">
-            <span className="mb-1 block text-sm font-medium">Numbers — one per line as number=amount</span>
+            <span className="mb-1 block text-sm font-medium">
+              Numbers — one per line as number=amount, and a name after it if you want one
+            </span>
             <textarea
               value={entry.bulkText}
               onChange={(e) => setEntry({ ...entry, bulkText: autoInsertThreeDEquals(e.target.value, s.gameType) })}
               rows={8}
-              placeholder={game.digits === 2 ? "07=5000\n42=3000\n00=2000" : "123=5000\n456=3000\n007=2000"}
+              placeholder={
+                game.digits === 2
+                  ? "07=5000\n42=3000 Ko Aung\n00=2000"
+                  : "123=5000\n456=3000 Ko Aung\n007=2000"
+              }
               className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 font-mono text-sm dark:border-gray-700 dark:bg-gray-800"
             />
           </label>
