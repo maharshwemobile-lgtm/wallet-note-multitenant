@@ -1071,3 +1071,25 @@ model LotteryLayoff {
   @@index([sessionId, number])
   @@index([businessId, createdAt])
 }
+
+/**
+ * A result already sent to a shop's Telegram customers.
+ * The result tables are shared by every shop, but each shop announces on its own bot, so
+ * "already sent" is per shop. Without this row a customer is told the same number again
+ * on every sync run -- once a minute, all evening.
+ */
+model ResultAnnouncement {
+  id          String   @id @default(uuid())
+  businessId  String
+  gameType    String
+  drawDate    String
+  sessionName String
+  /**
+   * How many chats it reached, kept so a silent failure is visible afterwards.
+   */
+  recipients  Int      @default(0)
+  sentAt      DateTime @default(now())
+
+  @@unique([businessId, gameType, drawDate, sessionName])
+  @@index([businessId, sentAt])
+}

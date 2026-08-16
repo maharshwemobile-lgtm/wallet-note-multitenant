@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { syncMarketRates } from "@/services/marketRateService";
+import { broadcastResults } from "@/services/resultBroadcast";
 import {
   autoSettleClosedSessions,
   closeExpiredThreeDSessions,
@@ -56,8 +57,18 @@ export async function POST(req: NextRequest) {
     market = { stored: 0, warnings: [error instanceof Error ? error.message : "market sync failed"] };
   }
 
+  // Told to customers as soon as the number is known, and before settling: a customer
+  // wants the number itself first, and whether they won is a separate message that only
+  // goes to those with a stake.
+  let broadcast;
+  try {
+    broadcast = await broadcastResults();
+  } catch (error) {
+    broadcast = { announced: 0, messages: 0, warnings: [error instanceof Error ? error.message : "broadcast failed"] };
+  }
+
   // Always after the fetch, so a number that just arrived settles on the same run.
   const settle = await autoSettleClosedSessions();
   const settleTwoD = await autoSettleTwoDSessions();
-  return NextResponse.json({ ok: true, opened, closed, history, twoD, market, settle, settleTwoD });
+  return NextResponse.json({ ok: true, opened, closed, history, twoD, market, broadcast, settle, settleTwoD });
 }
