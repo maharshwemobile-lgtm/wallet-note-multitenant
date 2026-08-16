@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { sendMessage, withBotToken } from "@/lib/telegram";
 import { resultMessage } from "@/lib/resultMessage";
+import { notifyAuditFeed } from "@/lib/telegramNotify";
+import { resolveRate } from "@/services/marketRateService";
 
 /** Telling every customer the number, as soon as it is known.
  *
@@ -134,6 +136,17 @@ export async function broadcastResults(now = new Date()) {
         }
       });
 
+      // Staff get it too, on the same guard: the shop wants the number as much as its
+      // customers do, and it is the one screen nobody is watching at 12:01.
+      const staffLines = [
+        `🔔 ${result.gameType === "TWO_D" ? "2D" : "3D"} result — ${result.sessionName} ${result.drawDate}`,
+        `Number: ${result.resultNumber}`,
+      ];
+      if (result.setValue) staffLines.push(`SET ${result.setValue}`);
+      if (result.value) staffLines.push(`VALUE ${result.value}`);
+      staffLines.push(`Sent to ${sent} customer(s).`);
+      notifyAuditFeed(owner.businessId, staffLines.join("\n"));
+
       await prisma.resultAnnouncement.updateMany({
         where: {
           businessId: owner.businessId,
@@ -147,6 +160,112 @@ export async function broadcastResults(now = new Date()) {
       announced += 1;
       messages += sent;
     }
+  }
+
+  return { announced, messages, warnings: warnings.slice(0, 10) };
+}
+
+/** Today's rate, to the customers who actually change money.
+ *
+ *  Sent only to customers who have exchanged with this shop before. A customer who has
+ *  only ever bet on numbers has no use for a THB rate every morning, and a bot that sends
+ *  things nobody asked for is a bot people block — which would cost the shop the result
+ *  messages too.
+ *
+ *  Once a day per shop, on the same announcement guard the results use: the sync runs
+ *  several times a day and the rate must not arrive several times with it.
+ */
+export async function broadcastDailyRates(now = new Date()) {
+  const owners = await prisma.user.findMany({
+    where: { active: true, deletedAt: null, telegramBotToken: { not: null } },
+    select: { id: true, businessId: true, telegramBotToken: true },
+  });
+  if (owners.length === 0) return { announced: 0, messages: 0, warnings: [] as string[] };
+
+  const warnings: string[] = [];
+  let announced = 0;
+  let messages = 0;
+
+  for (const owner of owners) {
+    const rate = await resolveRate(owner.businessId);
+    // Nothing to say without a rate, and saying "no rate today" helps nobody.
+    if (!rate) continue;
+
+    // Been through an exchange with this shop, whatever came of it: someone who asked for
+    // a quote is someone who changes money.
+    const orders = await prisma.exchangeOrder.findMany({
+      where: { businessId: owner.businessId },
+      select: { customerId: true },
+      distinct: ["customerId"],
+    });
+    if (orders.length === 0) continue;
+
+    const customers = await prisma.telegramCustomer.findMany({
+      where: {
+        id: { in: orders.map((order) => order.customerId) },
+        ownerUserId: owner.id,
+        blocked: false,
+      },
+      select: { chatId: true },
+    });
+    if (customers.length === 0) continue;
+
+    // Yangon's date, not the server's: a rate sent at 07:00 local is "today" to the shop
+    // while the server in UTC still calls it yesterday.
+    const business = await prisma.business.findUnique({
+      where: { id: owner.businessId },
+      select: { timezone: true },
+    });
+    const today = now.toLocaleDateString("en-CA", { timeZone: business?.timezone || "Asia/Yangon" });
+
+    try {
+      await prisma.resultAnnouncement.create({
+        data: {
+          businessId: owner.businessId,
+          gameType: "EXCHANGE_RATE",
+          drawDate: today,
+          sessionName: "DAILY",
+        },
+      });
+    } catch {
+      continue; // already sent today
+    }
+
+    const text =
+      `💱 ယနေ့ ငွေလဲနှုန်း\n\n` +
+      `ဘတ်ရောင်းမည် (သင်ပေး THB → ကျပ်ရ) — ၁ ဘတ် = ${rate.buyRate} ကျပ်\n` +
+      `ဘတ်ဝယ်မည် (သင်ပေး ကျပ် → THB ရ) — ၁ ဘတ် = ${rate.sellRate} ကျပ်\n\n` +
+      `လဲလှယ်ရန် "ငွေလဲမည်" ကို နှိပ်ပါ။`;
+
+    let sent = 0;
+    await withBotToken(owner.telegramBotToken!, async () => {
+      for (const customer of customers) {
+        try {
+          await sendMessage(customer.chatId, text);
+          sent += 1;
+        } catch (error) {
+          warnings.push(
+            `${owner.businessId}/${customer.chatId}: ${
+              error instanceof Error ? error.message : "send failed"
+            }`
+          );
+        }
+        await wait(GAP_MS);
+      }
+    });
+
+    await prisma.resultAnnouncement.updateMany({
+      where: {
+        businessId: owner.businessId,
+        gameType: "EXCHANGE_RATE",
+        drawDate: today,
+        sessionName: "DAILY",
+      },
+      data: { recipients: sent },
+    });
+
+    announced += 1;
+    messages += sent;
   }
 
   return { announced, messages, warnings: warnings.slice(0, 10) };

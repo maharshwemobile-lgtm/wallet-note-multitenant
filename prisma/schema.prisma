@@ -1073,8 +1073,11 @@ model LotteryLayoff {
 }
 
 /**
- * A result already sent to a shop's Telegram customers.
- * The result tables are shared by every shop, but each shop announces on its own bot, so
+ * Something a shop has already announced to its Telegram customers.
+ * Named for results, which is what it was built for, and it now also guards the daily
+ * exchange rate — the shape is the same question either way: has this shop already sent
+ * this thing for this date?
+ * The source tables are shared by every shop while each announces on its own bot, so
  * "already sent" is per shop. Without this row a customer is told the same number again
  * on every sync run -- once a minute, all evening.
  */

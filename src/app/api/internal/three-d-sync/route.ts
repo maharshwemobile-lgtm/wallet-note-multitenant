@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { syncMarketRates } from "@/services/marketRateService";
-import { broadcastResults } from "@/services/resultBroadcast";
+import { broadcastDailyRates, broadcastResults } from "@/services/resultBroadcast";
 import {
   autoSettleClosedSessions,
   closeExpiredThreeDSessions,
@@ -67,8 +67,16 @@ export async function POST(req: NextRequest) {
     broadcast = { announced: 0, messages: 0, warnings: [error instanceof Error ? error.message : "broadcast failed"] };
   }
 
+  // Once a day, and only to customers who have changed money with this shop before.
+  let rates;
+  try {
+    rates = await broadcastDailyRates();
+  } catch (error) {
+    rates = { announced: 0, messages: 0, warnings: [error instanceof Error ? error.message : "rate broadcast failed"] };
+  }
+
   // Always after the fetch, so a number that just arrived settles on the same run.
   const settle = await autoSettleClosedSessions();
   const settleTwoD = await autoSettleTwoDSessions();
-  return NextResponse.json({ ok: true, opened, closed, history, twoD, market, broadcast, settle, settleTwoD });
+  return NextResponse.json({ ok: true, opened, closed, history, twoD, market, broadcast, rates, settle, settleTwoD });
 }
