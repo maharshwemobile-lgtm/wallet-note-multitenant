@@ -717,3 +717,80 @@ export async function customerAbout(customer: CustomerRow) {
       : undefined,
   });
 }
+
+/** What the shop is told once a draw is settled: who won, and what it owes.
+ *
+ *  Goes to the people who run the shop, not through the audit feed — that only reaches
+ *  staff holding audit.view, and the owner of the bot wants this whether or not they hold
+ *  that permission. It is the message the counter acts on: these are the people who will
+ *  come in to collect.
+ *
+ *  Names come from the record itself, so a walk-in written up by hand appears beside a
+ *  Telegram customer. Both are people the shop owes.
+ */
+export async function notifySettlementToStaff(sessionId: string) {
+  const session = await prisma.threeDSession.findUnique({ where: { id: sessionId } });
+  if (!session) return { notified: 0 };
+
+  const bets = await prisma.threeDTransaction.findMany({
+    where: { sessionId, deletedAt: null, settlementStatus: { not: "CANCELLED" } },
+    select: {
+      number: true,
+      betAmount: true,
+      isWinner: true,
+      winAmount: true,
+      customerName: true,
+      customer: { select: { name: true } },
+    },
+  });
+  if (bets.length === 0) return { notified: 0 };
+
+  const winners = bets.filter((bet) => bet.isWinner);
+  const totalStake = bets.reduce((sum, bet) => sum + bet.betAmount, 0n);
+  const totalPayout = winners.reduce((sum, bet) => sum + bet.winAmount, 0n);
+
+  const lines = [
+    `📣 ${gameRules(session.gameType).label} · ${session.name} · ${session.drawDate}`,
+    `ထွက်ဂဏန်း — ${session.resultNumber ?? "-"}`,
+    "",
+    `ထိုးကြေး စုစုပေါင်း — ${fmtMoneyMy(totalStake)} ကျပ်`,
+  ];
+
+  if (winners.length === 0) {
+    lines.push("", "ပေါက်သူ မရှိပါ။");
+  } else {
+    lines.push(`လျော်ရမည် စုစုပေါင်း — ${fmtMoneyMy(totalPayout)} ကျပ်`, "", `ပေါက်သူ ${winners.length} ဦး —`);
+    // Capped: a busy draw can have dozens, and a message Telegram splits is harder to read
+    // than one that says how many more there are.
+    for (const bet of winners.slice(0, 20)) {
+      const who = bet.customer?.name ?? bet.customerName ?? "အမည်မသိ";
+      lines.push(`✅ ${who} — ${bet.number} · ${fmtMoneyMy(bet.betAmount)} → ${fmtMoneyMy(bet.winAmount)} ကျပ်`);
+    }
+    if (winners.length > 20) lines.push(`… နှင့် အခြား ${winners.length - 20} ဦး`);
+  }
+
+  lines.push("", `အသားတင် — ${fmtMoneyMy(totalStake - totalPayout)} ကျပ်`);
+
+  const text = lines.join("\n");
+  const staff = await prisma.user.findMany({
+    where: {
+      businessId: session.businessId,
+      active: true,
+      deletedAt: null,
+      telegramBotToken: { not: null },
+      telegramChatId: { not: null },
+    },
+    select: { telegramBotToken: true, telegramChatId: true },
+  });
+
+  let notified = 0;
+  for (const person of staff) {
+    try {
+      await withBotToken(person.telegramBotToken!, () => sendMessage(person.telegramChatId!, text));
+      notified += 1;
+    } catch {
+      // One unreachable chat must not stop the rest.
+    }
+  }
+  return { notified };
+}
