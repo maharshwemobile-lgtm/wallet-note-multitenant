@@ -1,7 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { sendMessage, withBotToken } from "@/lib/telegram";
 import { resultMessage } from "@/lib/resultMessage";
-import { notifyAuditFeed } from "@/lib/telegramNotify";
 import { resolveRate } from "@/services/marketRateService";
 
 /** Telling every customer the number, as soon as it is known.
@@ -85,7 +84,7 @@ export async function broadcastResults(now = new Date()) {
       deletedAt: null,
       telegramBotToken: { not: null },
     },
-    select: { id: true, businessId: true, telegramBotToken: true },
+    select: { id: true, businessId: true, telegramBotToken: true, telegramChatId: true },
   });
   if (owners.length === 0) return { announced: 0, messages: 0, warnings: [] };
 
@@ -136,8 +135,11 @@ export async function broadcastResults(now = new Date()) {
         }
       });
 
-      // Staff get it too, on the same guard: the shop wants the number as much as its
-      // customers do, and it is the one screen nobody is watching at 12:01.
+      // The person who owns the bot gets it too, on the same guard: the shop wants the
+      // number as much as its customers do, and it is the one screen nobody is watching
+      // at 12:01. Sent to their own chat rather than through the audit feed — that only
+      // reaches roles holding audit.view, and an owner who never granted themselves that
+      // permission was hearing nothing at all.
       const staffLines = [
         `🔔 ${result.gameType === "TWO_D" ? "2D" : "3D"} result — ${result.sessionName} ${result.drawDate}`,
         `Number: ${result.resultNumber}`,
@@ -145,7 +147,11 @@ export async function broadcastResults(now = new Date()) {
       if (result.setValue) staffLines.push(`SET ${result.setValue}`);
       if (result.value) staffLines.push(`VALUE ${result.value}`);
       staffLines.push(`Sent to ${sent} customer(s).`);
-      notifyAuditFeed(owner.businessId, staffLines.join("\n"));
+      if (owner.telegramChatId) {
+        await withBotToken(owner.telegramBotToken!, () =>
+          sendMessage(owner.telegramChatId!, staffLines.join("\n"))
+        ).catch(() => null);
+      }
 
       await prisma.resultAnnouncement.updateMany({
         where: {
