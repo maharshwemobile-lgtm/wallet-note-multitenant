@@ -3,11 +3,12 @@ import { sendMessage, withBotToken } from "@/lib/telegram";
 import { resultMessage } from "@/lib/resultMessage";
 import { resolveRate } from "@/services/marketRateService";
 
-/** Telling every customer the number, as soon as it is known.
+/** Telling the customers who bet the number, as soon as it is known.
  *
- *  Sent to all of a shop's Telegram customers, not only the ones who bet: a customer who
- *  sat this draw out still wants the number, and they asked the shop's bot for it by being
- *  there. Whether they won is a separate message and only goes to those with a stake.
+ *  Only the ones with a stake in that particular draw. A customer who sat this one out did
+ *  not ask to be told, and a bot that messages everyone twice a day is a bot people block —
+ *  which would cost the shop the messages that matter. Whether they won is a separate
+ *  message, sent at settlement.
  *
  *  Announced once per shop per draw. The result tables are shared by every shop while each
  *  announces on its own bot, so "already sent" has to be recorded per shop — otherwise the
@@ -72,6 +73,46 @@ async function recentResults(now: Date): Promise<Announcement[]> {
   ];
 }
 
+/** The shop's Telegram customers who have a bet in the draw this result belongs to.
+ *
+ *  Approved orders only: an order still awaiting a slip is not yet a bet, and a rejected one
+ *  never was. The shop's own session is found from the draw rather than the result's name —
+ *  2D sessions are created named after the draw, while a shop names its 3D session whatever
+ *  it likes, so for 3D the date and game are the whole match.
+ */
+async function sessionBettors(
+  ownerUserId: string,
+  businessId: string,
+  result: { gameType: string; drawDate: string; sessionName: string }
+) {
+  const sessions = await prisma.threeDSession.findMany({
+    where: {
+      businessId,
+      gameType: result.gameType,
+      drawDate: result.drawDate,
+      ...(result.gameType === "TWO_D" ? { name: result.sessionName } : {}),
+    },
+    select: { id: true },
+  });
+  if (sessions.length === 0) return [];
+
+  const orders = await prisma.lotteryOrder.findMany({
+    where: {
+      ownerUserId,
+      status: "APPROVED",
+      sessionId: { in: sessions.map((session) => session.id) },
+    },
+    select: { customerId: true },
+    distinct: ["customerId"],
+  });
+  if (orders.length === 0) return [];
+
+  return prisma.telegramCustomer.findMany({
+    where: { id: { in: orders.map((order) => order.customerId) }, blocked: false },
+    select: { id: true, chatId: true },
+  });
+}
+
 export async function broadcastResults(now = new Date()) {
   const results = await recentResults(now);
   if (results.length === 0) return { announced: 0, messages: 0, warnings: [] as string[] };
@@ -94,11 +135,7 @@ export async function broadcastResults(now = new Date()) {
 
   for (const result of results) {
     for (const owner of owners) {
-      const customers = await prisma.telegramCustomer.findMany({
-        where: { ownerUserId: owner.id, blocked: false },
-        select: { id: true, chatId: true },
-      });
-      if (customers.length === 0) continue;
+      const customers = await sessionBettors(owner.id, owner.businessId, result);
 
       // The row is written before anything is sent. Two sync runs overlapping would
       // otherwise both find nothing recorded and both send; losing the race here means
