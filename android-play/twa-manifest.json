@@ -1,0 +1,41 @@
+{
+  "packageId": "online.maharshwe.walletnote",
+  "host": "walletnote.maharshwe.online",
+  "name": "Wallet Note",
+  "launcherName": "Wallet Note",
+  "display": "standalone",
+  "themeColor": "#1d4ed8",
+  "themeColorDark": "#111827",
+  "navigationColor": "#ffffff",
+  "navigationColorDark": "#030712",
+  "navigationDividerColor": "#e5e7eb",
+  "navigationDividerColorDark": "#1f2937",
+  "backgroundColor": "#f6f7f9",
+  "enableNotifications": false,
+  "startUrl": "/play-app",
+  "iconUrl": "https://walletnote.maharshwe.online/icon-512.png",
+  "maskableIconUrl": "https://walletnote.maharshwe.online/icon-maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./wallet-note-upload.jks",
+    "alias": "walletnote"
+  },
+  "appVersion": "1.0.0",
+  "appVersionCode": 1,
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://walletnote.maharshwe.online/manifest.webmanifest",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 23,
+  "orientation": "any",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}
